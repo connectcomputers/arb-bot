@@ -1,0 +1,16 @@
+{
+  "timestamp": "20260811_200723",
+  "summary": {
+    "poly_count": 0,
+    "kalshi_count": 50,
+    "locked": 0,
+    "skipped": 50
+  },
+  "locked": [],
+  "skipped_breakdown": {
+    "S9": {
+      "desc": "Parlay/non-biner (tidak cocok arbitrase)",
+      "count": 50
+    }
+  }
+}
