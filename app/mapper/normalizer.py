@@ -382,6 +382,18 @@ def normalize_kalshi(raw_market: dict) -> MarketInfo:
         if crypto_15m:
             key = crypto_15m
         
+        # TAMBAHKAN: Coba crypto hourly
+        if not key:
+            crypto_hourly = _parse_kalshi_crypto_hourly(title, close_ts)
+            if crypto_hourly:
+                key = crypto_hourly
+        
+        # TAMBAHKAN: Coba crypto daily above/below strike
+        if not key:
+            crypto_above = _parse_kalshi_crypto_above_strike(title, close_ts)
+            if crypto_above:
+                key = crypto_above
+        
         # Coba economics
         if not key:
             econ = _parse_kalshi_economics(title, close_ts, event_ticker)
@@ -684,6 +696,98 @@ def _parse_kalshi_crypto_15m(title: str, close_ts: Optional[int]) -> Optional[Ca
         outcome_definition=f"{asset} price {'higher' if 'up' in title_lower else 'lower'} than {interval} ago",
     )
 
+# def _parse_kalshi_crypto_above_strike(title: str, close_ts: Optional[int]) -> Optional[CanonicalKey]:
+#     """
+#     Parse judul crypto daily Kalshi: 'Will Bitcoin be above $70,000 on August 12?'
+#     """
+#     title_lower = title.lower()
+    
+#     match = re.match(
+#         r"^(bitcoin|btc|ethereum|eth)\s+(above|below)\s+\$?([\d,]+(?:\.\d+)?)\s*(?:on|by|end of)?",
+#         title_lower,
+#         re.IGNORECASE
+#     )
+#     if not match:
+#         return None
+    
+#     asset_map = {"bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "eth": "ETH"}
+#     asset = asset_map[match.group(1).lower()]
+#     direction = "ABOVE" if match.group(2).lower() == "above" else "BELOW"
+#     strike_str = match.group(3).replace(",", "")
+#     strike = Decimal(strike_str)
+    
+#     if close_ts is None:
+#         return None
+    
+#     return CanonicalKey(
+#         asset=asset,
+#         template=direction + "_STRIKE",
+#         interval="daily",
+#         strike=strike,
+#         close_ts=close_ts,
+#         outcome_definition=f"{asset} price {match.group(2).lower()} ${strike} at close",
+#     )
+
+def _parse_kalshi_crypto_above_strike(title: str, close_ts: Optional[int]) -> Optional[CanonicalKey]:
+    """
+    Parse judul crypto daily Kalshi (fleksibel):
+    - 'Will Bitcoin be above $70,000 on August 12?'
+    - 'Bitcoin above $65,000 on August 8'
+    """
+    title_lower = title.lower()
+    
+    # re.search (bukan re.match) + 'be' opsional
+    match = re.search(
+        r"(bitcoin|btc|ethereum|eth)\s+(?:be\s+)?(above|below)\s+\$?([\d,]+(?:\.\d+)?)",
+        title_lower,
+    )
+    if not match:
+        return None
+    
+    asset_map = {"bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "eth": "ETH"}
+    asset = asset_map[match.group(1).lower()]
+    direction = "ABOVE" if match.group(2).lower() == "above" else "BELOW"
+    strike = Decimal(match.group(3).replace(",", ""))
+    
+    if close_ts is None:
+        return None
+    
+    return CanonicalKey(
+        asset=asset,
+        template=direction + "_STRIKE",
+        interval="daily",
+        strike=strike,
+        close_ts=close_ts,
+        outcome_definition=f"{asset} price {match.group(2).lower()} ${strike} at close",
+    )
+
+def _parse_kalshi_crypto_hourly(title: str, close_ts: Optional[int]) -> Optional[CanonicalKey]:
+    """Parse 'Ethereum up or down 1 hour?'"""
+    title_lower = title.lower()
+    
+    match = re.match(
+        r"^(bitcoin|btc|ethereum|eth)\s+(up\s+or\s+down|up|down)\s+(\d+)\s*(h|hour)",
+        title_lower,
+        re.IGNORECASE
+    )
+    if not match:
+        return None
+    
+    asset_map = {"bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "eth": "ETH"}
+    asset = asset_map[match.group(1).lower()]
+    interval = match.group(3) + "h"
+    
+    if close_ts is None:
+        return None
+    
+    return CanonicalKey(
+        asset=asset,
+        template="UP_DOWN",
+        interval=interval,
+        strike=None,
+        close_ts=close_ts,
+        outcome_definition=f"{asset} price {'higher' if 'up' in title_lower else 'lower'} than {interval} ago",
+    )
 
 def _kalshi_infer_category(title: str, event_ticker: str) -> str:
     """Infer kategori dari judul Kalshi."""

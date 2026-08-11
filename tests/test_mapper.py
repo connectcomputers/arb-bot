@@ -414,3 +414,33 @@ def test_matcher_lock_fed_rate_cut():
     
     assert result.lock_count == 1
     assert result.locked[0].key.asset == "FED_RATE"
+
+# ============ NORMALIZER CRYPTO TAMBAHAN ============
+def test_kalshi_crypto_hourly():
+    """Kalshi: 'Ethereum up or down 1 hour?'"""
+    raw = {
+        "title": "Ethereum up or down 1 hour?",
+        "ticker": "KXETH-1H-26AUG12-1500",
+        "event_ticker": "KXETH-1H-26AUG12",
+        "close_time": "2026-08-12T15:00:00Z",
+    }
+    market = normalize_kalshi(raw)
+    assert market.canonical_key is not None
+    assert market.canonical_key.asset == "ETH"
+    assert market.canonical_key.template == "UP_DOWN"
+    assert market.canonical_key.interval == "1h"
+
+
+def test_kalshi_crypto_above_strike():
+    """Kalshi: 'Will Bitcoin be above $70,000 on August 12?'"""
+    raw = {
+        "title": "Will Bitcoin be above $70,000 on August 12?",
+        "ticker": "KXBTC-26AUG12-T70K",
+        "event_ticker": "KXBTC-26AUG12",
+        "close_time": "2026-08-12T23:59:00Z",
+    }
+    market = normalize_kalshi(raw)
+    assert market.canonical_key is not None
+    assert market.canonical_key.asset == "BTC"
+    assert market.canonical_key.template == "ABOVE_STRIKE"
+    assert market.canonical_key.strike == Decimal("70000")    
