@@ -2,7 +2,8 @@
 Canonical Key: identitas universal lintas venue.
 Dua market dengan canonical key yang sama = market yang sama = boleh di-lock.
 """
-from dataclasses import dataclass, asdict
+# from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from decimal import Decimal
 from typing import Optional
 
@@ -25,7 +26,8 @@ class CanonicalKey:
     interval: str
     strike: Optional[Decimal]
     close_ts: int  # epoch seconds UTC
-    outcome_definition: str
+    # outcome_definition: str
+    outcome_definition: str = field(compare=False)  # <-- TAMBAHKAN INI    
     
     def to_dict(self) -> dict:
         return asdict(self)
