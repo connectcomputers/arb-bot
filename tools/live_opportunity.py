@@ -4,6 +4,7 @@ Refactored: fungsi inti `scan_cycle()` bisa dipanggil dari manual run
 atau loop otomatis.
 """
 # === PATH SETUP ===
+import os
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -142,6 +143,23 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
                             save_paper_trade(str(lock.key), orders, signal.pi)
                             paper_count = 1
 
+                        # === EXECUTOR ASLI (Tahap 10-D) ===
+                        # Hanya jalan jika LIVE_EXECUTION = True di environment
+                        if os.getenv("LIVE_EXECUTION", "false").lower() == "true":
+                            try:
+                                from app.execution.factory import get_executor
+                                from app.execution.leg_manager import LegManager
+                                
+                                ex_a = get_executor(m_a.venue, live=True)
+                                ex_b = get_executor(m_b.venue, live=True)
+                                mgr = LegManager(ex_a, ex_b, alert_fn=send_opportunity_alert)
+                                exec_rec = await mgr.execute_pair(m_a, m_b, signal)
+                                
+                                if exec_rec.state.value == "completed":
+                                    paper_count = 2  # marker: paper + live attempted
+                            except Exception as e:
+                                console.print(f"  [red]⚠ Executor error: {e}[/red]")
+
                             # === TELEGRAM ALERT ===
                             venues = " × ".join(sorted({m.venue.upper() for m in lock.markets}))
                             now_ts = int(datetime.now().timestamp())
@@ -168,7 +186,7 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
                                     paper_count = 1  # tetap 1, alert = bonus
                             except Exception:
                                 pass  # alert gagal bukan fatal
-                                                
+
                     decisions.append((lock, signal, paper_count))
     
     return ScanResult(
