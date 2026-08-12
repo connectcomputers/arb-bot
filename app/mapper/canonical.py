@@ -27,7 +27,7 @@ class CanonicalKey:
     strike: Optional[Decimal]
     close_ts: int  # epoch seconds UTC
     # outcome_definition: str
-    outcome_definition: str = field(compare=False)  # <-- TAMBAHKAN INI    
+    outcome_definition: str = field(compare=False)  # <-- TAMBAHKAN INI     
     
     def to_dict(self) -> dict:
         return asdict(self)

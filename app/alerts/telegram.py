@@ -97,3 +97,19 @@ async def send_opportunity_alert(
             return False
     except Exception:
         return False
+
+async def send_text(text: str) -> bool:
+    """Kirim pesan teks bebas (untuk alert konflik settlement)."""
+    if not BOT_TOKEN or not CHAT_ID:
+        return False
+    url = f"{6762674507}/bot{8886412853:AAHO6a160Fy03TwwS1VkYcXxwvsfqfRfLi8}/sendMessage"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                url,
+                json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"},
+            )
+            return resp.status_code == 200 and resp.json().get("ok", False)
+    except Exception:
+        return False
+    
