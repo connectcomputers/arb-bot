@@ -165,7 +165,7 @@ class LegManager:
                 await ex2.cancel_order(exec_rec.leg2_result.order_id)
                 req2.order_type = OrderType.FOK
                 exec_rec.leg2_result = await ex2.submit_order(req2)
-                
+
         if exec_rec.leg2_result.is_success:
             # SUKSES! Kedua kaki fill
             exec_rec.state = ArbState.COMPLETED
@@ -177,36 +177,100 @@ class LegManager:
         await self._hedge_leg1(exec_rec, m1, ex1, side1, out1, signal.size)
         return exec_rec
 
+    # async def _hedge_leg1(self, exec_rec: ArbExecution,
+    #                       market: MarketInfo, executor: Executor,
+    #                       original_side: OrderSide, outcome: OrderOutcome,
+    #                       size: int):
+    #     """Coba close posisi leg 1 (reverse order)."""
+    #     reverse_side = OrderSide.SELL if original_side == OrderSide.BUY else OrderSide.BUY
+
+    #     for attempt in range(HEDGE_ATTEMPTS):
+    #         hedge_req = OrderRequest(
+    #             venue=market.venue, market_id=market.venue_id,
+    #             side=reverse_side, outcome=outcome,
+    #             price=Decimal("0.01") if reverse_side == OrderSide.SELL else Decimal("0.99"),
+    #             size=size,
+    #             order_type=OrderType.IOC,
+    #             idempotency_key=f"{exec_rec.started_ts}-hedge-{attempt}",
+    #         )
+    #         hedge_result = await executor.submit_order(hedge_req)
+    #         exec_rec.hedge_results.append(hedge_result)
+
+    #         if hedge_result.is_success:
+    #             exec_rec.state = ArbState.FAILED
+    #             exec_rec.error_message = (f"Leg 2 gagal, leg 1 berhasil di-hedge "
+    #                                       f"(attempt {attempt + 1})")
+    #             return
+
+    #     # SEMUA HEDGE GAGAL → INI BAHAYA! Posisi terbuka.
+    #     exec_rec.state = ArbState.FAILED
+    #     exec_rec.error_message = (f"CRITICAL: Leg 2 gagal, hedge gagal {HEDGE_ATTEMPTS}x. "
+    #                               f"Posisi terbuka di {market.venue}!")
+
+    #     # Kirim alert Telegram darurat
+    #     if self.alert_fn:
+    #         try:
+    #             await self.alert_fn(
+    #                 f"🚨 <b>LEG RISK CRITICAL</b>\n"
+    #                 f"Key: {exec_rec.key}\n"
+    #                 f"Leg 1: FILLED di {market.venue}\n"
+    #                 f"Leg 2: REJECTED\n"
+    #                 f"Hedge: GAGAL {HEDGE_ATTEMPTS}x\n\n"
+    #                 f"<b>POSISI TERBUKA! INTERVENSI MANUAL DIPERLUKAN!</b>"
+    #             )
+    #         except Exception:
+    #             pass
+
     async def _hedge_leg1(self, exec_rec: ArbExecution,
                           market: MarketInfo, executor: Executor,
                           original_side: OrderSide, outcome: OrderOutcome,
                           size: int):
-        """Coba close posisi leg 1 (reverse order)."""
-        reverse_side = OrderSide.SELL if original_side == OrderSide.BUY else OrderSide.BUY
-
-        for attempt in range(HEDGE_ATTEMPTS):
-            hedge_req = OrderRequest(
-                venue=market.venue, market_id=market.venue_id,
-                side=reverse_side, outcome=outcome,
-                price=Decimal("0.01") if reverse_side == OrderSide.SELL else Decimal("0.99"),
-                size=size,
-                order_type=OrderType.IOC,
-                idempotency_key=f"{exec_rec.started_ts}-hedge-{attempt}",
+        """
+        Coba close posisi leg 1 dengan early-exit strategy (Tahap 13-D).
+        
+        Urutan strategi:
+        1. Reverse order di venue yang sama (paling murah)
+        2. Cross-venue exit (jika ada venue lain dengan market sama)
+        """
+        from app.execution.early_exit import attempt_early_exit, ExitStrategy
+        
+        # Strategi 1: Early exit di venue yang sama
+        exit_result = await attempt_early_exit(
+            market=market,
+            executor=executor,
+            original_side=original_side,
+            original_outcome=outcome,
+            size=size,
+            max_attempts=3,
+            max_slippage_pct=Decimal("0.02"),
+        )
+        
+        if exit_result.success:
+            exec_rec.state = ArbState.FAILED
+            exec_rec.error_message = (
+                f"Leg 2 gagal, leg 1 berhasil di-close via "
+                f"{exit_result.strategy.value} "
+                f"(slippage: ${exit_result.slippage_cost:.2f}, "
+                f"attempts: {exit_result.attempts})"
             )
-            hedge_result = await executor.submit_order(hedge_req)
-            exec_rec.hedge_results.append(hedge_result)
-
-            if hedge_result.is_success:
-                exec_rec.state = ArbState.FAILED
-                exec_rec.error_message = (f"Leg 2 gagal, leg 1 berhasil di-hedge "
-                                          f"(attempt {attempt + 1})")
-                return
-
-        # SEMUA HEDGE GAGAL → INI BAHAYA! Posisi terbuka.
+            
+            # Record hedge result
+            if exit_result.order_result:
+                exec_rec.hedge_results.append(exit_result.order_result)
+            
+            return
+        
+        # Strategi 2: Cross-venue exit (placeholder untuk masa depan)
+        # Saat ini kita skip karena butuh alternative_venues yang belum kita track
+        
+        # SEMUA STRATEGI GAGAL → POSISI TERBUKA!
         exec_rec.state = ArbState.FAILED
-        exec_rec.error_message = (f"CRITICAL: Leg 2 gagal, hedge gagal {HEDGE_ATTEMPTS}x. "
-                                  f"Posisi terbuka di {market.venue}!")
-
+        exec_rec.error_message = (
+            f"CRITICAL: Leg 2 gagal, early-exit gagal {exit_result.attempts}x. "
+            f"Slippage cost: ${exit_result.slippage_cost:.2f}. "
+            f"POSISI TERBUKA di {market.venue}!"
+        )
+        
         # Kirim alert Telegram darurat
         if self.alert_fn:
             try:
@@ -215,8 +279,8 @@ class LegManager:
                     f"Key: {exec_rec.key}\n"
                     f"Leg 1: FILLED di {market.venue}\n"
                     f"Leg 2: REJECTED\n"
-                    f"Hedge: GAGAL {HEDGE_ATTEMPTS}x\n\n"
+                    f"Early-exit: GAGAL ({exit_result.attempts} attempts)\n\n"
                     f"<b>POSISI TERBUKA! INTERVENSI MANUAL DIPERLUKAN!</b>"
                 )
             except Exception:
-                pass
+                pass    
