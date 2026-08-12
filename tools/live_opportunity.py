@@ -20,6 +20,7 @@ from app.mapper.normalizer import normalize_polymarket, normalize_kalshi
 from app.mapper.matcher import pair_markets
 from app.signal.engine import evaluate_pair
 from app.orderbook import fetch_kalshi_orderbook, fetch_polymarket_orderbook
+from app.execution.paper_executor import build_paper_orders, save_paper_trade
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
@@ -133,6 +134,7 @@ async def main():
     execute_count = 0
     wait_count = 0
     incomplete = 0
+    paper_trades_recorded = 0   # ← TAMBAHKAN BARIS INI
     
     for i, lock in enumerate(pairing.locked, 1):
         markets = lock.markets
@@ -174,6 +176,16 @@ async def main():
         if signal.execute:
             keputusan = "[bold green]🟢 EKSEKUSI[/bold green]"
             execute_count += 1
+
+            # === PAPER EXECUTOR: Susun & simpan order paper ===
+            paper_orders = build_paper_orders(m_a, m_b, signal)
+            if paper_orders:
+                key_repr = str(lock.key)
+                save_paper_trade(key_repr, paper_orders, signal.pi)
+                paper_trades_recorded += 1
+                console.print(f"    [dim]  📝 Paper trade #{paper_trades_recorded} "
+                              f"dicatat ({len(paper_orders)} order)[/dim]")
+                
         elif "Harga YES/NO belum lengkap" in signal.reason:
             keputusan = "[dim]⚪ NO DATA[/dim]"
         else:
@@ -196,7 +208,11 @@ async def main():
     console.print(f"  🟢 EKSEKUSI  : [green]{execute_count}[/green]")
     console.print(f"  🟡 TUNGGU    : [yellow]{wait_count}[/yellow]")
     console.print(f"  ⚪ NO DATA   : [dim]{incomplete}[/dim]")
-    
+    console.print(f"  📝 Paper     : [cyan]{paper_trades_recorded}[/cyan] trade dicatat")  # ← BARU
+
+    if paper_trades_recorded > 0:
+        console.print(f"\n[dim]📁 Lihat detail: data/paper_trades.json[/dim]")
+            
     if execute_count > 0:
         console.print(f"\n[bold green]🎉 Ada {execute_count} peluang arbitrase aktif![/bold green]")
         console.print("[dim]Catatan: untuk eksekusi real, butuh modul execution (Minggu 7).[/dim]")
