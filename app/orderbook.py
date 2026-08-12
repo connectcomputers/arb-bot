@@ -164,3 +164,39 @@ async def _fetch_poly_fallback(client: httpx.AsyncClient, condition_id: str) -> 
         return OrderbookSnapshot("polymarket", None, None, None, None)
     except Exception:
         return OrderbookSnapshot("polymarket", None, None, None, None)
+
+# ==========================
+# LIMITLESS
+# ==========================
+async def fetch_limitless_orderbook(client: httpx.AsyncClient, market_id: str) -> OrderbookSnapshot:
+    """
+    Ambil orderbook Limitless via CLOB API publik.
+    Endpoint: https://api.limitless.com/v1/markets/{market_id}/orderbook
+    """
+    url = f"https://api.limitless.com/v1/markets/{market_id}/orderbook"
+    try:
+        resp = await client.get(url, headers=HEADERS, timeout=15.0)
+        if resp.status_code != 200:
+            return OrderbookSnapshot("limitless", None, None, None, None)
+        
+        data = resp.json()
+        asks = data.get("asks", [])
+        bids = data.get("bids", [])
+        
+        # Limitless harga dalam desimal (mirip Polymarket)
+        best_ask = None
+        if asks:
+            best_ask = Decimal(min(asks, key=lambda x: float(x.get("price", 1)))["price"])
+        
+        best_bid = None
+        if bids:
+            best_bid = Decimal(max(bids, key=lambda x: float(x.get("price", 0)))["price"])
+        
+        # Limitless hanya punya YES/NO tunggal (tidak terpisah)
+        return OrderbookSnapshot(
+            venue="limitless",
+            yes_best_ask=best_ask, no_best_ask=best_ask,  # sama untuk YES dan NO
+            yes_best_bid=best_bid, no_best_bid=best_bid,
+        )
+    except Exception:
+        return OrderbookSnapshot("limitless", None, None, None, None)    

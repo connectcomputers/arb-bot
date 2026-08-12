@@ -4,7 +4,8 @@ Fixture berdasarkan kasus nyata dari screenshot klien dan blueprint.
 """
 import time
 from decimal import Decimal
-from app.mapper.normalizer import normalize_polymarket, normalize_kalshi
+# from app.mapper.normalizer import normalize_polymarket, normalize_kalshi
+from app.mapper.normalizer import normalize_polymarket, normalize_kalshi, normalize_limitless
 from app.mapper.matcher import pair_markets, SkipCode
 
 
@@ -443,4 +444,85 @@ def test_kalshi_crypto_above_strike():
     assert market.canonical_key is not None
     assert market.canonical_key.asset == "BTC"
     assert market.canonical_key.template == "ABOVE_STRIKE"
-    assert market.canonical_key.strike == Decimal("70000")    
+    assert market.canonical_key.strike == Decimal("70000")
+
+# ============ NORMALIZER LIMITLESS ============
+def test_limitless_crypto_hourly_btc():
+    """Limitless: 'Bitcoin Up or Down 1 Hour' → canonical key valid."""
+    raw = {
+        "title": "Bitcoin Up or Down 1 Hour",
+        "id": "lmt_btc_1h",
+        "endDate": "2026-08-12T15:00:00Z",
+    }
+    market = normalize_limitless(raw)
+    assert market.canonical_key is not None
+    assert market.canonical_key.asset == "BTC"
+    assert market.canonical_key.template == "UP_DOWN"
+    assert market.canonical_key.interval == "1h"
+
+
+def test_limitless_crypto_above_strike():
+    """Limitless: 'Ethereum Above $2500 by August 15' → strike = 2500."""
+    raw = {
+        "title": "Ethereum Above $2500 by August 15",
+        "id": "lmt_eth_above",
+        "endDate": "2026-08-15T23:59:00Z",
+    }
+    market = normalize_limitless(raw)
+    assert market.canonical_key is not None
+    assert market.canonical_key.asset == "ETH"
+    assert market.canonical_key.template == "ABOVE_STRIKE"
+    assert market.canonical_key.strike == Decimal("2500")
+
+
+def test_limitless_venue_name():
+    """Limitless market harus punya venue='limitless'."""
+    raw = {
+        "title": "Bitcoin Up or Down 1 Hour",
+        "id": "lmt_btc_1h",
+        "endDate": "2026-08-12T15:00:00Z",
+    }
+    market = normalize_limitless(raw)
+    assert market.venue == "limitless"
+    assert market.category == "Crypto"
+
+def test_matcher_lock_btc_1h_kalshi_limitless():
+    """BTC 1h di Kalshi + Limitless dengan close_ts sama → LOCKED."""
+    now_ts = int(time.time())
+    close_ts = now_ts + 3600  # 1 jam dari sekarang
+    
+    kal = normalize_kalshi({
+        "title": "Bitcoin Up or Down 1 Hour",
+        "ticker": "KXBTC-1H-26AUG12-1500",
+        "event_ticker": "KXBTC-1H-26AUG12",
+        "close_time": _epoch_to_iso(close_ts),
+    })
+    kal.canonical_key = kal.canonical_key.__class__(
+        asset=kal.canonical_key.asset,
+        template=kal.canonical_key.template,
+        interval=kal.canonical_key.interval,
+        strike=kal.canonical_key.strike,
+        close_ts=close_ts,
+        outcome_definition=kal.canonical_key.outcome_definition,
+    )
+    
+    lmt = normalize_limitless({
+        "title": "Bitcoin Up or Down 1 Hour",
+        "id": "lmt_btc_1h",
+        "endDate": _epoch_to_iso(close_ts),
+    })
+    lmt.canonical_key = lmt.canonical_key.__class__(
+        asset=lmt.canonical_key.asset,
+        template=lmt.canonical_key.template,
+        interval=lmt.canonical_key.interval,
+        strike=lmt.canonical_key.strike,
+        close_ts=close_ts,
+        outcome_definition=lmt.canonical_key.outcome_definition,
+    )
+    
+    result = pair_markets([], [kal], [lmt], min_ttl_seconds=60)
+    
+    assert result.lock_count == 1
+    assert result.locked[0].key.asset == "BTC"
+    assert len(result.locked[0].markets) == 2
+    assert {m.venue for m in result.locked[0].markets} == {"kalshi", "limitless"}

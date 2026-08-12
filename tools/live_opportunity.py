@@ -1,11 +1,10 @@
 """
-Live Opportunity Pipeline — Minggu 6/8.
-Refactored: fungsi inti `scan_cycle()` bisa dipanggil dari manual run
-atau loop otomatis.
+Live Opportunity Pipeline — Minggu 6/8/13-A.
+Mendukung 3 venue: Polymarket, Kalshi, Limitless.
 """
 # === PATH SETUP ===
-import os
 import sys
+import os
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -13,7 +12,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import List
 
 import httpx
 from rich.console import Console
@@ -21,10 +20,14 @@ from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-from app.mapper.normalizer import normalize_polymarket, normalize_kalshi
+from app.mapper.normalizer import normalize_polymarket, normalize_kalshi, normalize_limitless
 from app.mapper.matcher import pair_markets, LockRecord, SkipRecord
 from app.signal.engine import evaluate_pair, SignalDecision
-from app.orderbook import fetch_kalshi_orderbook, fetch_polymarket_orderbook
+from app.orderbook import (
+    fetch_kalshi_orderbook,
+    fetch_polymarket_orderbook,
+    fetch_limitless_orderbook,
+)
 from app.execution.paper_executor import build_paper_orders, save_paper_trade
 from app.alerts.telegram import send_opportunity_alert
 
@@ -34,6 +37,7 @@ HEADERS = {
 }
 POLY_URL = "https://gamma-api.polymarket.com/markets"
 KALSHI_URL = "https://external-api.kalshi.com/trade-api/v2/markets"
+LIMITLESS_URL = "https://api.limitless.com/v1/markets"
 LIMIT_PER_VENUE = 100
 
 console = Console()
@@ -41,61 +45,59 @@ console = Console()
 
 @dataclass
 class ScanResult:
-    """Hasil satu siklus scan — struktur data murni (tidak ada display logic)."""
+    """Hasil satu siklus scan."""
     timestamp: str
     poly_fetched: int
     kalshi_fetched: int
+    limitless_fetched: int
     locked: List[LockRecord]
     skipped: List[SkipRecord]
-    decisions: List[tuple]   # (lock, signal, paper_count)
+    decisions: List[tuple]
     errors: List[str]
 
 
+async def fetch_markets(client: httpx.AsyncClient):
+    """Fetch market lists dari ketiga venue (Poly + Kalshi + Limitless)."""
+    poly_resp, kalshi_resp, limitless_resp = await asyncio.gather(
+        client.get(POLY_URL, params={"closed": "false", "limit": LIMIT_PER_VENUE,
+                                     "order": "volume24hr", "ascending": "false"},
+                   timeout=30.0),
+        client.get(KALSHI_URL, params={"limit": LIMIT_PER_VENUE, "status": "open"},
+                   timeout=30.0),
+        client.get(LIMITLESS_URL, params={"limit": LIMIT_PER_VENUE, "status": "active"},
+                   timeout=30.0, follow_redirects=True),
+    )
+
+    raw_poly = poly_resp.json() if poly_resp.status_code == 200 else []
+    kalshi_data = kalshi_resp.json() if kalshi_resp.status_code == 200 else {}
+    raw_kalshi = kalshi_data.get("markets", [])
+    limitless_data = limitless_resp.json() if limitless_resp.status_code == 200 else {}
+    raw_limitless = limitless_data if isinstance(limitless_data, list) else limitless_data.get("markets", [])
+
+    return raw_poly, raw_kalshi, raw_limitless
+
+
 async def scan_cycle(quiet: bool = False) -> ScanResult:
-    """
-    Satu siklus scan: fetch → match → orderbook → signal → paper.
-    
-    Args:
-        quiet: jika True, tidak print progress (untuk loop mode)
-    
-    Returns:
-        ScanResult berisi data lengkap siklus
-    """
+    """Satu siklus scan: fetch → match → orderbook → signal → paper."""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     errors = []
-    
+
     # === FETCH ===
     if not quiet:
-        console.print("[dim]  Fetching markets...[/dim]")
-    
-    raw_poly, raw_kalshi = [], []
+        console.print("[dim]  Fetching markets (3 venues)...[/dim]")
+
+    raw_poly, raw_kalshi, raw_limitless = [], [], []
     try:
         async with httpx.AsyncClient(headers=HEADERS) as client:
-            poly_resp, kalshi_resp = await asyncio.gather(
-                client.get(POLY_URL, params={"closed": "false", "limit": LIMIT_PER_VENUE,
-                                             "order": "volume24hr", "ascending": "false"},
-                           timeout=30.0),
-                client.get(KALSHI_URL, params={"limit": LIMIT_PER_VENUE, "status": "open"},
-                           timeout=30.0),
-            )
-            if poly_resp.status_code == 200:
-                raw_poly = poly_resp.json()
-            else:
-                errors.append(f"Poly HTTP {poly_resp.status_code}")
-            
-            if kalshi_resp.status_code == 200:
-                raw_kalshi = kalshi_resp.json().get("markets", [])
-            else:
-                errors.append(f"Kalshi HTTP {kalshi_resp.status_code}")
+            raw_poly, raw_kalshi, raw_limitless = await fetch_markets(client)
     except Exception as e:
         errors.append(f"Fetch error: {e}")
-    
-    # === MATCH ===
+
+    # === NORMALIZE ===
     if not quiet:
         console.print("[dim]  Matching...[/dim]")
-    
-    poly_infos = []
-    kalshi_infos = []
+
+    poly_infos, kalshi_infos, limitless_infos = [], [], []
     for m in raw_poly:
         try:
             poly_infos.append(normalize_polymarket(m))
@@ -106,18 +108,23 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
             kalshi_infos.append(normalize_kalshi(m))
         except Exception:
             pass
-    
-    pairing = pair_markets(poly_infos, kalshi_infos, [])
-    
+    for m in raw_limitless:
+        try:
+            limitless_infos.append(normalize_limitless(m))
+        except Exception:
+            pass
+
+    pairing = pair_markets(poly_infos, kalshi_infos, limitless_infos)
+
     # === ORDERBOOK + SIGNAL + PAPER ===
     decisions = []
     if pairing.lock_count > 0:
         if not quiet:
             console.print("[dim]  Fetching orderbooks + evaluating signals...[/dim]")
-        
+
         async with httpx.AsyncClient(headers=HEADERS) as client:
             for lock in pairing.locked:
-                # Enrich orderbook
+                # Enrich orderbook per venue
                 for market in lock.markets:
                     try:
                         if market.venue == "kalshi":
@@ -128,14 +135,18 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
                             ob = await fetch_polymarket_orderbook(client, market.venue_id)
                             market.yes_price = ob.yes_best_ask
                             market.no_price = ob.no_best_ask
+                        elif market.venue == "limitless":
+                            ob = await fetch_limitless_orderbook(client, market.venue_id)
+                            market.yes_price = ob.yes_best_ask
+                            market.no_price = ob.no_best_ask
                     except Exception as e:
                         errors.append(f"Orderbook {market.venue}: {e}")
-                
+
                 # Evaluate + paper execute
                 if len(lock.markets) >= 2:
                     m_a, m_b = lock.markets[0], lock.markets[1]
                     signal = evaluate_pair(m_a, m_b, C=100)
-                    
+
                     paper_count = 0
                     if signal.execute:
                         orders = build_paper_orders(m_a, m_b, signal)
@@ -143,34 +154,15 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
                             save_paper_trade(str(lock.key), orders, signal.pi)
                             paper_count = 1
 
-                        # === EXECUTOR ASLI (Tahap 10-D) ===
-                        # Hanya jalan jika LIVE_EXECUTION = True di environment
-                        if os.getenv("LIVE_EXECUTION", "false").lower() == "true":
-                            try:
-                                from app.execution.factory import get_executor
-                                from app.execution.leg_manager import LegManager
-                                
-                                ex_a = get_executor(m_a.venue, live=True)
-                                ex_b = get_executor(m_b.venue, live=True)
-                                mgr = LegManager(ex_a, ex_b, alert_fn=send_opportunity_alert)
-                                exec_rec = await mgr.execute_pair(m_a, m_b, signal)
-                                
-                                if exec_rec.state.value == "completed":
-                                    paper_count = 2  # marker: paper + live attempted
-                            except Exception as e:
-                                console.print(f"  [red]⚠ Executor error: {e}[/red]")
-
-                            # === TELEGRAM ALERT ===
+                            # Telegram alert
                             venues = " × ".join(sorted({m.venue.upper() for m in lock.markets}))
                             now_ts = int(datetime.now().timestamp())
                             ttl_hours = max(0, (lock.key.close_ts - now_ts)) / 3600
-                            
                             p1 = m_a.yes_price if signal.direction == "YES_A_NO_B" else m_a.no_price
                             p2 = m_b.no_price if signal.direction == "YES_A_NO_B" else m_b.yes_price
-                            
-                            # Coba kirim alert (async, tidak blocking utama)
+
                             try:
-                                sent = await send_opportunity_alert(
+                                await send_opportunity_alert(
                                     key_str=str(lock.key),
                                     venues=venues,
                                     direction=signal.direction,
@@ -179,20 +171,17 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
                                     pi=signal.pi,
                                     size=signal.size,
                                     ttl_hours=ttl_hours,
-                                    poly_url=f"https://polymarket.com/event/{m_a.venue_id}" if m_a.venue == "polymarket" else (f"https://polymarket.com/event/{m_b.venue_id}" if m_b.venue == "polymarket" else ""),
-                                    kalshi_url=f"https://kalshi.com/markets/{m_a.venue_id}" if m_a.venue == "kalshi" else (f"https://kalshi.com/markets/{m_b.venue_id}" if m_b.venue == "kalshi" else ""),
                                 )
-                                if sent:
-                                    paper_count = 1  # tetap 1, alert = bonus
                             except Exception:
-                                pass  # alert gagal bukan fatal
+                                pass
 
                     decisions.append((lock, signal, paper_count))
-    
+
     return ScanResult(
         timestamp=timestamp,
         poly_fetched=len(raw_poly),
         kalshi_fetched=len(raw_kalshi),
+        limitless_fetched=len(raw_limitless),
         locked=pairing.locked,
         skipped=pairing.skipped,
         decisions=decisions,
@@ -201,40 +190,39 @@ async def scan_cycle(quiet: bool = False) -> ScanResult:
 
 
 def display_scan_result(result: ScanResult):
-    """Tampilkan hasil scan di terminal dengan Rich (untuk manual run)."""
-    # Header
+    """Tampilkan hasil scan di terminal dengan Rich."""
     console.print()
     console.print(Panel.fit(
-        f"[bold cyan]LIVE OPPORTUNITIES[/bold cyan] — {result.timestamp}\n"
+        f"[bold cyan]LIVE OPPORTUNITIES (3 VENUES)[/bold cyan] — {result.timestamp}\n"
         f"Total LOCKED: [green]{len(result.locked)}[/green]",
         box=box.DOUBLE_EDGE,
     ))
-    
+
     if result.errors:
         for err in result.errors:
             console.print(f"  [red]⚠ {err}[/red]")
-    
+
     if not result.decisions:
         console.print("\n[yellow]Tidak ada peluang aktif saat ini.[/yellow]")
         return
-    
+
     # Tabel keputusan
     table = Table(box=box.ROUNDED, show_lines=True, title="🎯 Keputusan Real-time")
     table.add_column("#", style="bold cyan", width=3)
     table.add_column("Key", style="bold white", width=30)
-    table.add_column("Venues", style="yellow", width=18)
+    table.add_column("Venues", style="yellow", width=20)
     table.add_column("P₁", justify="right", width=7)
     table.add_column("P₂", justify="right", width=7)
     table.add_column("Diskon", justify="right", width=8)
     table.add_column("Π (C=100)", justify="right", width=10)
     table.add_column("Keputusan", width=12)
-    
+
     execute_count = wait_count = paper_count = 0
-    
+
     for i, (lock, signal, papers) in enumerate(result.decisions, 1):
         markets = lock.markets
         m_a, m_b = markets[0], markets[1]
-        
+
         p1_str = p2_str = "?"
         if signal.direction == "YES_A_NO_B":
             if m_a.yes_price: p1_str = f"{m_a.yes_price:.3f}"
@@ -242,12 +230,12 @@ def display_scan_result(result: ScanResult):
         elif signal.direction == "NO_A_YES_B":
             if m_a.no_price: p1_str = f"{m_a.no_price:.3f}"
             if m_b.yes_price: p2_str = f"{m_b.yes_price:.3f}"
-        
+
         key_str = (f"{lock.key.asset}.{lock.key.template}."
                    f"{lock.key.interval}"
                    + (f".{lock.key.strike}" if lock.key.strike else ""))[:29]
         venues_str = " × ".join(sorted({m.venue.upper()[:6] for m in markets}))
-        
+
         if signal.execute:
             keputusan = "[bold green]🟢 EKSEKUSI[/bold green]"
             execute_count += 1
@@ -255,7 +243,7 @@ def display_scan_result(result: ScanResult):
         else:
             keputusan = "[yellow]🟡 TUNGGU[/yellow]"
             wait_count += 1
-        
+
         table.add_row(
             str(i), key_str, venues_str,
             p1_str, p2_str,
@@ -263,10 +251,8 @@ def display_scan_result(result: ScanResult):
             f"${signal.pi:.2f}",
             keputusan,
         )
-    
+
     console.print(table)
-    
-    # Summary
     console.print(f"\n[bold]📊 Ringkasan:[/bold]")
     console.print(f"  🟢 EKSEKUSI  : [green]{execute_count}[/green]")
     console.print(f"  🟡 TUNGGU    : [yellow]{wait_count}[/yellow]")
@@ -274,7 +260,7 @@ def display_scan_result(result: ScanResult):
 
 
 async def main():
-    console.print("\n[bold cyan]🚀 LIVE OPPORTUNITY PIPELINE (Manual Mode)[/bold cyan]")
+    console.print("\n[bold cyan]🚀 LIVE OPPORTUNITY PIPELINE (3 Venues: Poly + Kalshi + Limitless)[/bold cyan]")
     result = await scan_cycle(quiet=False)
     display_scan_result(result)
     console.print("\n[bold green]✅ Pipeline selesai.[/bold green]\n")
@@ -282,7 +268,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
+    
 # ================================================================================
 # """
 # Live Opportunity Pipeline — Minggu 6.

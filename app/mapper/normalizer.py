@@ -804,22 +804,66 @@ def _kalshi_infer_category(title: str, event_ticker: str) -> str:
 # ==========================
 # LIMITLESS NORMALIZER (Placeholder)
 # ==========================
+# def normalize_limitless(raw_market: dict) -> MarketInfo:
+#     """
+#     Normalizer Limitless. Saat ini placeholder — akan dilengkapi saat kita
+#     punya sampel data asli dari API Limitless.
+    
+#     Limitless hampir 100% crypto (BTC/ETH per jam/hari), jadi template-nya
+#     akan fokus pada crypto up/down dan above-strike.
+#     """
+#     title = raw_market.get("title", raw_market.get("question", ""))
+#     market_id = raw_market.get("id", raw_market.get("marketId", ""))
+    
+#     return MarketInfo(
+#         venue="limitless",
+#         venue_id=market_id,
+#         title=title,
+#         canonical_key=None,  # Placeholder
+#         category="Crypto",
+#         series=None,
+#         is_parlay=False,
+#         is_live_sport=False,
+#         yes_price=None,
+#         no_price=None,
+#         liquidity_usd=None,
+#         settlement_source="Limitless Official",
+#         raw_data=raw_market,
+#     )
+
 def normalize_limitless(raw_market: dict) -> MarketInfo:
     """
-    Normalizer Limitless. Saat ini placeholder — akan dilengkapi saat kita
-    punya sampel data asli dari API Limitless.
+    Normalizer Limitless — crypto hourly/daily up/down & above-strike.
     
-    Limitless hampir 100% crypto (BTC/ETH per jam/hari), jadi template-nya
-    akan fokus pada crypto up/down dan above-strike.
+    Contoh judul yang bisa di-parse:
+    - "Bitcoin Up or Down 1 Hour"
+    - "Ethereum Above $2500 by August 15"
     """
     title = raw_market.get("title", raw_market.get("question", ""))
     market_id = raw_market.get("id", raw_market.get("marketId", ""))
+    end_date_iso = raw_market.get("endDate", raw_market.get("end_time", ""))
+    
+    # Parse waktu settlement
+    close_ts = None
+    if end_date_iso:
+        try:
+            dt = datetime.fromisoformat(end_date_iso.replace("Z", "+00:00"))
+            close_ts = int(dt.timestamp())
+        except (ValueError, AttributeError):
+            pass
+    
+    # Attempt parse crypto hourly
+    key = _parse_limitless_crypto_hourly(title, close_ts)
+    
+    # Attempt parse crypto daily above-strike
+    if not key:
+        key = _parse_limitless_crypto_above(title, close_ts)
     
     return MarketInfo(
         venue="limitless",
         venue_id=market_id,
         title=title,
-        canonical_key=None,  # Placeholder
+        canonical_key=key,
         category="Crypto",
         series=None,
         is_parlay=False,
@@ -829,4 +873,62 @@ def normalize_limitless(raw_market: dict) -> MarketInfo:
         liquidity_usd=None,
         settlement_source="Limitless Official",
         raw_data=raw_market,
+    )
+
+
+def _parse_limitless_crypto_hourly(title: str, close_ts: Optional[int]) -> Optional[CanonicalKey]:
+    """Parse 'Bitcoin Up or Down 1 Hour'."""
+    title_lower = title.lower()
+    
+    match = re.match(
+        r"^(bitcoin|btc|ethereum|eth)\s+(up\s+or\s+down|up|down)\s+(\d+)\s*(h|hour)",
+        title_lower,
+        re.IGNORECASE
+    )
+    if not match:
+        return None
+    
+    asset_map = {"bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "eth": "ETH"}
+    asset = asset_map[match.group(1).lower()]
+    interval = match.group(3) + "h"
+    
+    if close_ts is None:
+        return None
+    
+    return CanonicalKey(
+        asset=asset,
+        template="UP_DOWN",
+        interval=interval,
+        strike=None,
+        close_ts=close_ts,
+        outcome_definition=f"{asset} price {'higher' if 'up' in title_lower else 'lower'} than {interval} ago",
+    )
+
+
+def _parse_limitless_crypto_above(title: str, close_ts: Optional[int]) -> Optional[CanonicalKey]:
+    """Parse 'Ethereum Above $2500 by August 15'."""
+    title_lower = title.lower()
+    
+    match = re.search(
+        r"(bitcoin|btc|ethereum|eth)\s+(above|below)\s+\$?([\d,]+(?:\.\d+)?)",
+        title_lower,
+    )
+    if not match:
+        return None
+    
+    asset_map = {"bitcoin": "BTC", "btc": "BTC", "ethereum": "ETH", "eth": "ETH"}
+    asset = asset_map[match.group(1).lower()]
+    direction = "ABOVE" if match.group(2).lower() == "above" else "BELOW"
+    strike = Decimal(match.group(3).replace(",", ""))
+    
+    if close_ts is None:
+        return None
+    
+    return CanonicalKey(
+        asset=asset,
+        template=direction + "_STRIKE",
+        interval="daily",
+        strike=strike,
+        close_ts=close_ts,
+        outcome_definition=f"{asset} price {match.group(2).lower()} ${strike} at close",
     )
