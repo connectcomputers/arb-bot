@@ -37,7 +37,7 @@ HEADERS = {
 }
 POLY_URL = "https://gamma-api.polymarket.com/markets"
 KALSHI_URL = "https://external-api.kalshi.com/trade-api/v2/markets"
-LIMITLESS_URL = "https://api.limitless.com/v1/markets"
+LIMITLESS_URL = "https://api.limitless.exchange/v1/markets"
 LIMIT_PER_VENUE = 100
 
 console = Console()

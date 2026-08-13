@@ -171,9 +171,9 @@ async def _fetch_poly_fallback(client: httpx.AsyncClient, condition_id: str) -> 
 async def fetch_limitless_orderbook(client: httpx.AsyncClient, market_id: str) -> OrderbookSnapshot:
     """
     Ambil orderbook Limitless via CLOB API publik.
-    Endpoint: https://api.limitless.com/v1/markets/{market_id}/orderbook
+    Endpoint: https://api.limitless.exchange/v1/markets/{market_id}/orderbook
     """
-    url = f"https://api.limitless.com/v1/markets/{market_id}/orderbook"
+    url = f"https://api.limitless.exchange/v1/markets/{market_id}/orderbook"
     try:
         resp = await client.get(url, headers=HEADERS, timeout=15.0)
         if resp.status_code != 200:

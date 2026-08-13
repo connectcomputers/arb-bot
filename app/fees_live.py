@@ -144,7 +144,7 @@ async def fetch_limitless_fee_schedule_live() -> dict:
             "amm": Decimal(str(cached["amm"])),
         }
     
-    url = "https://api.limitless.com/v1/fee-schedule"
+    url = "https://api.limitless.exchange/v1/fee-schedule"
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json",
