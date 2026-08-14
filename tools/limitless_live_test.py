@@ -92,35 +92,49 @@ def main():
     #     print(f"⚠ Error: {e}")
 
     # === Public: Market discovery ===
-    print("\n[1/3] Fetching markets (public, no auth)...")
+    print("\n[1/3] Fetching active markets (public, no auth)...")
     try:
-        # Limitless uses /api/v1/markets or similar - let's try common paths
-        for endpoint in ["/api/v1/markets", "/v1/markets", "/markets"]:
-            r = httpx.get(HOST + endpoint, params={"limit": 10}, timeout=15)
-            if r.status_code == 200:
-                markets = r.json()
-                print(f"✅ Endpoint found: {endpoint}")
-                print(f"Markets found: {len(markets)}")
-                
-                # Pick first active market
-                pick = None
-                for m in markets:
-                    if m.get("active") or m.get("status") == "active":
-                        pick = m
-                        break
-                
-                if pick:
-                    print("Market dipilih:", pick.get("title", pick.get("question", "?"))[:60])
-                    print("Market ID/slug:", pick.get("id") or pick.get("slug"))
-                else:
-                    print("⚠ Tidak ada market aktif")
-                break
-            elif r.status_code != 404:
-                print(f"⚠ Status {endpoint}: {r.status_code}")
-                print(r.text[:200])
+        r = httpx.get(HOST + "/markets/active", 
+                     params={"limit": 10}, timeout=15)
+        if r.status_code == 200:
+            response = r.json()
+            markets = response.get("data", [])
+            total = response.get("totalMarketsCount", 0)
+            print(f"✅ Endpoint found: /markets/active")
+            print(f"Total active markets: {total}")
+            print(f"Fetched: {len(markets)}")
+            
+            # Filter: not expired + CLOB type (untuk orderbook)
+            clob_markets = [m for m in markets 
+                           if not m.get("expired") 
+                           and m.get("tradeType") == "clob"]
+            amm_markets = [m for m in markets 
+                          if not m.get("expired") 
+                          and m.get("tradeType") == "amm"]
+            
+            print(f"CLOB markets: {len(clob_markets)}")
+            print(f"AMM markets: {len(amm_markets)}")
+            
+            # Pick first CLOB market (untuk orderbook test)
+            pick = clob_markets[0] if clob_markets else markets[0] if markets else None
+            
+            if pick:
+                print("\nMarket dipilih:")
+                print(f"  Title    : {pick.get('title', '?')[:60]}")
+                print(f"  ID       : {pick.get('id')}")
+                print(f"  Slug     : {pick.get('slug', '?')[:60]}")
+                print(f"  Status   : {pick.get('status')}")
+                print(f"  Type     : {pick.get('tradeType')}")
+                prices = pick.get('prices', [])
+                if prices and len(prices) >= 2:
+                    print(f"  Prices   : YES {prices[0]:.1f}¢ | NO {prices[1]:.1f}¢")
+                print(f"  Volume   : {pick.get('volumeFormatted', '0')} USDC")
+                print(f"  Liquidity: {pick.get('liquidityFormatted', '0')} USDC")
+            else:
+                print("⚠ Tidak ada market aktif")
         else:
-            print("⚠ Belum menemukan endpoint markets yang benar")
-            print("Coba manual di browser: https://limitless.exchange/markets")
+            print(f"⚠ Status: {r.status_code}")
+            print(r.text[:300])
     except Exception as e:
         print(f"⚠ Error: {e}")
 
@@ -157,24 +171,34 @@ def main():
     # except Exception as e:
     #     print(f"⚠ Error: {e}")
 
-    # === Orderbook public test ===
-    print("\n[3/3] Orderbook test (public endpoint)...")
-    try:
-        # Try common orderbook paths
-        test_slug = "btc-usd-1h-24aug14"  # contoh slug format
-        for endpoint in ["/api/v1/orderbook", "/v1/orderbook", "/orderbook"]:
-            r = httpx.get(HOST + endpoint, 
-                         params={"slug": test_slug}, timeout=15)
-            if r.status_code in (200, 404):
-                print(f"Endpoint {endpoint}: Status {r.status_code}")
+    # === Orderbook test (butuh auth untuk CLOB) ===
+    print("\n[3/3] Orderbook test...")
+    if pick and pick.get("tradeType") == "clob":
+        slug = pick.get("slug")
+        print(f"Testing orderbook for slug: {slug[:40]}...")
+        
+        if API_KEY and API_SECRET:
+            # Authenticated orderbook
+            headers = hmac_sign("GET", f"/trading/orderbook?slug={slug}")
+            try:
+                r = httpx.get(HOST + "/trading/orderbook",
+                             params={"slug": slug},
+                             headers=headers, timeout=15)
+                print(f"Status: {r.status_code}")
                 if r.status_code == 200:
-                    print("✅ Orderbook accessible")
-                break
-            elif r.status_code != 404:
-                print(f"⚠ Status {endpoint}: {r.status_code}")
-    except Exception as e:
-        print(f"⚠ Error: {e}")
-            
+                    print("✅ Orderbook accessible (authenticated)")
+                elif r.status_code in (400, 404):
+                    print(r.text[:200])
+            except Exception as e:
+                print(f"⚠ Error: {e}")
+        else:
+            print("⚠ Orderbook butuh auth (isi LIMITLESS_API_KEY & LIMITLESS_API_SECRET)")
+    elif pick and pick.get("tradeType") == "amm":
+        print("ℹ Market ini AMM (automated market maker), bukan orderbook CLOB")
+        print("  AMM trading via: POST /amm/buy, POST /amm/sell")
+    else:
+        print("⚠ Tidak ada CLOB market untuk test orderbook")
+        
     print("\n✅ STAGE 1 OK: wallet ready + public discovery.")
     print("Stage 2 berikutnya: get API key dari dashboard Limitless + deposit USDC di Base.")
 
