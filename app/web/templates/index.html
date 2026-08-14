@@ -94,6 +94,14 @@
             <p>Bot berjalan dalam mode paper trading, memindai setiap 60 detik. Halaman ini auto-refresh setiap 30 detik.</p>
         </div>
 
+        <div class="section">
+            <h2>🖥️ Log Scanner (real-time, update 10 dtk)</h2>
+            <table>
+                <tr><th>Waktu</th><th>#</th><th>Poly</th><th>Kalshi</th><th>Locked</th><th>🟢</th><th>🟡</th><th>📝</th><th>Err</th></tr>
+                <tbody id="logBody"><tr><td colspan="9" class="empty">Memuat log…</td></tr></tbody>
+            </table>
+        </div>
+
         <div class="kill-switch">
             <button class="btn btn-danger" onclick="killSwitch()">🛑 KILL SWITCH (Stop Service)</button>
         </div>
@@ -107,6 +115,22 @@
             alert(data.message);
             location.reload();
         }
+
+        async function loadLog() {
+            try {
+                const resp = await fetch('/api/log');
+                const data = await resp.json();
+                const rows = (data.logs || []).slice(-15).reverse().map(l => {
+                    const t = (l.timestamp || '').replace('T', ' ').substring(11, 19);
+                    return '<tr><td>' + t + '</td><td>' + (l.cycle ?? '-') + '</td><td>' + (l.poly ?? 0) +
+                        '</td><td>' + (l.kalshi ?? 0) + '</td><td>' + (l.locked ?? 0) + '</td><td>' + (l.execute ?? 0) +
+                        '</td><td>' + (l.wait ?? 0) + '</td><td>' + (l.paper ?? 0) + '</td><td>' + ((l.errors || []).length) + '</td></tr>';
+                }).join('');
+                document.getElementById('logBody').innerHTML = rows || '<tr><td colspan="9" class="empty">Belum ada log.</td></tr>';
+            } catch (e) {}
+        }
+        loadLog();
+        setInterval(loadLog, 10000);
     </script>
 </body>
 </html>
