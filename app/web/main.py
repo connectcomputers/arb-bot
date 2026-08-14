@@ -40,19 +40,78 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         return [json.loads(line) for line in all_lines[-lines:]]
 
 
+# @app.get("/", response_class=HTMLResponse)
+# async def dashboard(request: Request):
+#     """Layar 1: Dashboard — ringkasan real-time."""
+#     trades = _read_json(PAPER_TRADES)
+#     settlements = _read_json(LEDGER)
+    
+#     # Hitung statistik
+#     total_trades = len(trades)
+#     total_pi = sum(float(t.get("pi", 0)) for t in trades)
+#     matched = sum(1 for s in settlements if s.get("status") == "MATCH")
+#     conflicts = sum(1 for s in settlements if s.get("status") == "SETTLEMENT_CONFLICT")
+    
+#     # Service status
+#     try:
+#         result = subprocess.run(
+#             ["systemctl", "--user", "is-active", SERVICE_NAME],
+#             capture_output=True, text=True, timeout=2
+#         )
+#         service_status = result.stdout.strip()
+#     except Exception:
+#         service_status = "unknown"
+    
+#     # return templates.TemplateResponse("index.html", {
+#     #     "request": request,
+#     #     "page": "dashboard",
+#     #     "stats": {
+#     #         "total_trades": total_trades,
+#     #         "total_pi": f"${total_pi:.2f}",
+#     #         "matched": matched,
+#     #         "conflicts": conflicts,
+#     #         "service_status": service_status,
+#     #     },
+#     # })
+
+#     return templates.TemplateResponse(request, "index.html", {
+#         "stats": {
+#             "total_trades": total_trades,
+#             "total_pi": f"${total_pi:.2f}",
+#             "matched": matched,
+#             "conflicts": conflicts,
+#             "service_status": service_status,
+#         },
+#     })
+
+
+def _fmt_ts(ts):
+    try:
+        return datetime.fromtimestamp(int(ts)).strftime("%d/%m %H:%M")
+    except Exception:
+        return "-"
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    """Layar 1: Dashboard — ringkasan real-time."""
+    """Layar 1: Dashboard — ringkasan real-time + aktivitas scanner."""
     trades = _read_json(PAPER_TRADES)
     settlements = _read_json(LEDGER)
-    
-    # Hitung statistik
+
     total_trades = len(trades)
     total_pi = sum(float(t.get("pi", 0)) for t in trades)
     matched = sum(1 for s in settlements if s.get("status") == "MATCH")
     conflicts = sum(1 for s in settlements if s.get("status") == "SETTLEMENT_CONFLICT")
-    
-    # Service status
+
+    logs = _tail_log(LOOP_LOG, 1)
+    last = logs[0] if logs else None
+    scanner = {
+        "cycle": last.get("cycle", "-") if last else "-",
+        "last_scan": (last.get("timestamp", "-") or "-").replace("T", " ")[:19] if last else "-",
+        "markets": (last.get("poly", 0) + last.get("kalshi", 0)) if last else 0,
+        "locked": last.get("locked", 0) if last else 0,
+        "errors": len(last.get("errors", [])) if last else 0,
+    }
+
     try:
         result = subprocess.run(
             ["systemctl", "--user", "is-active", SERVICE_NAME],
@@ -61,18 +120,21 @@ async def dashboard(request: Request):
         service_status = result.stdout.strip()
     except Exception:
         service_status = "unknown"
-    
-    # return templates.TemplateResponse("index.html", {
-    #     "request": request,
-    #     "page": "dashboard",
-    #     "stats": {
-    #         "total_trades": total_trades,
-    #         "total_pi": f"${total_pi:.2f}",
-    #         "matched": matched,
-    #         "conflicts": conflicts,
-    #         "service_status": service_status,
-    #     },
-    # })
+
+    recent_trades = [{
+        "time": _fmt_ts(t.get("ts")),
+        "key": str(t.get("key"))[:40],
+        "venues": " × ".join(sorted({o.get("venue", "?") for o in t.get("orders", [])})),
+        "pi": t.get("pi", "0"),
+    } for t in reversed(trades)][:10]
+
+    recent_settlements = [{
+        "time": _fmt_ts(s.get("ts")),
+        "key": str(s.get("key"))[:40],
+        "status": s.get("status"),
+        "realized": s.get("realized_pnl") or "-",
+        "expected": s.get("expected_pi"),
+    } for s in reversed(settlements)][:10]
 
     return templates.TemplateResponse(request, "index.html", {
         "stats": {
@@ -82,6 +144,9 @@ async def dashboard(request: Request):
             "conflicts": conflicts,
             "service_status": service_status,
         },
+        "scanner": scanner,
+        "recent_trades": recent_trades,
+        "recent_settlements": recent_settlements,
     })
 
 @app.get("/api/pairing")
