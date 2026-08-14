@@ -62,34 +62,68 @@ def main():
     
     print("Address :", acct.address)
     print("Chain   : Base (ID 8453)")
-    print("PK      :", pk[:12] + "… (simpan di .env sebagai LIMITLESS_TEST_PK)")
+    # print("PK      :", pk[:12] + "… (simpan di .env sebagai LIMITLESS_TEST_PK)")
+    print("PK      :", pk[:64] + "… (simpan di .env sebagai LIMITLESS_TEST_PK)")
     
+    # # === Public: Market discovery ===
+    # print("\n[1/3] Fetching markets (public, no auth)...")
+    # try:
+    #     r = httpx.get(HOST + "/markets", params={"limit": 10}, timeout=15)
+    #     if r.status_code == 200:
+    #         markets = r.json()
+    #         print(f"✅ Markets found: {len(markets)}")
+            
+    #         # Pick first active market
+    #         pick = None
+    #         for m in markets:
+    #             if m.get("active"):
+    #                 pick = m
+    #                 break
+            
+    #         if pick:
+    #             print("Market dipilih:", pick.get("title", "?")[:60])
+    #             print("Market ID    :", pick.get("id"))
+    #         else:
+    #             print("⚠ Tidak ada market aktif")
+    #     else:
+    #         print(f"⚠ Status: {r.status_code}")
+    #         print(r.text[:200])
+    # except Exception as e:
+    #     print(f"⚠ Error: {e}")
+
     # === Public: Market discovery ===
     print("\n[1/3] Fetching markets (public, no auth)...")
     try:
-        r = httpx.get(HOST + "/markets", params={"limit": 10}, timeout=15)
-        if r.status_code == 200:
-            markets = r.json()
-            print(f"✅ Markets found: {len(markets)}")
-            
-            # Pick first active market
-            pick = None
-            for m in markets:
-                if m.get("active"):
-                    pick = m
-                    break
-            
-            if pick:
-                print("Market dipilih:", pick.get("title", "?")[:60])
-                print("Market ID    :", pick.get("id"))
-            else:
-                print("⚠ Tidak ada market aktif")
+        # Limitless uses /api/v1/markets or similar - let's try common paths
+        for endpoint in ["/api/v1/markets", "/v1/markets", "/markets"]:
+            r = httpx.get(HOST + endpoint, params={"limit": 10}, timeout=15)
+            if r.status_code == 200:
+                markets = r.json()
+                print(f"✅ Endpoint found: {endpoint}")
+                print(f"Markets found: {len(markets)}")
+                
+                # Pick first active market
+                pick = None
+                for m in markets:
+                    if m.get("active") or m.get("status") == "active":
+                        pick = m
+                        break
+                
+                if pick:
+                    print("Market dipilih:", pick.get("title", pick.get("question", "?"))[:60])
+                    print("Market ID/slug:", pick.get("id") or pick.get("slug"))
+                else:
+                    print("⚠ Tidak ada market aktif")
+                break
+            elif r.status_code != 404:
+                print(f"⚠ Status {endpoint}: {r.status_code}")
+                print(r.text[:200])
         else:
-            print(f"⚠ Status: {r.status_code}")
-            print(r.text[:200])
+            print("⚠ Belum menemukan endpoint markets yang benar")
+            print("Coba manual di browser: https://limitless.exchange/markets")
     except Exception as e:
         print(f"⚠ Error: {e}")
-    
+
     # === Auth test (jika credentials ada) ===
     if API_KEY and API_SECRET:
         print("\n[2/3] Auth test (HMAC signing)...")
@@ -108,21 +142,39 @@ def main():
     else:
         print("\n[2/3] Auth test skipped (isi .env LIMITLESS_API_KEY & LIMITLESS_API_SECRET)")
     
+    # # === Orderbook public test ===
+    # print("\n[3/3] Orderbook test (public endpoint)...")
+    # try:
+    #     r = httpx.get(HOST + "/markets/orderbook", 
+    #                  params={"market_id": "test"}, timeout=15)
+    #     print(f"Status: {r.status_code}")
+    #     if r.status_code == 200:
+    #         print("✅ Orderbook accessible")
+    #     elif r.status_code == 404:
+    #         print("⚠ Endpoint not found (mungkin butuh auth)")
+    #     else:
+    #         print(r.text[:200])
+    # except Exception as e:
+    #     print(f"⚠ Error: {e}")
+
     # === Orderbook public test ===
     print("\n[3/3] Orderbook test (public endpoint)...")
     try:
-        r = httpx.get(HOST + "/markets/orderbook", 
-                     params={"market_id": "test"}, timeout=15)
-        print(f"Status: {r.status_code}")
-        if r.status_code == 200:
-            print("✅ Orderbook accessible")
-        elif r.status_code == 404:
-            print("⚠ Endpoint not found (mungkin butuh auth)")
-        else:
-            print(r.text[:200])
+        # Try common orderbook paths
+        test_slug = "btc-usd-1h-24aug14"  # contoh slug format
+        for endpoint in ["/api/v1/orderbook", "/v1/orderbook", "/orderbook"]:
+            r = httpx.get(HOST + endpoint, 
+                         params={"slug": test_slug}, timeout=15)
+            if r.status_code in (200, 404):
+                print(f"Endpoint {endpoint}: Status {r.status_code}")
+                if r.status_code == 200:
+                    print("✅ Orderbook accessible")
+                break
+            elif r.status_code != 404:
+                print(f"⚠ Status {endpoint}: {r.status_code}")
     except Exception as e:
         print(f"⚠ Error: {e}")
-    
+            
     print("\n✅ STAGE 1 OK: wallet ready + public discovery.")
     print("Stage 2 berikutnya: get API key dari dashboard Limitless + deposit USDC di Base.")
 
