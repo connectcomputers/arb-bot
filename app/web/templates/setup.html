@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Setup Venue — Arb Bot</title>
+<style>
+ body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
+ .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px;max-width:640px}
+ h1,h2{color:#38bdf8}
+ textarea{width:100%;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px}
+ button{background:#059669;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer}
+ .msg{margin-left:10px;font-weight:600}
+ label{display:block;margin:8px 0}
+</style>
+</head>
+<body>
+<h1>🔐 Setup Kredensial Venue</h1>
+
+{% for venue, fields in venues.items() %}
+<div class="card" id="card-{{ venue }}">
+  <h2>{{ venue|capitalize }}
+      {% if saved[venue] %}<small style="color:#86efac">— kredensial tersimpan ✅</small>{% endif %}
+  </h2>
+  {% for name, label in fields %}
+  <label>{{ label }}
+    <textarea id="{{ venue }}-{{ name }}" rows="{{ 3 if 'pem' in name else 1 }}"
+      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>
+  </label>
+  {% endfor %}
+  <button onclick="cek('{{ venue }}')">CEK API</button>
+  <span class="msg" id="msg-{{ venue }}"></span>
+  <label><input type="checkbox" id="pair-{{ venue }}" disabled
+    {% if cfg['venues'][venue]['valid'] %}checked{% endif %}>
+    PAIR — aktif bila API VALID</label>
+</div>
+{% endfor %}
+
+<p><a href="/" style="color:#38bdf8">← Kembali ke Dashboard</a></p>
+
+<script>
+// async function cek(venue){
+//   const creds = {};
+//   document.querySelectorAll('#card-'+venue+' textarea').forEach(t=>{
+//     creds[t.id.substring(venue.length+1)] = t.value.trim();
+//   });
+//   await fetch('/api/credentials',{method:'POST',
+//     headers:{'Content-Type':'application/json'},
+//     body:JSON.stringify({venue, creds})});
+//   const el = document.getElementById('msg-'+venue);
+//   el.textContent = '…memeriksa';
+//   const r = await fetch('/api/cek-api',{method:'POST',
+//     headers:{'Content-Type':'application/json'},
+//     body:JSON.stringify({venue})});
+//   const d = await r.json();
+//   el.textContent = d.ok ? '✅ API '+venue+' VALID' : '❌ '+d.message;
+//   el.style.color = d.ok ? '#86efac' : '#fca5a5';
+//   const cb = document.getElementById('pair-'+venue);
+//   cb.disabled = !d.ok; cb.checked = d.ok;
+// }
+
+async function cek(venue){
+  const creds = {};
+  document.querySelectorAll('#card-'+venue+' textarea').forEach(t=>{
+    const v = t.value.trim();
+    if (v) creds[t.id.substring(venue.length+1)] = v;
+  });
+  if (Object.keys(creds).length){
+    await fetch('/api/credentials',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({venue, creds})});
+  }
+  const el = document.getElementById('msg-'+venue);
+  el.textContent = '…memeriksa';
+  const r = await fetch('/api/cek-api',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({venue})});
+  const d = await r.json();
+  el.textContent = d.ok ? '✅ API '+venue+' VALID' : '❌ '+d.message;
+  el.style.color = d.ok ? '#86efac' : '#fca5a5';
+  const cb = document.getElementById('pair-'+venue);
+  cb.disabled = !d.ok; cb.checked = d.ok;
+}
+</script>
+</body>
+</html>

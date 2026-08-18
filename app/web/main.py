@@ -12,6 +12,24 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.config_store import load_creds, save_creds, load_config, set_venue_valid
+from app.venue_auth import check_venue
+
+# VENUE_FIELDS = {
+#     "polymarket": [("private_key", "Private Key Wallet (0x…)")],
+#     "kalshi": [("api_key_id", "API Key ID"),
+#                ("private_key_pem", "RSA Private Key (-----BEGIN …)")],
+#     "limitless": [("api_key", "API Key"), ("api_secret", "API Secret")],
+# }
+
+VENUE_FIELDS = {
+    "polymarket": [("private_key", "Private Key Wallet (0x…)")],
+    "kalshi": [("api_key_id", "API Key ID"),
+               ("private_key_pem", "RSA Private Key (isi PEM atau path file)"),
+               ("base_url", "Base URL (OPSIONAL — kosong = produksi; isi https://demo-api.kalshi.co untuk demo)")],
+    "limitless": [("api_key", "API Key"), ("api_secret", "API Secret")],
+}
+
 app = FastAPI(title="Arb Bot Dashboard", version="1.0")
 templates = Jinja2Templates(directory="app/web/templates")
 
@@ -39,6 +57,30 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
 
+@app.get("/setup", response_class=HTMLResponse)
+async def setup(request: Request):
+    creds = load_creds()
+    cfg = load_config()
+    return templates.TemplateResponse(request, "setup.html", {
+        "venues": VENUE_FIELDS,
+        "saved": {v: (v in creds) for v in VENUE_FIELDS},
+        "cfg": cfg,
+    })
+
+
+@app.post("/api/credentials")
+async def api_credentials(request: Request):
+    data = await request.json()
+    save_creds(data.get("venue"), data.get("creds", {}))
+    return {"saved": True}
+
+
+@app.post("/api/cek-api")
+async def api_cek(request: Request):
+    venue = (await request.json()).get("venue")
+    ok, msg = check_venue(venue, load_creds().get(venue, {}))
+    set_venue_valid(venue, ok)
+    return {"ok": ok, "message": msg}
 
 # @app.get("/", response_class=HTMLResponse)
 # async def dashboard(request: Request):
