@@ -52,14 +52,26 @@ def check_kalshi(creds: dict):
     if not key_id or not pem:
         return False, "api key / pem kosong"
 
-    # Terima ISI pem ATAU PATH file
-    if not pem.startswith("-----"):
+    # # Terima ISI pem ATAU PATH file
+    # if not pem.startswith("-----"):
+    #     p = Path(os.path.expanduser(pem))
+    #     if not p.exists():
+    #         return False, "file pem tidak ditemukan"
+    #     pem = p.read_text()
+
+    # Terima ISI PEM (header di posisi mana pun) ATAU path file
+    if "-----BEGIN" in pem:
+        pem = pem[pem.find("-----BEGIN"):]          # buang sampah di depan
+    else:
         p = Path(os.path.expanduser(pem))
         if not p.exists():
             return False, "file pem tidak ditemukan"
         pem = p.read_text()
+    pem = pem.replace("\r\n", "\n")                  # normalisasi newline WA
 
-    base = (creds.get("base_url") or "").strip() or "https://api.kalshi.com"
+    # base = (creds.get("base_url") or "").strip() or "https://api.kalshi.com"
+    base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+    
     try:
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding

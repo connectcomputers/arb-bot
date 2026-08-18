@@ -25,7 +25,8 @@ load_dotenv()
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
-BASE = os.getenv("KALSHI_BASE_URL", "https://api.kalshi.com/trade-api/v2")
+# BASE = os.getenv("KALSHI_BASE_URL", "https://api.kalshi.com/trade-api/v2")
+BASE = os.getenv("KALSHI_BASE_URL", "https://api.elections.kalshi.com/trade-api/v2")
 KEY_ID = os.getenv("KALSHI_API_KEY_ID", "")
 PEM_PATH = Path(os.path.expanduser(
     os.getenv("KALSHI_PRIVATE_KEY_PATH", "~/kalshi_live.pem")))
