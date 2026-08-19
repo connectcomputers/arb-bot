@@ -103,6 +103,17 @@ def classify_kalshi(title: str, ticker: str) -> str:
     return classify(title, ticker)
 
 
+# def _poly(creds):
+#     r = httpx.get("https://gamma-api.polymarket.com/markets", params={
+#         "closed": "false", "limit": 200,
+#         "order": "volume24hr", "ascending": "false"}, timeout=20)
+#     return [{
+#         "key": m.get("conditionId") or str(m.get("id")),
+#         "title": (m.get("question") or "?")[:70],
+#         "cat": norm(m.get("category")) or classify(m.get("question") or ""),
+#         "vol": _vol(m), "liq": _liq(m),
+#     } for m in r.json()]
+
 def _poly(creds):
     r = httpx.get("https://gamma-api.polymarket.com/markets", params={
         "closed": "false", "limit": 200,
@@ -112,8 +123,43 @@ def _poly(creds):
         "title": (m.get("question") or "?")[:70],
         "cat": norm(m.get("category")) or classify(m.get("question") or ""),
         "vol": _vol(m), "liq": _liq(m),
+        "yes": float(m.get("bestAsk") or m.get("lastTradePrice") or 0),
     } for m in r.json()]
 
+# def _kalshi(creds):
+#     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+#     r = None
+#     for lim in (1000, 500, 200):
+#         r = httpx.get(base + "/trade-api/v2/markets",
+#                       params={"limit": lim, "status": "open"}, timeout=25)
+#         if r.status_code == 200:
+#             break
+#     rows = []
+#     for m in r.json().get("markets", []):
+#         tick = m.get("ticker") or ""
+#         if tick.startswith("KXMVE"):
+#             continue
+#         text = " ".join(filter(None, [m.get("title"), m.get("yes_sub_title"),
+#                                       m.get("no_sub_title")]))
+#         rows.append({"key": tick, "title": (m.get("title") or "?")[:70],
+#                     #  "cat": classify_kalshi(text, tick),
+#                     #  "vol": _vol(m), "liq": _liq(m)})
+#                      "cat": classify_kalshi(text, tick),
+#                      "vol": max(_vol(m), float(m.get("volume_fp") or 0)),   # ← 24j atau total
+#                      "liq": _liq(m)})                    
+#     if len(rows) < 30:
+#         try:
+#             rs = httpx.get(base + "/trade-api/v2/series",
+#                            params={"limit": 200}, timeout=20)
+#             for s in rs.json().get("series", []):
+#                 rows.append({"key": s.get("ticker"),
+#                              "title": (s.get("title") or "?")[:70],
+#                              "cat": norm(s.get("category")) or
+#                                     classify(s.get("title") or "", s.get("ticker") or ""),
+#                              "vol": _vol(s), "liq": _liq(s)})
+#         except Exception:
+#             pass
+#     return rows
 
 def _kalshi(creds):
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
@@ -131,11 +177,11 @@ def _kalshi(creds):
         text = " ".join(filter(None, [m.get("title"), m.get("yes_sub_title"),
                                       m.get("no_sub_title")]))
         rows.append({"key": tick, "title": (m.get("title") or "?")[:70],
-                    #  "cat": classify_kalshi(text, tick),
-                    #  "vol": _vol(m), "liq": _liq(m)})
                      "cat": classify_kalshi(text, tick),
-                     "vol": max(_vol(m), float(m.get("volume_fp") or 0)),   # ← 24j atau total
-                     "liq": _liq(m)})                    
+                     "vol": max(_vol(m), float(m.get("volume_fp") or 0)),
+                     "liq": _liq(m),
+                     "yes": (float(m.get("yes_bid_dollars") or 0) +
+                             float(m.get("yes_ask_dollars") or 0)) / 2})
     if len(rows) < 30:
         try:
             rs = httpx.get(base + "/trade-api/v2/series",
@@ -145,11 +191,36 @@ def _kalshi(creds):
                              "title": (s.get("title") or "?")[:70],
                              "cat": norm(s.get("category")) or
                                     classify(s.get("title") or "", s.get("ticker") or ""),
-                             "vol": _vol(s), "liq": _liq(s)})
+                             "vol": _vol(s), "liq": _liq(s),
+                             "yes": 0.0})
         except Exception:
             pass
     return rows
 
+# def _limitless(creds):
+#     seen = {}
+#     for sort in (None, "newest", "ending_soon"):
+#         for page in (1, 2, 3, 4):
+#             params = {"limit": 25, "page": page}
+#             if sort:
+#                 params["sortBy"] = sort
+#             try:
+#                 r = httpx.get("https://api.limitless.exchange/markets/active",
+#                               params=params, timeout=15)
+#                 data = r.json().get("data", [])
+#             except Exception:
+#                 break
+#             if not data:
+#                 break
+#             for m in data:
+#                 seen.setdefault(m.get("slug"), m)
+#     return [{
+#         "key": m.get("slug"),
+#         "title": (m.get("title") or "?")[:70],
+#         "cat": norm(m.get("categories")) or
+#                classify(m.get("title") or "", m.get("slug") or ""),
+#         "vol": _vol(m), "liq": _liq(m),
+#     } for m in seen.values()]
 
 def _limitless(creds):
     seen = {}
@@ -174,8 +245,8 @@ def _limitless(creds):
         "cat": norm(m.get("categories")) or
                classify(m.get("title") or "", m.get("slug") or ""),
         "vol": _vol(m), "liq": _liq(m),
+        "yes": (m.get("prices") or [0, 0])[0] / 100,
     } for m in seen.values()]
-
 
 FETCH = {"polymarket": _poly, "kalshi": _kalshi, "limitless": _limitless}
 

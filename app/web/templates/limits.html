@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><title>Pengaturan Pair</title>
+<style>body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;max-width:640px;margin-bottom:16px}
+h1{color:#38bdf8}h3{color:#7dd3fc;margin:4px 0}label{display:block;margin:10px 0}
+input{width:100%;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px}
+button{background:#059669;color:#fff;border:none;border-radius:6px;padding:10px 18px;cursor:pointer}
+button:disabled{background:#475569;cursor:not-allowed}
+.muted{color:#94a3b8;font-size:12px}code{color:#fbbf24}
+ .wrap{max-width:880px;margin:0 auto}
+</style>
+</head><body>
+<div class="wrap">    
+<h1>⚙️ Pengaturan Pair</h1>
+
+<div class="card">
+  <h3>Ringkasan dari Setup</h3>
+  <p>✅ Venue API VALID:
+    {% for v in venues_valid %}<b>{{ v }}</b>{% if not loop.last %}, {% endif %}
+    {% else %}<span class="muted">belum ada</span>{% endfor %}
+  </p>
+  {% for v, cats in pairs.items() %}
+  <p>📋 <b>{{ v }}</b>: {{ cats | join(', ') }}</p>
+  {% else %}
+  <p class="muted">Belum ada menu pair dipilih.</p>
+  {% endfor %}
+</div>
+
+<div class="card">
+<label>Volume Modal total (USDC)<input id="modal_total" type="number" value="{{ limits.get('modal_total','') }}"></label>
+<label>Modal per OP (USDC)<input id="modal_per_op" type="number" value="{{ limits.get('modal_per_op','') }}"></label>
+<label>SL (% pengaman posisi terbuka)<input id="sl" type="number" step="0.1" value="{{ limits.get('sl','') }}"></label>
+<label>TP (% ambil profit awal)<input id="tp" type="number" step="0.1" value="{{ limits.get('tp','') }}"></label>
+<label>Min profit per trade (USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}"></label>
+<label>Rugi harian max (USDC, auto-stop)<input id="rugi_harian" type="number" value="{{ limits.get('rugi_harian','') }}"></label>
+<button id="save" disabled onclick="simpan()">Simpan Pengaturan Pair</button>
+<span id="notif" style="display:none;color:#86efac;margin-left:10px">
+  ✅ Berhasil disimpan ke <code>data/trading_config.json</code></span>
+<br><br>
+<button id="dash" style="display:none;background:#0ea5e9"
+        onclick="bukaDashboard()">📊 Buka Dashboard</button>
+</div>
+
+<script>
+const ids = ['modal_total','modal_per_op','sl','tp','min_profit','rugi_harian'];
+function baca(){ const o={}; ids.forEach(i=>o[i]=parseFloat(document.getElementById(i).value)); return o; }
+function lengkap(){ return ids.every(i => document.getElementById(i).value !== ''); }
+function update(){
+  document.getElementById('save').disabled = !lengkap();
+  if (lengkap()) document.getElementById('dash').style.display = 'inline-block';
+}
+ids.forEach(i => document.getElementById(i).addEventListener('input', update));
+update();
+async function kirim(){
+  await fetch('/api/limits', {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({limits: baca()})});
+}
+async function simpan(){
+  await kirim();
+  document.getElementById('notif').style.display = 'inline';
+  document.getElementById('dash').style.display = 'inline-block';
+}
+async function bukaDashboard(){
+  await kirim();            // simpan dulu di server, BARU navigasi
+  location.href = '/';
+}
+</script>
+</div>
+</body></html>

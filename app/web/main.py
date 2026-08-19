@@ -18,6 +18,10 @@ from app.venue_auth import check_venue
 from fastapi.responses import RedirectResponse
 # from app.venue_markets import top_markets
 from app.venue_markets import venue_categories
+from app.config_store import (load_creds, save_creds, load_config,
+                              save_config, set_venue_valid)
+from app import engine
+from app.venue_positions import get_positions
 
 LIMIT_KEYS = ["modal_total", "modal_per_op", "sl",
               "tp", "min_profit", "rugi_harian"]
@@ -72,6 +76,35 @@ def _tail_log(path: Path, lines: int = 50) -> list:
     with open(path) as f:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
+
+@app.post("/api/pairs")
+async def api_pairs(request: Request):
+    cfg = load_config()
+    cfg["pairs"] = (await request.json()).get("pairs", {})
+    save_config(cfg)
+    return {"saved": True}
+
+# @app.get("/limits", response_class=HTMLResponse)
+# async def limits(request: Request):
+#     cfg = load_config()
+#     return templates.TemplateResponse(request, "limits.html",
+#                                       {"limits": cfg.get("limits", {})})
+
+@app.get("/limits", response_class=HTMLResponse)
+async def limits(request: Request):
+    cfg = load_config()
+    return templates.TemplateResponse(request, "limits.html", {
+        "limits": cfg.get("limits", {}),
+        "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
+        "pairs": cfg.get("pairs", {}),
+    })
+
+@app.post("/api/limits")
+async def api_limits(request: Request):
+    cfg = load_config()
+    cfg["limits"] = (await request.json()).get("limits", {})
+    save_config(cfg)
+    return {"saved": True}
 
 # @app.get("/api/markets")
 # async def api_markets(venue: str):
@@ -161,10 +194,16 @@ def _fmt_ts(ts):
 
 # @app.get("/", response_class=HTMLResponse)
 # async def dashboard(request: Request):
+# @app.get("/", response_class=HTMLResponse)
+# async def index(request: Request):
+#     if not config_complete(load_config()):
+#         return RedirectResponse("/setup")   # ← gerbang wajib S1
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     if not config_complete(load_config()):
-        return RedirectResponse("/setup")   # ← gerbang wajib S1
+        return RedirectResponse("/setup")
+    return templates.TemplateResponse(request, "index.html", {})
 
     """Layar 1: Dashboard — ringkasan real-time + aktivitas scanner."""
     trades = _read_json(PAPER_TRADES)
@@ -221,6 +260,37 @@ async def index(request: Request):
         "recent_trades": recent_trades,
         "recent_settlements": recent_settlements,
     })
+
+@app.get("/api/venue-feed")
+async def venue_feed():
+    cfg = load_config()
+    creds = load_creds()
+    return {"venues": [{
+        "venue": v,
+        "valid": bool(s.get("valid")),
+        "cats": (cfg.get("pairs") or {}).get(v, []),
+        "positions": get_positions(v, creds.get(v, {})) if s.get("valid") else [],
+    } for v, s in cfg["venues"].items()]}
+
+@app.post("/api/engine/start")
+async def engine_start(request: Request):
+    mode = (await request.json()).get("mode", "paper")
+    ok, msg = engine.start(mode)
+    return {"ok": ok, "message": msg}
+
+@app.post("/api/engine/stop")
+async def engine_stop():
+    engine.stop()
+    return {"ok": True}
+
+@app.post("/api/engine/kill")
+async def engine_kill():
+    engine.kill()
+    return {"ok": True}
+
+@app.get("/api/engine/status")
+async def engine_status():
+    return engine.status()
 
 @app.get("/api/pairing")
 async def api_pairing():

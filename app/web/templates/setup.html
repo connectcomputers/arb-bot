@@ -15,9 +15,11 @@
   textarea.secret{-webkit-text-security:disc;font-family:monospace}
  textarea.secret.shown{-webkit-text-security:none}
  button.mini{background:#334155;padding:4px 10px;font-size:12px;margin-left:8px}
+  .wrap{max-width:880px;margin:0 auto}
 </style>
 </head>
 <body>
+<div class="wrap">  
 <h1>🔐 Setup Kredensial & Pair</h1>
 
 {% for venue, fields in venues.items() %}
@@ -167,6 +169,7 @@ async function simpanPairs(){
   location.href = '/limits';
 }
 </script>
+</div>
 </body>
 </html>
 
