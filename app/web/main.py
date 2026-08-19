@@ -15,6 +15,22 @@ from fastapi.templating import Jinja2Templates
 from app.config_store import load_creds, save_creds, load_config, set_venue_valid
 from app.venue_auth import check_venue
 
+from fastapi.responses import RedirectResponse
+# from app.venue_markets import top_markets
+from app.venue_markets import venue_categories
+
+LIMIT_KEYS = ["modal_total", "modal_per_op", "sl",
+              "tp", "min_profit", "rugi_harian"]
+
+
+def config_complete(cfg: dict) -> bool:
+    venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
+    pairs = cfg.get("pairs") or {}
+    n_pairs = sum(len(v) for v in pairs.values())
+    limits = cfg.get("limits") or {}
+    return (venues_ok >= 2 and n_pairs >= 1
+            and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS))
+
 # VENUE_FIELDS = {
 #     "polymarket": [("private_key", "Private Key Wallet (0x…)")],
 #     "kalshi": [("api_key_id", "API Key ID"),
@@ -56,6 +72,16 @@ def _tail_log(path: Path, lines: int = 50) -> list:
     with open(path) as f:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
+
+# @app.get("/api/markets")
+# async def api_markets(venue: str):
+#     creds = load_creds().get(venue, {})
+#     return {"venue": venue, **top_markets(venue, creds)}
+
+@app.get("/api/markets")
+async def api_markets(venue: str):
+    creds = load_creds().get(venue, {})
+    return {"venue": venue, "categories": venue_categories(venue, creds)}
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup(request: Request):
@@ -133,8 +159,13 @@ def _fmt_ts(ts):
     except Exception:
         return "-"
 
+# @app.get("/", response_class=HTMLResponse)
+# async def dashboard(request: Request):
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def index(request: Request):
+    if not config_complete(load_config()):
+        return RedirectResponse("/setup")   # ← gerbang wajib S1
+
     """Layar 1: Dashboard — ringkasan real-time + aktivitas scanner."""
     trades = _read_json(PAPER_TRADES)
     settlements = _read_json(LEDGER)
