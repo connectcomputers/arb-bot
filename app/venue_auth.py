@@ -8,19 +8,40 @@ from datetime import datetime, timezone
 import httpx
 
 
+# def check_polymarket(creds: dict):
+#     pk = creds.get("private_key", "")
+#     if not pk:
+#         return False, "private key kosong"
+#     try:
+#         from py_clob_client_v2 import ClobClient
+#         c = ClobClient(host="https://clob.polymarket.com", chain_id=137, key=pk)
+#         c.create_or_derive_api_key()
+#         return True, "API VALID"
+#     except Exception as e:
+#         return False, f"TIDAK VALID: {e}"
+
 def check_polymarket(creds: dict):
     pk = creds.get("private_key", "")
     if not pk:
         return False, "private key kosong"
     try:
+        from eth_account import Account
+        Account.from_key(pk)
+    except Exception:
+        return False, "private key tidak valid"
+    try:
         from py_clob_client_v2 import ClobClient
         c = ClobClient(host="https://clob.polymarket.com", chain_id=137, key=pk)
-        c.create_or_derive_api_key()
+        try:
+            c.create_or_derive_api_key()
+        except Exception:
+            c.derive_api_key()
         return True, "API VALID"
-    except Exception as e:
-        return False, f"TIDAK VALID: {e}"
-
-
+    except Exception:
+        return False, ("wallet valid, tetapi server menolak API key baru "
+                       "(batas key per wallet tercapai). "
+                       "Ganti ke wallet lain yang masih segar.")
+    
 # def check_kalshi(creds: dict):
 #     key_id = creds.get("api_key_id", "")
 #     pem = creds.get("private_key_pem", "")
