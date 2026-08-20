@@ -118,6 +118,7 @@ async function poll(){
   const b = document.getElementById('badge');
   b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'INACTIVE');
   b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
+  if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }  
   document.getElementById('cols').innerHTML = f.venues.map(v => `
   <div class="col">
     <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·

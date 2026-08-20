@@ -8,6 +8,8 @@ import httpx
 
 EXEC_LOG = Path("data") / "exec_log.jsonl"
 
+SERIES_CANDIDATES = ["KXMLB", "KXNFL", "KXNBA", "KXNHL", "KXELEC", "KXPOL",
+                     "KXCPI", "KXFED", "KXBTC", "KXETH", "KXSPX", "KXGOLD"]
 
 def _log(entry: dict):
     EXEC_LOG.parent.mkdir(exist_ok=True)
@@ -100,43 +102,6 @@ def exec_polymarket(creds, usd=2, dry=False):
 
 
 # def _kalshi_market(base):
-#     r = httpx.get(base + "/trade-api/v2/markets",
-#                   params={"limit": 200, "status": "open"}, timeout=12)
-#     for m in r.json().get("markets", []):
-#         if (m.get("ticker") or "").startswith("KXMVE"):
-#             continue
-#         ask = float(m.get("yes_ask_dollars") or 0)
-#         if ask > 0:
-#             return {"t": m["ticker"], "ask": ask,
-#                     "q": m.get("title") or m["ticker"]}
-#     return None
-
-# def _kalshi_market(base):
-#     r = None
-#     for lim in (1000, 500, 200):
-#         r = httpx.get(base + "/trade-api/v2/markets",
-#                       params={"limit": lim, "status": "open"}, timeout=15)
-#         if r.status_code == 200:
-#             break
-#     ms = [m for m in r.json().get("markets", [])
-#           if not (m.get("ticker") or "").startswith("KXMVE")]
-#     best = None
-#     for m in ms:
-#         ask = float(m.get("yes_ask_dollars") or 0)
-#         vol = float(m.get("volume_fp") or 0)
-#         if 0.05 < ask < 0.95 and (best is None or vol > best["vol"]):
-#             best = {"t": m["ticker"], "ask": ask, "vol": vol,
-#                     "q": m.get("title") or m["ticker"]}
-#     if best:
-#         return best
-#     for m in ms:
-#         lp = float(m.get("last_price_dollars") or 0)
-#         if 0.05 < lp < 0.95:
-#             return {"t": m["ticker"], "ask": min(lp + 0.03, 0.99),
-#                     "q": m.get("title") or m["ticker"]}
-#     return None
-
-# def _kalshi_market(base):
 #     re_ = httpx.get(base + "/trade-api/v2/events",
 #                     params={"limit": 100, "status": "open"}, timeout=15)
 #     evs = sorted([e for e in re_.json().get("events", [])
@@ -153,37 +118,60 @@ def exec_polymarket(creds, usd=2, dry=False):
 #                         "q": m.get("title") or ev.get("ticker")}
 #     return None
 
+# def _kalshi_market(base):
+#     def get(params):
+#         try:
+#             r = httpx.get(base + "/trade-api/v2/markets",
+#                           params=params, timeout=15)
+#             return r.json() if r.status_code == 200 else None
+#         except Exception:
+#             return None
+
+#     pages = []
+#     j = get({"limit": 500, "status": "open", "order_by": "volume"})
+#     if j is None:                                   # server tak kenal order_by
+#         j = get({"limit": 500, "status": "open"})
+#     while j and len(pages) < 6:                     # maks ±3.000 market
+#         pages.append(j)
+#         cur = j.get("cursor")
+#         if not cur:
+#             break
+#         j = get({"limit": 500, "status": "open", "cursor": cur})
+
+#     best = None
+#     for pg in pages:
+#         for m in pg.get("markets", []):
+#             t = m.get("ticker") or ""
+#             if t.startswith("KXMVE"):
+#                 continue
+#             ask = float(m.get("yes_ask_dollars") or 0)
+#             vol = float(m.get("volume_fp") or 0)
+#             if 0.05 < ask < 0.95 and (best is None or vol > best["vol"]):
+#                 best = {"t": t, "ask": ask, "vol": vol,
+#                         "q": m.get("title") or t}
+#         if best and best["vol"] > 0:
+#             break
+#     return best
+
 def _kalshi_market(base):
-    def get(params):
+    best = None
+    for ser in SERIES_CANDIDATES:
         try:
             r = httpx.get(base + "/trade-api/v2/markets",
-                          params=params, timeout=15)
-            return r.json() if r.status_code == 200 else None
+                          params={"limit": 50, "status": "open",
+                                  "series_ticker": ser}, timeout=12)
         except Exception:
-            return None
-
-    pages = []
-    j = get({"limit": 500, "status": "open", "order_by": "volume"})
-    if j is None:                                   # server tak kenal order_by
-        j = get({"limit": 500, "status": "open"})
-    while j and len(pages) < 6:                     # maks ±3.000 market
-        pages.append(j)
-        cur = j.get("cursor")
-        if not cur:
-            break
-        j = get({"limit": 500, "status": "open", "cursor": cur})
-
-    best = None
-    for pg in pages:
-        for m in pg.get("markets", []):
+            continue
+        if r.status_code != 200:
+            continue
+        for m in r.json().get("markets", []):
             t = m.get("ticker") or ""
             if t.startswith("KXMVE"):
                 continue
             ask = float(m.get("yes_ask_dollars") or 0)
             vol = float(m.get("volume_fp") or 0)
             if 0.05 < ask < 0.95 and (best is None or vol > best["vol"]):
-                best = {"t": t, "ask": ask, "vol": vol,
-                        "q": m.get("title") or t}
+                best = {"t": t, "ask": ask, "vol": vol, "q": m.get("title") or t}
         if best and best["vol"] > 0:
             break
     return best
