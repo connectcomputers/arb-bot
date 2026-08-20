@@ -6,10 +6,104 @@ from pathlib import Path
 
 import httpx
 
+from datetime import datetime, timezone
+from eth_account import Account
+
 EXEC_LOG = Path("data") / "exec_log.jsonl"
 
 SERIES_CANDIDATES = ["KXMLB", "KXNFL", "KXNBA", "KXNHL", "KXELEC", "KXPOL",
                      "KXCPI", "KXFED", "KXBTC", "KXETH", "KXSPX", "KXGOLD"]
+
+USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71bF37bb0B8BD"
+RPC_BASE = "https://mainnet.base.org"
+APPROVED_FLAG = Path("data") / "lim_approved.json"
+
+
+def _rpc(method, params=None):
+    r = httpx.post(RPC_BASE, json={"jsonrpc": "2.0", "id": 1,
+                   "method": method, "params": params or []}, timeout=15)
+    return r.json().get("result")
+
+
+def _lim_hmac(creds, method, path):
+    ts = datetime.now(timezone.utc).isoformat()
+    msg = f"{ts}\n{method}\n{path}\n"
+    sig = base64.b64encode(hmac.new(base64.b64decode(creds["api_secret"]),
+                   msg.encode(), hashlib.sha256).digest()).decode()
+    return {"lmts-api-key": creds["api_key"],
+            "lmts-timestamp": ts, "lmts-signature": sig}
+
+
+def _lim_switch_eoa(creds):
+    r = httpx.put("https://api.limitless.exchange/profiles",
+                  json={"tradeWalletOption": "eoa"},
+                  headers=_lim_hmac(creds, "PUT", "/profiles"), timeout=15)
+    return r.status_code
+
+
+def _lim_approve(pk, spender):
+    acct = Account.from_key(pk)
+    nonce = int(_rpc("eth_getTransactionCount", [acct.address, "latest"]), 16)
+    gp = int(_rpc("eth_gasPrice"), 16)
+    data = ("095ea7b3" + spender[2:].rjust(64, "0")
+            + format(2**256 - 1, "x").rjust(64, "0"))
+    tx = {"chainId": 8453, "nonce": nonce, "to": USDC_BASE,
+          "data": "0x" + data, "gas": 120000, "gasPrice": gp * 2}
+    signed = Account.sign_transaction(tx, pk)
+    raw = getattr(signed, "raw_transaction", None) or signed.rawTransaction
+    return _rpc("eth_sendRawTransaction", ["0x" + raw.hex()])
+
+
+def exec_limitless(creds, usd=2, dry=False):
+    pk = creds.get("wallet_pk", "")
+    if not pk:
+        return False, ("Limitless: isi Wallet Private Key dedicated di /setup "
+                       "(mode eoa, tanpa approval partner)")
+    _lim_switch_eoa(creds)
+    r = httpx.get("https://api.limitless.exchange/markets/active",
+                  params={"limit": 25}, timeout=15)
+    m = next((x for x in r.json().get("data", [])
+              if x.get("prices") and len(x["prices"]) == 2), None)
+    if not m:
+        return False, "tidak ada market limitless"
+    d = httpx.get(f"https://api.limitless.exchange/markets/{m['slug']}",
+                  timeout=15).json().get("data", {})
+    exchange = (d.get("venue") or {}).get("exchange") or d.get("exchangeAddress")
+    token_id = int((d.get("tokenIds") or [0])[0] or d.get("yesTokenId") or 0)
+    acct = Account.from_key(pk)
+    if not APPROVED_FLAG.exists():
+        _lim_approve(pk, exchange)
+        APPROVED_FLAG.write_text(json.dumps({"ts": time.time()}))
+    maker_amount = int(usd * 1e6)
+    order = {"salt": int(time.time() * 1000), "maker": acct.address,
+             "signer": acct.address,
+             "taker": "0x0000000000000000000000000000000000000000",
+             "tokenId": token_id, "makerAmount": maker_amount,
+             "takerAmount": 1, "expiration": 0, "nonce": 0,
+             "feeRateBps": 0, "side": 0, "signatureType": 0}
+    domain = {"name": "Limitless CTF Exchange", "version": "1",
+              "chainId": 8453, "verifyingContract": exchange}
+    types = {"Order": [
+        {"name": "salt", "type": "uint256"}, {"name": "maker", "type": "address"},
+        {"name": "signer", "type": "address"}, {"name": "taker", "type": "address"},
+        {"name": "tokenId", "type": "uint256"},
+        {"name": "makerAmount", "type": "uint256"},
+        {"name": "takerAmount", "type": "uint256"},
+        {"name": "expiration", "type": "uint256"}, {"name": "nonce", "type": "uint256"},
+        {"name": "feeRateBps", "type": "uint256"}, {"name": "side", "type": "uint8"},
+        {"name": "signatureType", "type": "uint8"}]}
+    sig = Account.sign_typed_data(pk, domain, types, order)
+    if dry:
+        return True, f"[DRY] limitless BUY {m['title'][:40]} sig={sig.signature.hex()[:20]}…"
+    ro = httpx.post("https://api.limitless.exchange/orders",
+                    json={**order, "signature": sig.signature.hex(),
+                          "market": m["slug"]},
+                    headers=_lim_hmac(creds, "POST", "/orders"), timeout=15)
+    _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "limitless",
+          "status": ro.status_code, "body": ro.text[:150]})
+    if ro.status_code in (200, 201):
+        return True, f"BUY {usd} USDC :: {m['title'][:40]}"
+    return False, f"limitless {ro.status_code}: {ro.text[:120]}"
 
 def _log(entry: dict):
     EXEC_LOG.parent.mkdir(exist_ok=True)
@@ -82,6 +176,7 @@ def exec_polymarket(creds, usd=2, dry=False):
         proxy = creds.get("proxy_address")
         if proxy:
             client_args["funder"] = proxy          # ← deposit wallet flow
+            client_args["signature_type"] = 2     # POLY_PROXY — workaround resmi            
         c = ClobClient(**client_args)
         try:
             api = c.create_or_derive_api_key()
