@@ -136,22 +136,57 @@ def exec_polymarket(creds, usd=2, dry=False):
 #                     "q": m.get("title") or m["ticker"]}
 #     return None
 
+# def _kalshi_market(base):
+#     re_ = httpx.get(base + "/trade-api/v2/events",
+#                     params={"limit": 100, "status": "open"}, timeout=15)
+#     evs = sorted([e for e in re_.json().get("events", [])
+#                   if not (e.get("ticker") or "").startswith("KXMVE")],
+#                  key=lambda e: float(e.get("volume") or 0), reverse=True)
+#     for ev in evs[:10]:
+#         rm = httpx.get(base + "/trade-api/v2/markets",
+#                        params={"event_ticker": ev.get("ticker"),
+#                                "status": "open"}, timeout=12)
+#         for m in rm.json().get("markets", []):
+#             ask = float(m.get("yes_ask_dollars") or 0)
+#             if 0.05 < ask < 0.95:
+#                 return {"t": m["ticker"], "ask": ask,
+#                         "q": m.get("title") or ev.get("ticker")}
+#     return None
+
 def _kalshi_market(base):
-    re_ = httpx.get(base + "/trade-api/v2/events",
-                    params={"limit": 100, "status": "open"}, timeout=15)
-    evs = sorted([e for e in re_.json().get("events", [])
-                  if not (e.get("ticker") or "").startswith("KXMVE")],
-                 key=lambda e: float(e.get("volume") or 0), reverse=True)
-    for ev in evs[:10]:
-        rm = httpx.get(base + "/trade-api/v2/markets",
-                       params={"event_ticker": ev.get("ticker"),
-                               "status": "open"}, timeout=12)
-        for m in rm.json().get("markets", []):
+    def get(params):
+        try:
+            r = httpx.get(base + "/trade-api/v2/markets",
+                          params=params, timeout=15)
+            return r.json() if r.status_code == 200 else None
+        except Exception:
+            return None
+
+    pages = []
+    j = get({"limit": 500, "status": "open", "order_by": "volume"})
+    if j is None:                                   # server tak kenal order_by
+        j = get({"limit": 500, "status": "open"})
+    while j and len(pages) < 6:                     # maks ±3.000 market
+        pages.append(j)
+        cur = j.get("cursor")
+        if not cur:
+            break
+        j = get({"limit": 500, "status": "open", "cursor": cur})
+
+    best = None
+    for pg in pages:
+        for m in pg.get("markets", []):
+            t = m.get("ticker") or ""
+            if t.startswith("KXMVE"):
+                continue
             ask = float(m.get("yes_ask_dollars") or 0)
-            if 0.05 < ask < 0.95:
-                return {"t": m["ticker"], "ask": ask,
-                        "q": m.get("title") or ev.get("ticker")}
-    return None
+            vol = float(m.get("volume_fp") or 0)
+            if 0.05 < ask < 0.95 and (best is None or vol > best["vol"]):
+                best = {"t": t, "ask": ask, "vol": vol,
+                        "q": m.get("title") or t}
+        if best and best["vol"] > 0:
+            break
+    return best
 
 def exec_kalshi(creds, usd=2, dry=False):
     from cryptography.hazmat.primitives import hashes, serialization
