@@ -1,4 +1,5 @@
 """Menu pair per venue — versi final self-consistent."""
+import json
 import httpx
 
 NATIVE_MAP = {
@@ -117,7 +118,8 @@ def classify_kalshi(title: str, ticker: str) -> str:
 def _poly(creds):
     r = httpx.get("https://gamma-api.polymarket.com/markets", params={
         "closed": "false", "limit": 200,
-        "order": "volume24hr", "ascending": "false"}, timeout=20)
+        # "order": "volume24hr", "ascending": "false"}, timeout=20)
+        "order": "volume24hr", "ascending": "false"}, timeout=10)
     return [{
         "key": m.get("conditionId") or str(m.get("id")),
         "title": (m.get("question") or "?")[:70],
@@ -169,7 +171,8 @@ def _kalshi(creds):
     r = None
     for lim in (1000, 500, 200):
         r = httpx.get(base + "/trade-api/v2/markets",
-                      params={"limit": lim, "status": "open"}, timeout=25)
+                    #   params={"limit": lim, "status": "open"}, timeout=25)
+                      params={"limit": lim, "status": "open"}, timeout=12)
         if r.status_code == 200:
             break
     rows = []
@@ -189,7 +192,8 @@ def _kalshi(creds):
     if len(rows) < 30:
         try:
             rs = httpx.get(base + "/trade-api/v2/series",
-                           params={"limit": 200}, timeout=20)
+                        #    params={"limit": 200}, timeout=20)
+                           params={"limit": 200}, timeout=10)
             for s in rs.json().get("series", []):
                 rows.append({"key": s.get("ticker"),
                              "title": (s.get("title") or "?")[:70],
@@ -235,7 +239,8 @@ def _limitless(creds):
                 params["sortBy"] = sort
             try:
                 r = httpx.get("https://api.limitless.exchange/markets/active",
-                              params=params, timeout=15)
+                            #   params=params, timeout=15)
+                              params=params, timeout=8)
                 data = r.json().get("data", [])
             except Exception:
                 break
@@ -259,7 +264,8 @@ def _poly_events(creds):
         try:
             r = httpx.get("https://gamma-api.polymarket.com/events", params={
                 "closed": "false", "limit": 50, "page": page,
-                "order": "volume24hr", "ascending": "false"}, timeout=20)
+                # "order": "volume24hr", "ascending": "false"}, timeout=20)
+                "order": "volume24hr", "ascending": "false"}, timeout=10)
             data = r.json()
             if not data:
                 break
@@ -300,7 +306,8 @@ def _kalshi_events(creds):
     rows = []
     try:
         r = httpx.get(base + "/trade-api/v2/events",
-                      params={"limit": 200, "status": "open"}, timeout=25)
+                    #   params={"limit": 200, "status": "open"}, timeout=25)
+                      params={"limit": 200, "status": "open"}, timeout=12)
         for ev in r.json().get("events", []):
             title = ev.get("title") or "?"
             tick = ev.get("ticker") or ""

@@ -13,6 +13,8 @@ STATE = Path("data") / "live_state.json"
 KILL = Path("data") / "kill.json"
 FEES = {"polymarket": 0.0, "kalshi": 0.04, "limitless": 0.004}
 
+INTERVAL = 30
+
 _thr = None
 _run = False
 
@@ -88,7 +90,6 @@ def _write(st):
     STATE.parent.mkdir(exist_ok=True)
     STATE.write_text(json.dumps(st, indent=1))
 
-
 # def _scan():
 #     cfg = load_config()
 #     creds = load_creds()
@@ -96,7 +97,6 @@ def _write(st):
 #     venues = [v for v, s in cfg["venues"].items()
 #               if s.get("valid") and s.get("enabled") and pairs.get(v)]
 
-#     # ---- bangun rows: utamakan events (judul bersih), fallback markets ----
 #     rows = {}
 #     for v in venues:
 #         ev_rows = []
@@ -115,11 +115,12 @@ def _write(st):
 #                 allr = FETCH[v](creds.get(v, {}))
 #             except Exception:
 #                 allr = []
-#             rows[v] = [r for r in allr
-#                        if r["cat"] in pairs[v] and r.get("yes")]
+#             rows[v] = [r for r in allr if r["cat"] in pairs[v]]
 
-#     # ---- matching lintas venue ----
+#     t0 = time.time()
+#     comparisons = 0
 #     matches = []
+#     near = []
 #     vs = list(rows)
 #     for i in range(len(vs)):
 #         for j in range(i + 1, len(vs)):
@@ -129,23 +130,33 @@ def _write(st):
 #                 for mb in rows[b][:60]:
 #                     if ma["cat"] != mb["cat"]:
 #                         continue
+#                     comparisons += 1
 #                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
-#                     same = (ka and ka == kb) or sim(ma["title"], mb["title"]) >= 0.5
+#                     s = sim(ma["title"], mb["title"])
+#                     same = (ka and ka == kb) or s >= 0.5
 #                     if not same:
+#                         if s >= 0.25:
+#                             near.append({"a": a, "b": b, "s": round(s, 2),
+#                                          "ta": ma["title"][:40],
+#                                          "tb": mb["title"][:40]})
 #                         continue
 #                     ya = ma.get("yes") or 0.0
 #                     yb = mb.get("yes") or 0.0
-#                     if ya > 0 and yb > 0:
-#                         spread = max(yb - ya, ya - yb)   # harga riil kedua sisi
-#                     else:
-#                         spread = 0.0                     # tampil saja, jangan trade
-#                     pi = spread - FEES[a] - FEES[b]
+#                     spread = max(yb - ya, ya - yb) if (ya > 0 and yb > 0) else 0.0
+#                     fees = FEES[a] + FEES[b]
 #                     matches.append({"a": a, "b": b, "cat": ma["cat"],
 #                                     "ta": ma["title"], "tb": mb["title"],
-#                                     "pi": round(pi, 4)})
-#     matches.sort(key=lambda m: -m["pi"])
-#     return matches[:10]      # kandidat tampil walau Π negatif;
-#                              # eksekusi tetap hanya bila Π >= min_profit
+#                                     "gross": round(spread, 4),
+#                                     "fees": round(fees, 4),
+#                                     "pi": round(spread - fees, 4)})
+#     near.sort(key=lambda x: -x["s"])
+#     matches.sort(key=lambda m: -m["pi"])        # laba terbesar → terkecil
+#     info = {"counts": {v: len(rows[v]) for v in rows},
+#             "comparisons": comparisons,
+#             "ts": time.strftime("%H:%M:%S"),
+#             "epoch": int(time.time()), # <- Tambah ini
+#             "duration": round(time.time() - t0, 1)}
+#     return matches[:10], info, near[:5]
 
 def _scan():
     cfg = load_config()
@@ -154,7 +165,10 @@ def _scan():
     venues = [v for v, s in cfg["venues"].items()
               if s.get("valid") and s.get("enabled") and pairs.get(v)]
 
-    # ---- bangun rows: utamakan events (judul bersih), fallback markets ----
+    log = []
+    def L(msg):
+        log.append(f"{time.strftime('%H:%M:%S')} {msg}")
+
     rows = {}
     for v in venues:
         ev_rows = []
@@ -173,45 +187,58 @@ def _scan():
                 allr = FETCH[v](creds.get(v, {}))
             except Exception:
                 allr = []
-            # rows[v] = [r for r in allr
-            #            if r["cat"] in pairs[v] and r.get("yes")]
             rows[v] = [r for r in allr if r["cat"] in pairs[v]]
-            
-    # ---- matching lintas venue + statistik + near-miss ----
+        L(f"fetch {v} → {len(rows[v])} event")
+
+    t0 = time.time()
+    comparisons = 0
     matches = []
     near = []
     vs = list(rows)
     for i in range(len(vs)):
         for j in range(i + 1, len(vs)):
             a, b = vs[i], vs[j]
+            n_pair = 0
             for ma in rows[a][:60]:
                 ka = crypto_key(ma["title"]) if ma["cat"] == "crypto" else None
                 for mb in rows[b][:60]:
                     if ma["cat"] != mb["cat"]:
                         continue
+                    comparisons += 1
+                    n_pair += 1
                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     same = (ka and ka == kb) or s >= 0.5
                     if not same:
-                        if s >= 0.25:                     # kandidat terdekat
+                        if s >= 0.25:
                             near.append({"a": a, "b": b, "s": round(s, 2),
                                          "ta": ma["title"][:40],
                                          "tb": mb["title"][:40]})
+                            L(f"kandidat {a}×{b} sim {s:.2f}: "
+                              f"{ma['title'][:28]} ↔ {mb['title'][:28]}")
                         continue
                     ya = ma.get("yes") or 0.0
                     yb = mb.get("yes") or 0.0
-                    if ya > 0 and yb > 0:
-                        spread = max(yb - ya, ya - yb)    # harga riil kedua sisi
-                    else:
-                        spread = 0.0                      # tampil saja, jangan trade
-                    pi = spread - FEES[a] - FEES[b]
+                    spread = max(yb - ya, ya - yb) if (ya > 0 and yb > 0) else 0.0
+                    fees = FEES[a] + FEES[b]
+                    pi = round(spread - fees, 4)
                     matches.append({"a": a, "b": b, "cat": ma["cat"],
                                     "ta": ma["title"], "tb": mb["title"],
-                                    "pi": round(pi, 4)})
+                                    "gross": round(spread, 4),
+                                    "fees": round(fees, 4), "pi": pi})
+                    L(f"MATCH {a}×{b} Π {pi*100:.1f}¢: "
+                      f"{ma['title'][:28]} ↔ {mb['title'][:28]}")
+            L(f"banding {a}×{b}: {n_pair} pairs")
     near.sort(key=lambda x: -x["s"])
-    stats = {v: len(rows[v]) for v in rows}
     matches.sort(key=lambda m: -m["pi"])
-    return matches[:10], stats, near[:5]
+    L(f"selesai: {comparisons} perbandingan · {len(matches)} match · "
+      f"{round(time.time()-t0,1)} dtk")
+    info = {"counts": {v: len(rows[v]) for v in rows},
+            "comparisons": comparisons,
+            "ts": time.strftime("%H:%M:%S"),
+            "epoch": int(time.time()),
+            "duration": round(time.time() - t0, 1)}
+    return matches[:10], info, near[:5], log[-40:]
 
 # def _loop():
 #     global _run
@@ -219,7 +246,8 @@ def _scan():
 #         cfg = load_config()
 #         st = _read()
 #         st["running"] = True
-#         st["matches"] = _scan()
+#         # st["matches"], st["stats"], st["near"] = _scan()
+#         st["matches"], st["info"], st["near"] = _scan()
 #         lim = cfg.get("limits", {})
 #         minp = float(lim.get("min_profit", 0.5)) / 100
 #         for m in st["matches"]:
@@ -231,27 +259,46 @@ def _scan():
 #                     "size": float(lim.get("modal_per_op", 1))})
 #         st["trades"] = st["trades"][-50:]
 #         _write(st)
-#         time.sleep(60)
+#         # time.sleep(60)
+#         st["interval"] = INTERVAL
+#         _write(st)
+#         time.sleep(INTERVAL)        
 
 def _loop():
     global _run
     while _run:
-        cfg = load_config()
-        st = _read()
-        st["running"] = True
-        st["matches"], st["stats"], st["near"] = _scan()
-        lim = cfg.get("limits", {})
-        minp = float(lim.get("min_profit", 0.5)) / 100
-        for m in st["matches"]:
-            if m["pi"] >= minp:
-                st.setdefault("trades", []).append({
-                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "mode": st.get("mode", "paper"),
-                    "venues": [m["a"], m["b"]], "pi": m["pi"],
-                    "size": float(lim.get("modal_per_op", 1))})
-        st["trades"] = st["trades"][-50:]
-        _write(st)
-        time.sleep(60)
+        try:
+            cfg = load_config()
+            st = _read()
+            st["running"] = True
+            st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+            lim = cfg.get("limits", {})
+            minp = float(lim.get("min_profit", 0.5)) / 100
+            for m in st["matches"]:
+                if m["pi"] >= minp:
+                    st.setdefault("trades", []).append({
+                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        "mode": st.get("mode", "paper"),
+                        "venues": [m["a"], m["b"]], "pi": m["pi"],
+                        "size": float(lim.get("modal_per_op", 1))})
+            st["trades"] = st["trades"][-50:]
+            st["interval"] = INTERVAL
+            st.pop("last_error", None)
+            _write(st)
+            time.sleep(INTERVAL)
+        except Exception as e:                 # thread TIDAK boleh mati
+            st = _read()
+            st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
+            _write(st)
+            time.sleep(5)
+
+def refresh():
+    """Scan baru sekarang juga (dipakai saat halaman dashboard dibuka)."""
+    st = _read()
+    st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+    st["interval"] = INTERVAL
+    _write(st)
+    return st
         
 def start(mode):
     global _thr, _run

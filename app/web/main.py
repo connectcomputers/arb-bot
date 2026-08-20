@@ -77,6 +77,10 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
 
+@app.post("/api/engine/refresh")
+async def engine_refresh():
+    return engine.refresh()
+
 @app.post("/api/pairs")
 async def api_pairs(request: Request):
     cfg = load_config()

@@ -19,6 +19,10 @@ h4{color:#7dd3fc;margin:12px 0 4px;font-size:11px;text-transform:uppercase}
 .tabs{margin:18px 0 8px}.tabs button{background:#334155}
 iframe{width:100%;height:70vh;border:1px solid #334155;border-radius:12px;background:#0f172a}
 a{color:#38bdf8}
+.logbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
+font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;margin:6px 0}
+.matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
+padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 </style></head>
 <body><div class="wrap">
 <header>
@@ -63,11 +67,40 @@ const it = s => `<div class="item">${s}</div>`;
     //   .map(m=>it(`[${m.cat}] Π=${(m.pi*100).toFixed(2)}¢ <span class="muted">${m.a}↔${m.b}</span>`)).join('')
     //   || '<div class="muted">menunggu scanner…</div>'}
 
+    // <h4>Match + Π</h4>
+    // <div class="muted">scan: ${(s.stats||{})[v.venue]||0} event</div>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it('['+m.cat+'] Π='+(m.pi*100).toFixed(2)+'¢ '+m.a+'↔'+m.b)).join('')
+    //   || (s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+    //     .map(n=>it('terdekat sim '+n.s+': '+n.ta+' ↔ '+n.tb)).join('')
+    //   || '<div class="muted">tidak ada kandidat</div>'}
 
+    // <h4>🔄 Screening Realtime</h4>
+    // <div class="item">scan terakhir ${(s.info||{}).ts||'-'} · ${(s.info||{}).duration||0} dtk</div>
+
+    // <h4>Match + Π bersih (terbesar → terkecil)</h4>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+
+    //     ' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+
+    //     '¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>'+
+    //     '<br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>')).join('')
+    //   || '<div class="muted">belum ada kejadian yang sama</div>'}
+    // ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+    //   .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
+
+    
 async function poll(){
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
     fetch('/api/engine/status').then(r=>r.json())]);
+  window.__st = s;
+  const ep0 = ((s.info||{}).epoch) || 0;
+  const age0 = Math.floor(Date.now()/1000) - ep0;
+  if (age0 > (s.interval||30) * 2 && !window.__rf) {
+    window.__rf = true;
+    fetch('/api/engine/refresh', {method:'POST'})
+      .then(()=>{ window.__rf = false; poll(); });
+  }  
   const b = document.getElementById('badge');
   b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'INACTIVE');
   b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
@@ -79,19 +112,47 @@ async function poll(){
     <h4>Open Positions (OP)</h4>
     ${v.positions.length ? v.positions.map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
                          : '<div class="muted">tidak ada</div>'}
-    <h4>Match + Π</h4>
-    <div class="muted">scan: ${(s.stats||{})[v.venue]||0} event</div>
-    ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
-      .map(m=>it('['+m.cat+'] Π='+(m.pi*100).toFixed(2)+'¢ '+m.a+'↔'+m.b)).join('')
-      || (s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
-        .map(n=>it('terdekat sim '+n.s+': '+n.ta+' ↔ '+n.tb)).join('')
-      || '<div class="muted">tidak ada kandidat</div>'}
+
+    <h4>🔄 Screening Realtime</h4>
+    <div class="item" id="scan-${v.venue}">🔄 …</div>
+    <div class="item">event venue ini: ${((s.info||{}).counts||{})[v.venue]||0}
+      · perbandingan: ${((s.info||{}).comparisons||0).toLocaleString('id-ID')}</div>
+    <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8)
+      .map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>      
+
+    <h4>Match + Π bersih (terbesar → terkecil)</h4>
+    <div class="matchbox">
+      ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+        .map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+
+          ' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+
+          '¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>'+
+          '<br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>')).join('')
+        || '<div class="muted">belum ada kejadian yang sama</div>'}
+      ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+        .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
+    </div>
+
     <h4>Eksekusi</h4>
     ${(s.trades||[]).filter(t=>t.venues.includes(v.venue))
       .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('')
       || '<div class="muted">belum ada</div>'}
   </div>`).join('');
 }
-poll(); setInterval(poll, 10000);
+poll(); 
+// setInterval(poll, 10000);
+setInterval(()=>{
+  const st = window.__st;
+  if(!st) return;
+  const now = Math.floor(Date.now()/1000);
+  const ep = ((st.info||{}).epoch) || now;
+  const iv = st.interval || 30;
+  const age = now - ep;
+  // const txt = age < 3 ? '🔄 sedang scanning…'
+  //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+  const txt = age < 3 ? '🔄 sedang scanning…'
+    : age > iv*2 ? '⚠ scan tertunda — memicu scan baru…'
+    : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+  document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; });
+},1000);
 </script>
 </div></body></html>

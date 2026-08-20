@@ -11,6 +11,27 @@
  "near": [
   {
    "a": "polymarket",
+   "b": "kalshi",
+   "s": 0.25,
+   "ta": "Pro Football: 2027 Champion",
+   "tb": "Who will host the 2031 Pro Football Cham"
+  },
+  {
+   "a": "polymarket",
+   "b": "kalshi",
+   "s": 0.25,
+   "ta": "Pro Football: 2027 Champion",
+   "tb": "Who will host the 2031 Pro Football Cham"
+  },
+  {
+   "a": "polymarket",
+   "b": "kalshi",
+   "s": 0.25,
+   "ta": "Pro Football: 2027 Champion",
+   "tb": "Who will host the 2031 Pro Football Cham"
+  },
+  {
+   "a": "polymarket",
    "b": "limitless",
    "s": 0.25,
    "ta": "Bitcoin above ___ on August 20?",
@@ -22,27 +43,60 @@
    "s": 0.25,
    "ta": "Bitcoin above ___ on August 20?",
    "tb": "BTC Up or Down - Daily"
-  },
-  {
-   "a": "polymarket",
-   "b": "limitless",
-   "s": 0.25,
-   "ta": "Bitcoin above ___ on August 20?",
-   "tb": "BTC Up or Down - Weekly"
-  },
-  {
-   "a": "polymarket",
-   "b": "limitless",
-   "s": 0.25,
-   "ta": "Ethereum above ___ on August 20?",
-   "tb": "ETH Up or Down - Hourly"
-  },
-  {
-   "a": "polymarket",
-   "b": "limitless",
-   "s": 0.25,
-   "ta": "Ethereum above ___ on August 20?",
-   "tb": "ETH Up or Down - Daily"
   }
+ ],
+ "info": {
+  "counts": {
+   "polymarket": 85,
+   "kalshi": 20,
+   "limitless": 121
+  },
+  "comparisons": 2912,
+  "ts": "12:23:55",
+  "epoch": 1787203435,
+  "duration": 0.2
+ },
+ "interval": 30,
+ "scanlog": [
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin Up or Down on August \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Daily",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Bitcoin above ___ on August  \u2194 BTC Up or Down - Weekly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Hourly",
+  "12:23:55 kandidat polymarket\u00d7limitless sim 0.25: Ethereum above ___ on August \u2194 ETH Up or Down - Daily",
+  "12:23:55 banding polymarket\u00d7limitless: 1940 pairs",
+  "12:23:55 banding kalshi\u00d7limitless: 540 pairs",
+  "12:23:55 selesai: 2912 perbandingan \u00b7 0 match \u00b7 0.2 dtk"
  ]
 }
