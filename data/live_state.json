@@ -1,0 +1,48 @@
+{
+ "running": true,
+ "mode": "paper",
+ "matches": [],
+ "trades": [],
+ "stats": {
+  "polymarket": 85,
+  "kalshi": 20,
+  "limitless": 123
+ },
+ "near": [
+  {
+   "a": "polymarket",
+   "b": "limitless",
+   "s": 0.25,
+   "ta": "Bitcoin above ___ on August 20?",
+   "tb": "BTC Up or Down - Hourly"
+  },
+  {
+   "a": "polymarket",
+   "b": "limitless",
+   "s": 0.25,
+   "ta": "Bitcoin above ___ on August 20?",
+   "tb": "BTC Up or Down - Daily"
+  },
+  {
+   "a": "polymarket",
+   "b": "limitless",
+   "s": 0.25,
+   "ta": "Bitcoin above ___ on August 20?",
+   "tb": "BTC Up or Down - Weekly"
+  },
+  {
+   "a": "polymarket",
+   "b": "limitless",
+   "s": 0.25,
+   "ta": "Ethereum above ___ on August 20?",
+   "tb": "ETH Up or Down - Hourly"
+  },
+  {
+   "a": "polymarket",
+   "b": "limitless",
+   "s": 0.25,
+   "ta": "Ethereum above ___ on August 20?",
+   "tb": "ETH Up or Down - Daily"
+  }
+ ]
+}

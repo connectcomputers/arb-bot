@@ -57,6 +57,13 @@ async function kill(){ if(confirm('Kill switch: hentikan & kunci eksekusi?')){
   await fetch('/api/engine/kill',{method:'POST'}); poll(); } }
 function tab(a){ document.getElementById('audit').style.display = a?'block':'none'; }
 const it = s => `<div class="item">${s}</div>`;
+
+    // <h4>Match + Π</h4>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it(`[${m.cat}] Π=${(m.pi*100).toFixed(2)}¢ <span class="muted">${m.a}↔${m.b}</span>`)).join('')
+    //   || '<div class="muted">menunggu scanner…</div>'}
+
+
 async function poll(){
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
@@ -73,9 +80,12 @@ async function poll(){
     ${v.positions.length ? v.positions.map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
                          : '<div class="muted">tidak ada</div>'}
     <h4>Match + Π</h4>
+    <div class="muted">scan: ${(s.stats||{})[v.venue]||0} event</div>
     ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
-      .map(m=>it(`[${m.cat}] Π=${(m.pi*100).toFixed(2)}¢ <span class="muted">${m.a}↔${m.b}</span>`)).join('')
-      || '<div class="muted">menunggu scanner…</div>'}
+      .map(m=>it('['+m.cat+'] Π='+(m.pi*100).toFixed(2)+'¢ '+m.a+'↔'+m.b)).join('')
+      || (s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+        .map(n=>it('terdekat sim '+n.s+': '+n.ta+' ↔ '+n.tb)).join('')
+      || '<div class="muted">tidak ada kandidat</div>'}
     <h4>Eksekusi</h4>
     ${(s.trades||[]).filter(t=>t.venues.includes(v.venue))
       .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('')

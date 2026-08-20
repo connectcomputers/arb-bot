@@ -161,6 +161,9 @@ def _poly(creds):
 #             pass
 #     return rows
 
+                    #  "yes": (float(m.get("yes_bid_dollars") or 0) +
+                    #          float(m.get("yes_ask_dollars") or 0)) / 2})
+
 def _kalshi(creds):
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
     r = None
@@ -180,8 +183,9 @@ def _kalshi(creds):
                      "cat": classify_kalshi(text, tick),
                      "vol": max(_vol(m), float(m.get("volume_fp") or 0)),
                      "liq": _liq(m),
-                     "yes": (float(m.get("yes_bid_dollars") or 0) +
-                             float(m.get("yes_ask_dollars") or 0)) / 2})
+                     "yes": ((float(m.get("yes_bid_dollars") or 0) +
+                              float(m.get("yes_ask_dollars") or 0)) / 2)
+                             or float(m.get("last_price_dollars") or 0)})
     if len(rows) < 30:
         try:
             rs = httpx.get(base + "/trade-api/v2/series",
@@ -247,6 +251,76 @@ def _limitless(creds):
         "vol": _vol(m), "liq": _liq(m),
         "yes": (m.get("prices") or [0, 0])[0] / 100,
     } for m in seen.values()]
+
+def _poly_events(creds):
+    """Ambil event Polymarket (level lebih tinggi, judul lebih bersih)."""
+    rows = []
+    for page in range(1, 6):
+        try:
+            r = httpx.get("https://gamma-api.polymarket.com/events", params={
+                "closed": "false", "limit": 50, "page": page,
+                "order": "volume24hr", "ascending": "false"}, timeout=20)
+            data = r.json()
+            if not data:
+                break
+        except Exception:
+            break
+        for ev in data:
+            title = ev.get("title") or "?"
+            cat = norm(ev.get("category")) or classify(title)
+            if not cat or cat == "lainnya":
+                continue
+            markets = ev.get("markets") or []
+            vol_total = 0.0
+            yes = 0.0
+            for m in markets:
+                vol_total += float(m.get("volume24hr") or m.get("volumeNum") or 0)
+                if not yes:
+                    op = m.get("outcomePrices")
+                    if op:
+                        try:
+                            vals = json.loads(op)          # '["1","0"]' → list
+                            yes = float(vals[0])
+                        except Exception:
+                            yes = 0.0
+            rows.append({
+                "key": ev.get("slug") or ev.get("id"),
+                "title": title[:80],
+                "cat": cat,
+                "vol": vol_total,
+                "liq": 0.0,
+                "yes": yes,
+                "kind": "event",
+            })
+    return rows
+
+def _kalshi_events(creds):
+    """Ambil event Kalshi (judul lebih deskriptif dari market)."""
+    base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+    rows = []
+    try:
+        r = httpx.get(base + "/trade-api/v2/events",
+                      params={"limit": 200, "status": "open"}, timeout=25)
+        for ev in r.json().get("events", []):
+            title = ev.get("title") or "?"
+            tick = ev.get("ticker") or ""
+            if tick.startswith("KXMVE"):
+                continue
+            cat = classify_kalshi(title, tick)
+            if not cat or cat == "lainnya":
+                continue
+            rows.append({
+                "key": tick,
+                "title": title[:80],
+                "cat": cat,
+                "vol": float(ev.get("volume") or 0),
+                "liq": float(ev.get("liquidity") or 0),
+                "yes": 0.0,            # event tidak punya YES tunggal
+                "kind": "event",
+            })
+    except Exception:
+        pass
+    return rows
 
 FETCH = {"polymarket": _poly, "kalshi": _kalshi, "limitless": _limitless}
 
