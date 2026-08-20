@@ -42,12 +42,29 @@ def config_complete(cfg: dict) -> bool:
 #     "limitless": [("api_key", "API Key"), ("api_secret", "API Secret")],
 # }
 
-VENUE_FIELDS = {
-    "polymarket": [("private_key", "Private Key Wallet (0x…)")],
-    "kalshi": [("api_key_id", "API Key ID"),
-               ("private_key_pem", "RSA Private Key (isi PEM atau path file)"),
-               ("base_url", "Base URL (OPSIONAL — kosong = produksi; isi https://demo-api.kalshi.co untuk demo)")],
-    "limitless": [("api_key", "API Key"), ("api_secret", "API Secret")],
+# VENUE_FIELDS = {
+#     "polymarket": [("private_key", "Private Key Wallet (0x…)")],
+#     "kalshi": [("api_key_id", "API Key ID"),
+#                ("private_key_pem", "RSA Private Key (isi PEM atau path file)"),
+#                ("base_url", "Base URL (OPSIONAL — kosong = produksi; isi https://demo-api.kalshi.co untuk demo)")],
+#     "limitless": [("api_key", "API Key"), ("api_secret", "API Secret")],
+# }
+
+VENUES_SCHEMA = {
+    "polymarket": [
+        ("private_key", "Private Key Wallet (0x…)"),
+        ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)"),
+    ],
+    "kalshi": [
+        ("api_key_id", "API Key ID"),
+        ("private_key_pem", "RSA Private Key (PEM)"),
+        ("base_url", "Base URL (kosong = produksi)"),
+    ],
+    "limitless": [
+        ("api_key", "API Key"),
+        ("api_secret", "API Secret"),
+        ("partner_wallet", "Partner Wallet Address (opsional, untuk order)"),
+    ],
 }
 
 app = FastAPI(title="Arb Bot Dashboard", version="1.0")
@@ -76,6 +93,11 @@ def _tail_log(path: Path, lines: int = 50) -> list:
     with open(path) as f:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
+
+@app.post("/api/exec/micro")
+async def exec_micro(request: Request):
+    data = await request.json()
+    return engine.micro_exec(data.get("venue"), dry=bool(data.get("dry")))
 
 @app.post("/api/engine/refresh")
 async def engine_refresh():
@@ -120,16 +142,22 @@ async def api_markets(venue: str):
     creds = load_creds().get(venue, {})
     return {"venue": venue, "categories": venue_categories(venue, creds)}
 
+# @app.get("/setup", response_class=HTMLResponse)
+# async def setup(request: Request):
+#     creds = load_creds()
+#     cfg = load_config()
+#     return templates.TemplateResponse(request, "setup.html", {
+#         "venues": VENUE_FIELDS,
+#         "saved": {v: (v in creds) for v in VENUE_FIELDS},
+#         "cfg": cfg,
+#     })
+
 @app.get("/setup", response_class=HTMLResponse)
 async def setup(request: Request):
-    creds = load_creds()
     cfg = load_config()
-    return templates.TemplateResponse(request, "setup.html", {
-        "venues": VENUE_FIELDS,
-        "saved": {v: (v in creds) for v in VENUE_FIELDS},
-        "cfg": cfg,
-    })
-
+    saved = {v: bool(load_creds().get(v)) for v in VENUES_SCHEMA}
+    return templates.TemplateResponse(request, "setup.html",
+        {"venues": VENUES_SCHEMA, "cfg": cfg, "saved": saved})
 
 @app.post("/api/credentials")
 async def api_credentials(request: Request):

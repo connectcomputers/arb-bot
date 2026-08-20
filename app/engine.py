@@ -8,6 +8,7 @@ from pathlib import Path
 from app.config_store import load_config, load_creds
 from app.venue_markets import FETCH
 from app.venue_markets import FETCH, _poly_events, _kalshi_events
+from app.executor import EXEC
 
 STATE = Path("data") / "live_state.json"
 KILL = Path("data") / "kill.json"
@@ -243,26 +244,30 @@ def _scan():
 # def _loop():
 #     global _run
 #     while _run:
-#         cfg = load_config()
-#         st = _read()
-#         st["running"] = True
-#         # st["matches"], st["stats"], st["near"] = _scan()
-#         st["matches"], st["info"], st["near"] = _scan()
-#         lim = cfg.get("limits", {})
-#         minp = float(lim.get("min_profit", 0.5)) / 100
-#         for m in st["matches"]:
-#             if m["pi"] >= minp:
-#                 st.setdefault("trades", []).append({
-#                     "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-#                     "mode": st.get("mode", "paper"),
-#                     "venues": [m["a"], m["b"]], "pi": m["pi"],
-#                     "size": float(lim.get("modal_per_op", 1))})
-#         st["trades"] = st["trades"][-50:]
-#         _write(st)
-#         # time.sleep(60)
-#         st["interval"] = INTERVAL
-#         _write(st)
-#         time.sleep(INTERVAL)        
+#         try:
+#             cfg = load_config()
+#             st = _read()
+#             st["running"] = True
+#             st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+#             lim = cfg.get("limits", {})
+#             minp = float(lim.get("min_profit", 0.5)) / 100
+#             for m in st["matches"]:
+#                 if m["pi"] >= minp:
+#                     st.setdefault("trades", []).append({
+#                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+#                         "mode": st.get("mode", "paper"),
+#                         "venues": [m["a"], m["b"]], "pi": m["pi"],
+#                         "size": float(lim.get("modal_per_op", 1))})
+#             st["trades"] = st["trades"][-50:]
+#             st["interval"] = INTERVAL
+#             st.pop("last_error", None)
+#             _write(st)
+#             time.sleep(INTERVAL)
+#         except Exception as e:                 # thread TIDAK boleh mati
+#             st = _read()
+#             st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
+#             _write(st)
+#             time.sleep(5)
 
 def _loop():
     global _run
@@ -274,24 +279,52 @@ def _loop():
             st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
             lim = cfg.get("limits", {})
             minp = float(lim.get("min_profit", 0.5)) / 100
+            per_op = float(lim.get("modal_per_op", 2))
+            
+            # cap belanja harian
+            today = time.strftime("%Y-%m-%d")
+            sp = st.get("spend", {})
+            if sp.get("today") != today:
+                sp = {"today": today, "amount": 0.0}
+            cap = float(lim.get("rugi_harian", 5))
+            
             for m in st["matches"]:
                 if m["pi"] >= minp:
-                    st.setdefault("trades", []).append({
-                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                        "mode": st.get("mode", "paper"),
-                        "venues": [m["a"], m["b"]], "pi": m["pi"],
-                        "size": float(lim.get("modal_per_op", 1))})
-            st["trades"] = st["trades"][-50:]
+                    # auto-exec bila mode = real & cap belum tercapai
+                    if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
+                        from app.executor import EXEC
+                        for venue in [m["a"], m["b"]]:
+                            fn = EXEC.get(venue)
+                            if fn:
+                                ok, msg = fn(load_creds().get(venue, {}), usd=per_op)
+                                if ok:
+                                    sp["amount"] = round(sp["amount"] + per_op, 2)
+                                    st.setdefault("trades", []).append({
+                                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                        "mode": "real-auto",
+                                        "venues": [venue], "pi": m["pi"],
+                                        "size": per_op, "note": msg[:60]})
+                                    st["trades"] = st["trades"][-50:]
+                    else:
+                        # paper mode atau cap tercapai
+                        st.setdefault("trades", []).append({
+                            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            "mode": st.get("mode", "paper"),
+                            "venues": [m["a"], m["b"]], "pi": m["pi"],
+                            "size": per_op})
+                        st["trades"] = st["trades"][-50:]
+            
+            st["spend"] = sp
             st["interval"] = INTERVAL
             st.pop("last_error", None)
             _write(st)
             time.sleep(INTERVAL)
-        except Exception as e:                 # thread TIDAK boleh mati
+        except Exception as e:
             st = _read()
             st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
             _write(st)
             time.sleep(5)
-
+            
 def refresh():
     """Scan baru sekarang juga (dipakai saat halaman dashboard dibuka)."""
     st = _read()
@@ -333,6 +366,38 @@ def unkill():
     if KILL.exists():
         KILL.unlink()
 
+def micro_exec(venue, dry=False):
+    if KILL.exists():
+        return {"ok": False, "message": "kill switch aktif — eksekusi ditolak"}
+    cfg = load_config()
+    lim = cfg.get("limits", {})
+    per_op = float(lim.get("modal_per_op", 2))
+    st = _read()
+
+    # cap belanja harian (proxy rugi harian untuk demo)
+    today = time.strftime("%Y-%m-%d")
+    sp = st.get("spend", {})
+    if sp.get("today") != today:
+        sp = {"today": today, "amount": 0.0}
+    cap = float(lim.get("rugi_harian", 5))
+    if not dry and sp["amount"] + per_op > cap:
+        return {"ok": False,
+                "message": f"cap harian tercapai (${sp['amount']:.2f}/${cap:.2f})"}
+
+    fn = EXEC.get(venue)
+    if not fn:
+        return {"ok": False, "message": "venue tidak dikenal"}
+    ok, msg = fn(load_creds().get(venue, {}), usd=per_op, dry=dry)
+
+    if ok and not dry:
+        sp["amount"] = round(sp["amount"] + per_op, 2)
+        st["spend"] = sp
+        st.setdefault("trades", []).append({
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-micro",
+            "venues": [venue], "pi": 0.0, "size": per_op, "note": msg[:60]})
+        st["trades"] = st["trades"][-50:]
+        _write(st)
+    return {"ok": ok, "message": msg}
 
 def status():
     st = _read()

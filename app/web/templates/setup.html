@@ -16,6 +16,7 @@
  textarea.secret.shown{-webkit-text-security:none}
  button.mini{background:#334155;padding:4px 10px;font-size:12px;margin-left:8px}
   .wrap{max-width:880px;margin:0 auto}
+  label small.hint{color:#94a3b8;font-size:11px;margin-left:6px}  
 </style>
 </head>
 <body>
@@ -28,14 +29,23 @@
     {% if saved[venue] %}<small style="color:#86efac">— kredensial tersimpan ✅</small>{% endif %}
   </h2>
   {% for name, label in fields %}
-  <label>{{ label }}
-    <!-- <textarea id="{{ venue }}-{{ name }}" rows="{{ 3 if 'pem' in name else 1 }}"
-      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea> -->
+  <!-- <textarea id="{{ venue }}-{{ name }}" rows="{{ 3 if 'pem' in name else 1 }}"
+    placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea> -->
+  <!-- <label>{{ label }}
     <textarea id="{{ venue }}-{{ name }}"
       class="{{ 'secret' if ('private' in name or 'secret' in name) else '' }}"
       rows="{{ 3 if 'pem' in name else 1 }}"
       placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>      
+  </label> -->
+
+  <label>{{ label }}
+    {% if 'opsional' in label %}<small class="hint">(boleh kosong)</small>{% endif %}
+    <textarea id="{{ venue }}-{{ name }}"
+      class="{{ 'secret' if ('private' in name or 'secret' in name) else '' }}"
+      rows="{{ 3 if 'pem' in name else 1 }}"
+      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>
   </label>
+    
   {% endfor %}
   <!-- <button onclick="cek('{{ venue }}')">CEK API</button> -->
   <button onclick="cek('{{ venue }}')">CEK API</button>

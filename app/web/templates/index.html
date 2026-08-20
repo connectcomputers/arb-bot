@@ -88,7 +88,21 @@ const it = s => `<div class="item">${s}</div>`;
     // ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
     //   .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
 
-    
+      // ${v.venue === 'limitless'
+      //   ? ' <button class="gray" disabled title="read-only: butuh EIP-712/partner">🎯</button>'
+      //   : ` <button class="blue" onclick="micro('${v.venue}')">🎯</button>`}      
+
+async function micro(v){
+  if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
+              ' (± sesuai Modal per OP)?')) return;
+  const r = await fetch('/api/exec/micro',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:v})});
+  const d = await r.json();
+  alert((d.ok?'✅ ':'❌ ')+d.message);
+  poll();
+}
+
 async function poll(){
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
@@ -107,7 +121,8 @@ async function poll(){
   document.getElementById('cols').innerHTML = f.venues.map(v => `
   <div class="col">
     <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·
-      <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
+      <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
+    </h2>
     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
     <h4>Open Positions (OP)</h4>
     ${v.positions.length ? v.positions.map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
