@@ -1,15 +1,20 @@
 """Executor S-Final: order real mikro per venue."""
 import base64
+import hashlib
+import hmac
 import json
 import time
 from pathlib import Path
-
 import httpx
+from eth_account import Account
 
 from datetime import datetime, timezone
 from eth_account import Account
 
 EXEC_LOG = Path("data") / "exec_log.jsonl"
+APPROVED_FLAG = Path("data") / "lim_approved.json"
+
+# EXEC_LOG = Path("data") / "exec_log.jsonl"
 
 SERIES_CANDIDATES = ["KXMLB", "KXNFL", "KXNBA", "KXNHL", "KXELEC", "KXPOL",
                      "KXCPI", "KXFED", "KXBTC", "KXETH", "KXSPX", "KXGOLD"]
@@ -293,8 +298,14 @@ def exec_kalshi(creds, usd=2, dry=False):
                  "/portfolio/orders"):
         ts = str(int(time.time() * 1000))
         msg = f"{ts}POST{path}".encode()
-        sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                       salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256)
+        # sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+        #                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256)
+        sig = key.sign(
+            data=msg,
+            padding=padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                salt_length=padding.PSS.DIGEST_LENGTH),
+            algorithm=hashes.SHA256()
+        )        
         r = httpx.post(base + path, json=body, headers={
             "KALSHI-ACCESS-KEY": key_id,
             "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
@@ -308,9 +319,9 @@ def exec_kalshi(creds, usd=2, dry=False):
     return False, "semua path order 404"
 
 
-def exec_limitless(creds, usd=1, dry=False):
-    return False, ("Limitless read-only: order butuh tanda tangan EIP-712 "
-                   "wallet / delegated partner (di luar scope fase ini)")
+# def exec_limitless(creds, usd=1, dry=False):
+#     return False, ("Limitless read-only: order butuh tanda tangan EIP-712 "
+#                    "wallet / delegated partner (di luar scope fase ini)")
 
 
 EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
