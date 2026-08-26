@@ -94,6 +94,15 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
 
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    if not config_complete(load_config()):
+        return RedirectResponse("/setup")
+    st = engine.status()
+    if st.get("kill") or st.get("need_rearm"):
+        return RedirectResponse("/setup", status_code=303)   # sesi berakhir → setup
+    return templates.TemplateResponse(request, "index.html", {})
+
 @app.post("/api/exec/micro")
 async def exec_micro(request: Request):
     data = await request.json()
@@ -101,20 +110,15 @@ async def exec_micro(request: Request):
 
 @app.post("/api/engine/refresh")
 async def engine_refresh():
-    return engine.refresh()
+    return engine.refresh()          # engine.refresh() sendiri menolak saat kill/berhenti
 
 @app.post("/api/pairs")
 async def api_pairs(request: Request):
     cfg = load_config()
     cfg["pairs"] = (await request.json()).get("pairs", {})
     save_config(cfg)
+    engine.unkill()                  # ✅ Simpan di setup = buka sesi baru
     return {"saved": True}
-
-# @app.get("/limits", response_class=HTMLResponse)
-# async def limits(request: Request):
-#     cfg = load_config()
-#     return templates.TemplateResponse(request, "limits.html",
-#                                       {"limits": cfg.get("limits", {})})
 
 @app.get("/limits", response_class=HTMLResponse)
 async def limits(request: Request):
@@ -130,27 +134,13 @@ async def api_limits(request: Request):
     cfg = load_config()
     cfg["limits"] = (await request.json()).get("limits", {})
     save_config(cfg)
+    engine.unkill()                  # ✅
     return {"saved": True}
-
-# @app.get("/api/markets")
-# async def api_markets(venue: str):
-#     creds = load_creds().get(venue, {})
-#     return {"venue": venue, **top_markets(venue, creds)}
 
 @app.get("/api/markets")
 async def api_markets(venue: str):
     creds = load_creds().get(venue, {})
     return {"venue": venue, "categories": venue_categories(venue, creds)}
-
-# @app.get("/setup", response_class=HTMLResponse)
-# async def setup(request: Request):
-#     creds = load_creds()
-#     cfg = load_config()
-#     return templates.TemplateResponse(request, "setup.html", {
-#         "venues": VENUE_FIELDS,
-#         "saved": {v: (v in creds) for v in VENUE_FIELDS},
-#         "cfg": cfg,
-#     })
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup(request: Request):
@@ -163,73 +153,21 @@ async def setup(request: Request):
 async def api_credentials(request: Request):
     data = await request.json()
     save_creds(data.get("venue"), data.get("creds", {}))
+    engine.unkill()                  # ✅
     return {"saved": True}
-
 
 @app.post("/api/cek-api")
 async def api_cek(request: Request):
     venue = (await request.json()).get("venue")
     ok, msg = check_venue(venue, load_creds().get(venue, {}))
     set_venue_valid(venue, ok)
-    return {"ok": ok, "message": msg}
-
-# @app.get("/", response_class=HTMLResponse)
-# async def dashboard(request: Request):
-#     """Layar 1: Dashboard — ringkasan real-time."""
-#     trades = _read_json(PAPER_TRADES)
-#     settlements = _read_json(LEDGER)
-    
-#     # Hitung statistik
-#     total_trades = len(trades)
-#     total_pi = sum(float(t.get("pi", 0)) for t in trades)
-#     matched = sum(1 for s in settlements if s.get("status") == "MATCH")
-#     conflicts = sum(1 for s in settlements if s.get("status") == "SETTLEMENT_CONFLICT")
-    
-#     # Service status
-#     try:
-#         result = subprocess.run(
-#             ["systemctl", "--user", "is-active", SERVICE_NAME],
-#             capture_output=True, text=True, timeout=2
-#         )
-#         service_status = result.stdout.strip()
-#     except Exception:
-#         service_status = "unknown"
-    
-#     # return templates.TemplateResponse("index.html", {
-#     #     "request": request,
-#     #     "page": "dashboard",
-#     #     "stats": {
-#     #         "total_trades": total_trades,
-#     #         "total_pi": f"${total_pi:.2f}",
-#     #         "matched": matched,
-#     #         "conflicts": conflicts,
-#     #         "service_status": service_status,
-#     #     },
-#     # })
-
-#     return templates.TemplateResponse(request, "index.html", {
-#         "stats": {
-#             "total_trades": total_trades,
-#             "total_pi": f"${total_pi:.2f}",
-#             "matched": matched,
-#             "conflicts": conflicts,
-#             "service_status": service_status,
-#         },
-#     })
-
+    return {"ok": ok, "message": msg}   # cek saja TIDAK membuka kunci
 
 def _fmt_ts(ts):
     try:
         return datetime.fromtimestamp(int(ts)).strftime("%d/%m %H:%M")
     except Exception:
         return "-"
-
-# @app.get("/", response_class=HTMLResponse)
-# async def dashboard(request: Request):
-# @app.get("/", response_class=HTMLResponse)
-# async def index(request: Request):
-#     if not config_complete(load_config()):
-#         return RedirectResponse("/setup")   # ← gerbang wajib S1
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -307,17 +245,16 @@ async def venue_feed():
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
     mode = (await request.json()).get("mode", "paper")
-    ok, msg = engine.start(mode)
-    return {"ok": ok, "message": msg}
+    return engine.start(mode)        # start menolak sendiri bila kill aktif
 
 @app.post("/api/engine/stop")
 async def engine_stop():
-    engine.stop()
+    engine.stop()                    # stop real → need_rearm (logika di engine)
     return {"ok": True}
 
 @app.post("/api/engine/kill")
 async def engine_kill():
-    engine.kill()
+    engine.kill()                    # kill → kunci + need_rearm
     return {"ok": True}
 
 @app.get("/api/engine/status")
@@ -405,6 +342,5 @@ async def kill_switch():
             "🛑 <b>KILL SWITCH ACTIVATED</b>\n"
             "Service dihentikan manual via dashboard."
         ))
-        return {"status": "stopped", "message": "Service stopped + alert sent"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

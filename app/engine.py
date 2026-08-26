@@ -10,6 +10,8 @@ from app.venue_markets import FETCH
 from app.venue_markets import FETCH, _poly_events, _kalshi_events
 from app.executor import EXEC
 
+SESSION = Path("data") / "session.json"
+
 STATE = Path("data") / "live_state.json"
 KILL = Path("data") / "kill.json"
 FEES = {"polymarket": 0.0, "kalshi": 0.04, "limitless": 0.004}
@@ -34,6 +36,18 @@ MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
           "august": 8, "september": 9, "october": 10}
 
+def _start_session(mode):
+    SESSION.parent.mkdir(exist_ok=True)
+    SESSION.write_text(json.dumps(
+        {"mode": mode, "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}))
+
+def _session_mode():
+    if SESSION.exists():
+        try:
+            return json.loads(SESSION.read_text()).get("mode")
+        except Exception:
+            pass
+    return None
 
 def _num(s):
     s = s.replace(",", "").replace("$", "").strip()
@@ -368,14 +382,23 @@ def _loop():
             _write(st)
             time.sleep(5)
                         
+# def refresh():
+#     """Scan baru sekarang juga (dipakai saat halaman dashboard dibuka)."""
+#     st = _read()
+#     st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+#     st["interval"] = INTERVAL
+#     _write(st)
+#     return st
+
 def refresh():
-    """Scan baru sekarang juga (dipakai saat halaman dashboard dibuka)."""
+    if KILL.exists() or not _run:     # ← kunci: tidak scan saat berhenti/kill
+        return status()
     st = _read()
     st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
     st["interval"] = INTERVAL
     _write(st)
     return st
-        
+
 def start(mode):
     global _thr, _run
     if KILL.exists():
@@ -391,23 +414,49 @@ def start(mode):
     return True, f"engine {mode} dimulai"
 
 
+# def stop():
+#     global _run
+#     _run = False
+#     st = _read()
+#     st["running"] = False
+#     _write(st)
+
 def stop():
     global _run
+    was_real = _session_mode() == "real"
+    if SESSION.exists():
+        SESSION.unlink()
     _run = False
     st = _read()
     st["running"] = False
+    if was_real:                      # real = sesi berakhir, wajib re-arm
+        st["need_rearm"] = True
     _write(st)
 
+# def kill():
+#     stop()
+#     KILL.parent.mkdir(exist_ok=True)
+#     KILL.write_text(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S")}))
 
 def kill():
     stop()
+    st = _read()
+    st["need_rearm"] = True           # kill = selalu akhiri sesi
+    _write(st)
     KILL.parent.mkdir(exist_ok=True)
     KILL.write_text(json.dumps({"ts": time.strftime("%Y-%m-%dT%H:%M:%S")}))
 
+# def unkill():
+#     if KILL.exists():
+#         KILL.unlink()
 
 def unkill():
     if KILL.exists():
         KILL.unlink()
+    st = _read()
+    st.pop("need_rearm", None)
+    st.pop("auto_stop", None)
+    _write(st)
 
 def micro_exec(venue, dry=False):
     if KILL.exists():
@@ -442,8 +491,15 @@ def micro_exec(venue, dry=False):
         _write(st)
     return {"ok": ok, "message": msg}
 
+# def status():
+#     st = _read()
+#     st["running"] = bool(_run)
+#     st["kill"] = KILL.exists()
+#     return st
+
 def status():
     st = _read()
     st["running"] = bool(_run)
     st["kill"] = KILL.exists()
+    st["session"] = _session_mode()
     return st

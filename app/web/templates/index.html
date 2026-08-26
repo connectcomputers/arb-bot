@@ -165,9 +165,14 @@ setInterval(()=>{
   const age = now - ep;
   // const txt = age < 3 ? '🔄 sedang scanning…'
   //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
-  const txt = age < 3 ? '🔄 sedang scanning…'
+  // const txt = age < 3 ? '🔄 sedang scanning…'
+  //   : age > iv*2 ? '⚠ scan tertunda — memicu scan baru…'
+  //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+
+  const txt = !st.running ? '⏹ mesin berhenti — mulai lagi bila siap'
+    : age < 3 ? '🔄 sedang scanning…'
     : age > iv*2 ? '⚠ scan tertunda — memicu scan baru…'
-    : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+    : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;  
   document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; });
 },1000);
 </script>
