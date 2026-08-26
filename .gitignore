@@ -218,3 +218,8 @@ __marimo__/
 .streamlit/secrets.toml
 data/credentials.json
 data/trading_config.json
+data/kill.json
+data/live_state.json
+data/session.json
+data/exec_log.jsonl
+data/lim_approved.json
