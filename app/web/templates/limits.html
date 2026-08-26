@@ -8,6 +8,7 @@ button{background:#059669;color:#fff;border:none;border-radius:6px;padding:10px 
 button:disabled{background:#475569;cursor:not-allowed}
 .muted{color:#94a3b8;font-size:12px}code{color:#fbbf24}
  .wrap{max-width:880px;margin:0 auto}
+button:disabled{opacity:.4;cursor:not-allowed} 
 </style>
 </head><body>
 <div class="wrap">    
@@ -38,7 +39,7 @@ button:disabled{background:#475569;cursor:not-allowed}
   ✅ Berhasil disimpan ke <code>data/trading_config.json</code></span>
 <br><br>
 <button id="dash" style="display:none;background:#0ea5e9"
-        onclick="bukaDashboard()">📊 Buka Dashboard</button>
+        onclick="bukaDashboard()" disabled>📊 Buka Dashboard</button>
 </div>
 
 <script>
@@ -59,6 +60,9 @@ async function kirim(){
 async function simpan(){
   await kirim();
   document.getElementById('notif').style.display = 'inline';
+  const b = document.getElementById('dash');
+  b.disabled = false;
+  b.onclick = () => location.href = '/';  
   document.getElementById('dash').style.display = 'inline-block';
 }
 async function bukaDashboard(){

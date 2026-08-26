@@ -114,6 +114,15 @@ async def limits(request: Request):
         "pairs": cfg.get("pairs", {}),
     })
 
+# @app.get("/limits")
+# async def limits(request: Request):
+#     cfg = load_config()
+#     return templates.TemplateResponse(request, "limits.html", {
+#         "limits": {},                      # ← field selalu kosong
+#         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
+#         "pairs": cfg.get("pairs", {}),
+#     })
+
 @app.post("/api/limits")
 async def api_limits(request: Request):
     cfg = load_config()
@@ -237,10 +246,16 @@ async def venue_feed():
         "positions": get_positions(v, creds.get(v, {})) if s.get("valid") else [],
     } for v, s in cfg["venues"].items()]}
 
+# @app.post("/api/engine/start")
+# async def engine_start(request: Request):
+#     mode = (await request.json()).get("mode", "paper")
+#     return engine.start(mode)        # start menolak sendiri bila kill aktif
+
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
     mode = (await request.json()).get("mode", "paper")
-    return engine.start(mode)        # start menolak sendiri bila kill aktif
+    ok, msg = engine.start(mode)
+    return {"ok": ok, "message": msg}
 
 @app.post("/api/engine/stop")
 async def engine_stop():
