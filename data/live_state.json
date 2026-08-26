@@ -102,6 +102,5 @@
  "spend": {
   "today": "2026-08-20",
   "amount": 0.0
- },
- "need_rearm": true
+ }
 }
