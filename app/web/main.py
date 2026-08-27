@@ -45,11 +45,17 @@ VENUES_SCHEMA = {
         ("private_key_pem", "RSA Private Key (PEM)"),
         ("base_url", "Base URL (kosong = produksi)"),
     ],
+    # "limitless": [
+    #     ("api_key", "API Key"),
+    #     ("api_secret", "API Secret"),
+    #     ("partner_wallet", "Partner Wallet Address (opsional, untuk order)"),
+    # ],
     "limitless": [
         ("api_key", "API Key"),
         ("api_secret", "API Secret"),
-        ("partner_wallet", "Partner Wallet Address (opsional, untuk order)"),
-    ],
+        ("partner_wallet", "Partner Wallet Address (opsional, fase partner)"),
+        ("wallet_pk", "Wallet Private Key dedicated (0x…, untuk order real)"),
+    ],    
 }
 
 app = FastAPI(title="Arb Bot Dashboard", version="1.0")

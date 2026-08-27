@@ -154,6 +154,10 @@ def exec_polymarket(creds, usd=2, dry=False):
     size = max(1, int(usd // price))
     if dry:
         return True, f"[DRY] BUY YES {size} x {price} :: {m['q'][:50]}"
+    # ---- GUARDRAIL: order real wajib proxy (deposit wallet flow) ----
+    if not dry and not creds.get("proxy_address"):                      # ← TAMBAH
+        return (False, "Poly real butuh Deposit/Proxy Wallet Address — "
+                       "isi di /setup (deposit wallet flow wajib)")     # ← TAMBAH
     try:
         # from py_clob_client_v2 import ClobClient
         # from py_clob_client_v2.clob_types import OrderArgs, OrderType

@@ -92,6 +92,10 @@ const it = s => `<div class="item">${s}</div>`;
       //   ? ' <button class="gray" disabled title="read-only: butuh EIP-712/partner">🎯</button>'
       //   : ` <button class="blue" onclick="micro('${v.venue}')">🎯</button>`}      
 
+    // <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·
+    //   <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
+    // </h2>
+
 async function micro(v){
   if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
               ' (± sesuai Modal per OP)?')) return;
@@ -108,6 +112,7 @@ async function poll(){
     fetch('/api/venue-feed').then(r=>r.json()),
     fetch('/api/engine/status').then(r=>r.json())]);
   window.__st = s;
+  if (s.kill || s.need_rearm){ location.href = '/setup'; return; }   // ← TAMBAH INI
   const ep0 = ((s.info||{}).epoch) || 0;
   const age0 = Math.floor(Date.now()/1000) - ep0;
   if (age0 > (s.interval||30) * 2 && !window.__rf) {
@@ -123,6 +128,7 @@ async function poll(){
   <div class="col">
     <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·
       <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
+      <button class="blue" onclick="micro('${v.venue}')">🎯</button>
     </h2>
     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
     <h4>Open Positions (OP)</h4>
