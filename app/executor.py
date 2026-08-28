@@ -50,15 +50,54 @@ def _k_headers(creds, method, path, body=""):
             "Content-Type": "application/json"}
 
 
-def _k_market():
-    with httpx.Client(timeout=10) as client:
-        r = client.get(KALSHI_HOST + KALSHI_ROOT + "/markets",
-                       params={"status": "open", "limit": 100})
-        r.raise_for_status()
-    for m in r.json().get("markets", []):
-        yes = float(m.get("yes_ask") or 0) / 100
-        if 0.30 <= yes <= 0.70 and m.get("ticker"):
-            return {"ticker": m["ticker"], "yes": yes}
+# def _k_market():
+#     with httpx.Client(timeout=10) as client:
+#         r = client.get(KALSHI_HOST + KALSHI_ROOT + "/markets",
+#                        params={"status": "open", "limit": 100})
+#         r.raise_for_status()
+#     for m in r.json().get("markets", []):
+#         yes = float(m.get("yes_ask") or 0) / 100
+#         if 0.30 <= yes <= 0.70 and m.get("ticker"):
+#             return {"ticker": m["ticker"], "yes": yes}
+#     return None
+
+def _k_price(m):
+    """Harga YES (0..1) dari field mana pun yang tersedia."""
+    for f in ("yes_ask", "yes_ask_dollars", "last_price",
+              "last_price_dollars", "yes_bid"):
+        v = m.get(f)
+        if v not in (None, "", 0, "0"):
+            v = float(v)
+            return v / 100 if v > 1 else v
+    return 0.0
+
+
+def _k_market(creds, ticker=None):
+    targets = [
+        # host baru WAJIB auth
+        (KALSHI_HOST, _k_headers(creds, "GET", KALSHI_ROOT + "/markets")),
+        # host lama publik (fallback, sama dengan screening)
+        ("https://api.elections.kalshi.com", None),
+    ]
+    for host, hdr in targets:
+        try:
+            with httpx.Client(timeout=10) as client:
+                r = client.get(host + KALSHI_ROOT + "/markets",
+                               params={"status": "open", "limit": 200},
+                               headers=hdr)
+                r.raise_for_status()
+            ms = r.json().get("markets", [])
+            if ticker:                      # mode uji: ticker eksplisit
+                for m in ms:
+                    if m.get("ticker") == ticker:
+                        return {"ticker": ticker, "yes": _k_price(m) or 0.50}
+                continue
+            for m in ms:                    # mode auto: cari yang likuid
+                yes = _k_price(m)
+                if 0.30 <= yes <= 0.70 and m.get("ticker"):
+                    return {"ticker": m["ticker"], "yes": yes}
+        except Exception:
+            continue
     return None
 
 def _rpc(method, params=None):
@@ -96,7 +135,7 @@ def _lim_approve(pk, spender):
     return _rpc("eth_sendRawTransaction", ["0x" + raw.hex()])
 
 
-def exec_limitless(creds, usd=2, dry=False):
+def exec_limitless(creds, usd=2, dry=False, ticker=None):
     pk = creds.get("wallet_pk", "")
     if not pk:
         return False, ("Limitless: isi Wallet Private Key dedicated di /setup "
@@ -183,7 +222,7 @@ def _poly_market():
             return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask}
     return None
 
-def exec_polymarket(creds, usd=2, dry=False):
+def exec_polymarket(creds, usd=2, dry=False, ticker=None):
     m = _poly_market()
     if not m:
         return False, "tidak ada market likuid"
@@ -317,7 +356,7 @@ def _kalshi_market(base):
             break
     return best
 
-# def exec_kalshi(creds, usd=2, dry=False):
+# def exec_kalshi(creds, usd=2, dry=False, ticker=None):
 #     from cryptography.hazmat.primitives import hashes, serialization
 #     from cryptography.hazmat.primitives.asymmetric import padding
 #     key_id = creds.get("api_key_id", "")
@@ -359,8 +398,9 @@ def _kalshi_market(base):
 #             return False, f"kalshi {r.status_code}: {r.text[:120]}"
 #     return False, "semua path order 404"
 
-def exec_kalshi(creds, usd=2, dry=False):
-    m = _k_market()
+def exec_kalshi(creds, usd=2, dry=False, ticker=None):
+    # m = _k_market()
+    m = _k_market(creds, ticker=ticker)     # ← ganti baris lama
     if not m:
         return False, "tidak ada market kalshi likuid"
     price = min(round(m["yes"] + 0.01, 2), 0.99)
