@@ -62,37 +62,40 @@ def _k_headers(creds, method, path, body=""):
 #     return None
 
 def _k_price(m):
-    """Harga YES (0..1) dari field mana pun yang tersedia."""
-    for f in ("yes_ask", "yes_ask_dollars", "last_price",
-              "last_price_dollars", "yes_bid"):
+    for f in ("yes_ask_dollars", "last_price_dollars", "yes_bid_dollars",
+              "yes_ask", "last_price", "yes_bid"):
         v = m.get(f)
         if v not in (None, "", 0, "0"):
             v = float(v)
             return v / 100 if v > 1 else v
     return 0.0
 
+def _k_get_market(creds, ticker):
+    path = KALSHI_ROOT + "/markets/" + ticker
+    for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", path)),
+                      ("https://api.elections.kalshi.com", None)):
+        try:
+            with httpx.Client(timeout=10) as client:
+                r = client.get(host + path, headers=hdr)
+                r.raise_for_status()
+            m = r.json().get("market") or {}
+            if m.get("ticker"):
+                return {"ticker": m["ticker"], "yes": _k_price(m) or 0.50}
+        except Exception:
+            continue
+    return None
 
 def _k_market(creds, ticker=None):
-    targets = [
-        # host baru WAJIB auth
-        (KALSHI_HOST, _k_headers(creds, "GET", KALSHI_ROOT + "/markets")),
-        # host lama publik (fallback, sama dengan screening)
-        ("https://api.elections.kalshi.com", None),
-    ]
-    for host, hdr in targets:
+    if ticker:
+        return _k_get_market(creds, ticker)      # ← endpoint tunggal, terbukti 200
+    for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", KALSHI_ROOT + "/markets")),
+                      ("https://api.elections.kalshi.com", None)):
         try:
             with httpx.Client(timeout=10) as client:
                 r = client.get(host + KALSHI_ROOT + "/markets",
-                               params={"status": "open", "limit": 200},
-                               headers=hdr)
+                               params={"status": "open", "limit": 500}, headers=hdr)
                 r.raise_for_status()
-            ms = r.json().get("markets", [])
-            if ticker:                      # mode uji: ticker eksplisit
-                for m in ms:
-                    if m.get("ticker") == ticker:
-                        return {"ticker": ticker, "yes": _k_price(m) or 0.50}
-                continue
-            for m in ms:                    # mode auto: cari yang likuid
+            for m in r.json().get("markets", []):
                 yes = _k_price(m)
                 if 0.30 <= yes <= 0.70 and m.get("ticker"):
                     return {"ticker": m["ticker"], "yes": yes}
