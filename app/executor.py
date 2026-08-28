@@ -156,6 +156,14 @@ def exec_limitless(creds, usd=2, dry=False, ticker=None):
                   timeout=15).json().get("data", {})
     exchange = (d.get("venue") or {}).get("exchange") or d.get("exchangeAddress")
     token_id = int((d.get("tokenIds") or [0])[0] or d.get("yesTokenId") or 0)
+    
+    pk = (creds.get("wallet_pk") or "").strip()
+    pk_hex = pk[2:] if pk.lower().startswith("0x") else pk
+    if len(pk_hex) != 64 or not set(pk_hex) <= set("0123456789abcdefABCDEF"):
+        return (False, f"Limitless: field Wallet Private Key berisi "
+                       f"{len(pk_hex)} hex (ALAMAT wallet) — butuh PRIVATE KEY "
+                       f"64 hex; minta re-ekspor dari wallet")
+        
     acct = Account.from_key(pk)
     if not APPROVED_FLAG.exists():
         _lim_approve(pk, exchange)
