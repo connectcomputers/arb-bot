@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+import uuid as _uuid
 from pathlib import Path
 import httpx
 from eth_account import Account
@@ -23,6 +24,34 @@ USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71bF37bb0B8BD"
 RPC_BASE = "https://mainnet.base.org"
 APPROVED_FLAG = Path("data") / "lim_approved.json"
 
+KALSHI_HOST = "https://external-api.kalshi.com"
+KALSHI_ROOT = "/trade-api/v2"
+
+def _k_sign(pem, ts, method, path, body=""):
+    key = serialization.load_pem_private_key(pem.encode(), password=None)
+    sig = key.sign(f"{ts}{method}{path}{body}".encode(),
+                   padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                               salt_length=padding.PSS.DIGEST_LENGTH),
+                   hashes.SHA256())
+    return base64.b64encode(sig).decode()
+
+def _k_headers(creds, method, path, body=""):
+    ts = str(int(time.time() * 1000))
+    return {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+            "KALSHI-ACCESS-SIGNATURE": _k_sign(
+                creds.get("private_key_pem", ""), ts, method, path, body),
+            "KALSHI-ACCESS-TIMESTAMP": ts,
+            "Content-Type": "application/json"}
+
+def _k_market():
+    r = requests.get(KALSHI_HOST + KALSHI_ROOT + "/markets",
+                     params={"status": "open", "limit": 100}, timeout=10)
+    r.raise_for_status()
+    for m in r.json().get("markets", []):
+        yes = float(m.get("yes_ask") or 0) / 100
+        if 0.30 <= yes <= 0.70 and m.get("ticker"):
+            return {"ticker": m["ticker"], "yes": yes}
+    return None
 
 def _rpc(method, params=None):
     r = httpx.post(RPC_BASE, json={"jsonrpc": "2.0", "id": 1,
@@ -280,48 +309,70 @@ def _kalshi_market(base):
             break
     return best
 
-def exec_kalshi(creds, usd=2, dry=False):
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    key_id = creds.get("api_key_id", "")
-    pem = (creds.get("private_key_pem") or "").strip()
-    if not key_id or "-----BEGIN" not in pem:
-        return False, "kredensial kalshi belum lengkap"
-    base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
-    m = _kalshi_market(base)
-    if not m:
-        return False, "tidak ada market ber-quote"
-    price = min(round(m["ask"] + 0.01, 2), 0.99)
-    count = max(1, int(usd))
-    body = {"action": "buy", "side": "yes", "ticker": m["t"],
-            "count": count, "type": "limit", "price": price}
-    if dry:
-        return True, f"[DRY] {body}"
-    key = serialization.load_pem_private_key(pem.encode(), password=None)
-    for path in ("/trade-api/v2/orders", "/trade-api/v2/portfolio/orders",
-                 "/portfolio/orders"):
-        ts = str(int(time.time() * 1000))
-        msg = f"{ts}POST{path}".encode()
-        # sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-        #                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256)
-        sig = key.sign(
-            data=msg,
-            padding=padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                                salt_length=padding.PSS.DIGEST_LENGTH),
-            algorithm=hashes.SHA256()
-        )        
-        r = httpx.post(base + path, json=body, headers={
-            "KALSHI-ACCESS-KEY": key_id,
-            "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
-            "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=12)
-        if r.status_code != 404:
-            _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "kalshi",
-                  "path": path, "status": r.status_code, "body": r.text[:150]})
-            if r.status_code in (200, 201):
-                return True, f"BUY YES {count} x {price} :: {m['q'][:40]}"
-            return False, f"kalshi {r.status_code}: {r.text[:120]}"
-    return False, "semua path order 404"
+# def exec_kalshi(creds, usd=2, dry=False):
+#     from cryptography.hazmat.primitives import hashes, serialization
+#     from cryptography.hazmat.primitives.asymmetric import padding
+#     key_id = creds.get("api_key_id", "")
+#     pem = (creds.get("private_key_pem") or "").strip()
+#     if not key_id or "-----BEGIN" not in pem:
+#         return False, "kredensial kalshi belum lengkap"
+#     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+#     m = _kalshi_market(base)
+#     if not m:
+#         return False, "tidak ada market ber-quote"
+#     price = min(round(m["ask"] + 0.01, 2), 0.99)
+#     count = max(1, int(usd))
+#     body = {"action": "buy", "side": "yes", "ticker": m["t"],
+#             "count": count, "type": "limit", "price": price}
+#     if dry:
+#         return True, f"[DRY] {body}"
+#     key = serialization.load_pem_private_key(pem.encode(), password=None)
+#     for path in ("/trade-api/v2/orders", "/trade-api/v2/portfolio/orders",
+#                  "/portfolio/orders"):
+#         ts = str(int(time.time() * 1000))
+#         msg = f"{ts}POST{path}".encode()
+#         # sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+#         #                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256)
+#         sig = key.sign(
+#             data=msg,
+#             padding=padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+#                                 salt_length=padding.PSS.DIGEST_LENGTH),
+#             algorithm=hashes.SHA256()
+#         )        
+#         r = httpx.post(base + path, json=body, headers={
+#             "KALSHI-ACCESS-KEY": key_id,
+#             "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
+#             "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=12)
+#         if r.status_code != 404:
+#             _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "kalshi",
+#                   "path": path, "status": r.status_code, "body": r.text[:150]})
+#             if r.status_code in (200, 201):
+#                 return True, f"BUY YES {count} x {price} :: {m['q'][:40]}"
+#             return False, f"kalshi {r.status_code}: {r.text[:120]}"
+#     return False, "semua path order 404"
 
+def exec_kalshi(creds, usd=2, dry=False):
+    m = _k_market()
+    if not m:
+        return False, "tidak ada market kalshi likuid"
+    price = min(round(m["yes"] + 0.01, 2), 0.99)
+    size = max(1, int(usd // price))
+    if dry:
+        return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
+    path = KALSHI_ROOT + "/portfolio/events/orders"
+    body = json.dumps({
+        "ticker": m["ticker"],
+        "side": "bid",                      # bid = beli YES
+        "count": f"{size:.2f}",
+        "price": f"{price:.4f}",            # dollar fixed-point
+        "client_order_id": str(_uuid.uuid4()),
+    }, separators=(",", ":"))
+    r = requests.post(KALSHI_HOST + path,
+                      headers=_k_headers(creds, "POST", path, body),
+                      data=body, timeout=15)
+    if r.status_code >= 400:
+        return False, f"kalshi {r.status_code}: {r.text[:200]}"
+    return True, f"BUY YES {size} x {price} :: {m['ticker']}"
 
 # def exec_limitless(creds, usd=1, dry=False):
 #     return False, ("Limitless read-only: order butuh tanda tangan EIP-712 "
