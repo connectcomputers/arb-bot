@@ -4,9 +4,12 @@ import hashlib
 import hmac
 import json
 import time
-import uuid as _uuid
 from pathlib import Path
+# import httpx
+import uuid as _uuid
 import httpx
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
 from eth_account import Account
 
 from datetime import datetime, timezone
@@ -24,8 +27,10 @@ USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71bF37bb0B8BD"
 RPC_BASE = "https://mainnet.base.org"
 APPROVED_FLAG = Path("data") / "lim_approved.json"
 
+
 KALSHI_HOST = "https://external-api.kalshi.com"
 KALSHI_ROOT = "/trade-api/v2"
+
 
 def _k_sign(pem, ts, method, path, body=""):
     key = serialization.load_pem_private_key(pem.encode(), password=None)
@@ -35,6 +40,7 @@ def _k_sign(pem, ts, method, path, body=""):
                    hashes.SHA256())
     return base64.b64encode(sig).decode()
 
+
 def _k_headers(creds, method, path, body=""):
     ts = str(int(time.time() * 1000))
     return {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
@@ -43,10 +49,12 @@ def _k_headers(creds, method, path, body=""):
             "KALSHI-ACCESS-TIMESTAMP": ts,
             "Content-Type": "application/json"}
 
+
 def _k_market():
-    r = requests.get(KALSHI_HOST + KALSHI_ROOT + "/markets",
-                     params={"status": "open", "limit": 100}, timeout=10)
-    r.raise_for_status()
+    with httpx.Client(timeout=10) as client:
+        r = client.get(KALSHI_HOST + KALSHI_ROOT + "/markets",
+                       params={"status": "open", "limit": 100})
+        r.raise_for_status()
     for m in r.json().get("markets", []):
         yes = float(m.get("yes_ask") or 0) / 100
         if 0.30 <= yes <= 0.70 and m.get("ticker"):
@@ -362,14 +370,15 @@ def exec_kalshi(creds, usd=2, dry=False):
     path = KALSHI_ROOT + "/portfolio/events/orders"
     body = json.dumps({
         "ticker": m["ticker"],
-        "side": "bid",                      # bid = beli YES
+        "side": "bid",
         "count": f"{size:.2f}",
-        "price": f"{price:.4f}",            # dollar fixed-point
+        "price": f"{price:.4f}",
         "client_order_id": str(_uuid.uuid4()),
     }, separators=(",", ":"))
-    r = requests.post(KALSHI_HOST + path,
-                      headers=_k_headers(creds, "POST", path, body),
-                      data=body, timeout=15)
+    with httpx.Client(timeout=15) as client:
+        r = client.post(KALSHI_HOST + path,
+                        headers=_k_headers(creds, "POST", path, body),
+                        content=body)
     if r.status_code >= 400:
         return False, f"kalshi {r.status_code}: {r.text[:200]}"
     return True, f"BUY YES {size} x {price} :: {m['ticker']}"
