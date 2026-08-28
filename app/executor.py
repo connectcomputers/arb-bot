@@ -8,6 +8,8 @@ from pathlib import Path
 # import httpx
 import uuid as _uuid
 import httpx
+import hashlib
+
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from eth_account import Account
@@ -360,50 +362,88 @@ def _kalshi_market(base):
     return best
 
 # def exec_kalshi(creds, usd=2, dry=False, ticker=None):
-#     from cryptography.hazmat.primitives import hashes, serialization
-#     from cryptography.hazmat.primitives.asymmetric import padding
-#     key_id = creds.get("api_key_id", "")
-#     pem = (creds.get("private_key_pem") or "").strip()
-#     if not key_id or "-----BEGIN" not in pem:
-#         return False, "kredensial kalshi belum lengkap"
-#     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
-#     m = _kalshi_market(base)
+#     # m = _k_market()
+#     m = _k_market(creds, ticker=ticker)     # ← ganti baris lama
 #     if not m:
-#         return False, "tidak ada market ber-quote"
-#     price = min(round(m["ask"] + 0.01, 2), 0.99)
-#     count = max(1, int(usd))
-#     body = {"action": "buy", "side": "yes", "ticker": m["t"],
-#             "count": count, "type": "limit", "price": price}
+#         return False, "tidak ada market kalshi likuid"
+#     price = min(round(m["yes"] + 0.01, 2), 0.99)
+#     size = max(1, int(usd // price))
 #     if dry:
-#         return True, f"[DRY] {body}"
-#     key = serialization.load_pem_private_key(pem.encode(), password=None)
-#     for path in ("/trade-api/v2/orders", "/trade-api/v2/portfolio/orders",
-#                  "/portfolio/orders"):
-#         ts = str(int(time.time() * 1000))
-#         msg = f"{ts}POST{path}".encode()
-#         # sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-#         #                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256)
-#         sig = key.sign(
-#             data=msg,
-#             padding=padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-#                                 salt_length=padding.PSS.DIGEST_LENGTH),
-#             algorithm=hashes.SHA256()
-#         )        
-#         r = httpx.post(base + path, json=body, headers={
-#             "KALSHI-ACCESS-KEY": key_id,
-#             "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
-#             "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=12)
-#         if r.status_code != 404:
-#             _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "kalshi",
-#                   "path": path, "status": r.status_code, "body": r.text[:150]})
-#             if r.status_code in (200, 201):
-#                 return True, f"BUY YES {count} x {price} :: {m['q'][:40]}"
-#             return False, f"kalshi {r.status_code}: {r.text[:120]}"
-#     return False, "semua path order 404"
+#         return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
+#     # path = KALSHI_ROOT + "/portfolio/events/orders"
+#     # body = json.dumps({
+#     #     "ticker": m["ticker"],
+#     #     "side": "bid",
+#     #     "count": f"{size:.2f}",
+#     #     "price": f"{price:.4f}",
+#     #     "client_order_id": str(_uuid.uuid4()),
+#     # }, separators=(",", ":"))
+#     # log = []
+#     # for host in (KALSHI_HOST, "https://api.elections.kalshi.com"):
+#     #     for variant_name, payload_fn in [
+#     #         ("A:ts+method+path", lambda t: f"{t}POST{path}"),
+#     #         ("B:ts+method+path+body", lambda t: f"{t}POST{path}{body}"),
+#     #         ("C:method+path+body+ts", lambda t: f"POST{path}{body}{t}"),
+#     #         ("D:method+path+ts", lambda t: f"POST{path}{t}"),
+#     #     ]:
+#     #         ts = str(int(time.time() * 1000))
+#     #         key = serialization.load_pem_private_key(creds.get("private_key_pem", "").encode(), password=None)
+#     #         sig = base64.b64encode(key.sign(payload_fn(ts).encode(),
+#     #             padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+#     #                         salt_length=padding.PSS.DIGEST_LENGTH),
+#     #             hashes.SHA256())).decode()
+#     #         hdrs = {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+#     #                 "KALSHI-ACCESS-SIGNATURE": sig,
+#     #                 "KALSHI-ACCESS-TIMESTAMP": ts,
+#     #                 "Content-Type": "application/json"}
+#     #         with httpx.Client(timeout=15) as client:
+#     #             r = client.post(host + path, headers=hdrs, content=body)
+#     #         tag = f"[{host.split('://')[1]}|{variant_name}]"
+#     #         log.append(f"{tag} {r.status_code}")
+#     #         if r.status_code < 400:
+#     #             return True, f"BUY YES {size} x {price} :: {m['ticker']}"
+#     # return False, "kalshi: " + " | ".join(log)
+
+#     path = KALSHI_ROOT + "/portfolio/events/orders"
+#     body = json.dumps({
+#         "ticker": m["ticker"],
+#         "side": "bid",
+#         "count": f"{size:.2f}",
+#         "price": f"{price:.4f}",
+#         "client_order_id": str(_uuid.uuid4()),
+#     }, separators=(",", ":"))
+
+#     body_hash = hashlib.sha256(body.encode()).hexdigest()
+#     log = []
+
+#     for host in (KALSHI_HOST, "https://api.elections.kalshi.com"):
+#         for variant_name, payload_fn in [
+#             ("A:ts+method+path", lambda t: f"{t}POST{path}"),
+#             ("B:ts+method+path+body", lambda t: f"{t}POST{path}{body}"),
+#             ("C:ts+method+path+hash", lambda t: f"{t}POST{path}{body_hash}"),
+#             ("D:method+path+hash+ts", lambda t: f"POST{path}{body_hash}{t}"),
+#         ]:
+#             ts = str(int(time.time() * 1000))
+#             key = serialization.load_pem_private_key(creds.get("private_key_pem", "").encode(), password=None)
+#             sig = base64.b64encode(key.sign(payload_fn(ts).encode(),
+#                 padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+#                             salt_length=padding.PSS.DIGEST_LENGTH),
+#                 hashes.SHA256())).decode()
+#             hdrs = {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+#                     "KALSHI-ACCESS-SIGNATURE": sig,
+#                     "KALSHI-ACCESS-TIMESTAMP": ts,
+#                     "Content-Type": "application/json"}
+#             with httpx.Client(timeout=15) as client:
+#                 r = client.post(host + path, headers=hdrs, content=body)
+#             tag = f"[{host.split('://')[1]}|{variant_name}]"
+#             log.append(f"{tag} {r.status_code}")
+#             if r.status_code < 400:
+#                 return True, f"BUY YES {size} x {price} :: {m['ticker']}"
+#     return False, "kalshi: " + " | ".join(log)
+#     return True, f"BUY YES {size} x {price} :: {m['ticker']}"
 
 def exec_kalshi(creds, usd=2, dry=False, ticker=None):
-    # m = _k_market()
-    m = _k_market(creds, ticker=ticker)     # ← ganti baris lama
+    m = _k_market(creds, ticker=ticker)
     if not m:
         return False, "tidak ada market kalshi likuid"
     price = min(round(m["yes"] + 0.01, 2), 0.99)
@@ -417,11 +457,22 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
         "count": f"{size:.2f}",
         "price": f"{price:.4f}",
         "client_order_id": str(_uuid.uuid4()),
+        "time_in_force": "good_till_canceled",
+        "self_trade_prevention_type": "taker_at_cross",
     }, separators=(",", ":"))
+    ts = str(int(time.time() * 1000))
+    key = serialization.load_pem_private_key(
+        creds.get("private_key_pem", "").encode(), password=None)
+    sig = base64.b64encode(key.sign(f"{ts}POST{path}".encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.DIGEST_LENGTH),
+        hashes.SHA256())).decode()
+    hdrs = {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+            "KALSHI-ACCESS-SIGNATURE": sig,
+            "KALSHI-ACCESS-TIMESTAMP": ts,
+            "Content-Type": "application/json"}
     with httpx.Client(timeout=15) as client:
-        r = client.post(KALSHI_HOST + path,
-                        headers=_k_headers(creds, "POST", path, body),
-                        content=body)
+        r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
     if r.status_code >= 400:
         return False, f"kalshi {r.status_code}: {r.text[:200]}"
     return True, f"BUY YES {size} x {price} :: {m['ticker']}"
