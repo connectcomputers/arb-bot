@@ -111,21 +111,38 @@ def _rpc(method, params=None):
     return r.json().get("result")
 
 
-def _lim_hmac(creds, method, path):
+# def _lim_hmac(creds, method, path):
+#     ts = datetime.now(timezone.utc).isoformat()
+#     msg = f"{ts}\n{method}\n{path}\n"
+#     sig = base64.b64encode(hmac.new(base64.b64decode(creds["api_secret"]),
+#                    msg.encode(), hashlib.sha256).digest()).decode()
+#     return {"lmts-api-key": creds["api_key"],
+#             "lmts-timestamp": ts, "lmts-signature": sig}
+
+def _lim_hmac(creds, method, path, body=None):
     ts = datetime.now(timezone.utc).isoformat()
-    msg = f"{ts}\n{method}\n{path}\n"
+    if body:
+        msg = f"{ts}\n{method}\n{path}\n{body}"
+    else:
+        msg = f"{ts}\n{method}\n{path}\n"
     sig = base64.b64encode(hmac.new(base64.b64decode(creds["api_secret"]),
                    msg.encode(), hashlib.sha256).digest()).decode()
     return {"lmts-api-key": creds["api_key"],
-            "lmts-timestamp": ts, "lmts-signature": sig}
+            "lmts-timestamp": ts, "lmts-signature": sig,
+            "Content-Type": "application/json"}
 
+# def _lim_switch_eoa(creds):
+#     r = httpx.put("https://api.limitless.exchange/profiles",
+#                   json={"tradeWalletOption": "eoa"},
+#                   headers=_lim_hmac(creds, "PUT", "/profiles"), timeout=15)
+#     return r.status_code
 
 def _lim_switch_eoa(creds):
+    body = json.dumps({"tradeWalletOption": "eoa"}, separators=(",", ":"))
     r = httpx.put("https://api.limitless.exchange/profiles",
-                  json={"tradeWalletOption": "eoa"},
-                  headers=_lim_hmac(creds, "PUT", "/profiles"), timeout=15)
+                  content=body,
+                  headers=_lim_hmac(creds, "PUT", "/profiles", body), timeout=15)
     return r.status_code
-
 
 def _lim_approve(pk, spender):
     acct = Account.from_key(pk)
@@ -140,12 +157,23 @@ def _lim_approve(pk, spender):
     return _rpc("eth_sendRawTransaction", ["0x" + raw.hex()])
 
 
+# def exec_limitless(creds, usd=2, dry=False, ticker=None):
+#     pk = creds.get("wallet_pk", "")
+#     if not pk:
+#         return False, ("Limitless: isi Wallet Private Key dedicated di /setup "
+#                        "(mode eoa, tanpa approval partner)")
+#     # _lim_switch_eoa(creds)
+    
+#     r = httpx.get("https://api.limitless.exchange/markets/active",
+
 def exec_limitless(creds, usd=2, dry=False, ticker=None):
-    pk = creds.get("wallet_pk", "")
-    if not pk:
-        return False, ("Limitless: isi Wallet Private Key dedicated di /setup "
-                       "(mode eoa, tanpa approval partner)")
-    _lim_switch_eoa(creds)
+    pk = (creds.get("wallet_pk") or "").strip()
+    pk_hex = pk[2:] if pk.lower().startswith("0x") else pk
+    if len(pk_hex) != 64 or not set(pk_hex) <= set("0123456789abcdefABCDEF"):
+        return (False, f"Limitless: field Wallet Private Key berisi "
+                       f"{len(pk_hex)} hex (ALAMAT wallet) — butuh PRIVATE KEY "
+                       f"64 hex; minta re-ekspor dari wallet")
+    # _lim_switch_eoa(creds)   # ← BIARKAN DIKOMENTAR (sudah Anda lakukan)
     r = httpx.get("https://api.limitless.exchange/markets/active",
                   params={"limit": 25}, timeout=15)
     m = next((x for x in r.json().get("data", [])
@@ -189,10 +217,19 @@ def exec_limitless(creds, usd=2, dry=False, ticker=None):
     sig = Account.sign_typed_data(pk, domain, types, order)
     if dry:
         return True, f"[DRY] limitless BUY {m['title'][:40]} sig={sig.signature.hex()[:20]}…"
+    # ro = httpx.post("https://api.limitless.exchange/orders",
+    #                 json={**order, "signature": sig.signature.hex(),
+    #                       "market": m["slug"]},
+    #                 headers=_lim_hmac(creds, "POST", "/orders"), timeout=15)
+
+    order_payload = {**order, "signature": sig.signature.hex(),
+                     "market": m["slug"]}
+    order_body = json.dumps(order_payload, separators=(",", ":"))
     ro = httpx.post("https://api.limitless.exchange/orders",
-                    json={**order, "signature": sig.signature.hex(),
-                          "market": m["slug"]},
-                    headers=_lim_hmac(creds, "POST", "/orders"), timeout=15)
+                    content=order_body,
+                    headers=_lim_hmac(creds, "POST", "/orders", order_body),
+                    timeout=15)
+    
     _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "limitless",
           "status": ro.status_code, "body": ro.text[:150]})
     if ro.status_code in (200, 201):
