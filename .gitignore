@@ -223,3 +223,4 @@ data/live_state.json
 data/session.json
 data/exec_log.jsonl
 data/lim_approved.json
+*_lama_q.*

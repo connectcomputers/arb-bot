@@ -1,251 +1,681 @@
+<!-- app/web/templates/setup.html -->
 <!DOCTYPE html>
 <html lang="id">
 <head>
 <meta charset="UTF-8">
 <title>Setup Kredensial & Pair — Arb Bot</title>
+
 <style>
- body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
- .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px;max-width:780px}
- h1,h2{color:#38bdf8} h3{color:#7dd3fc;margin:10px 0 4px}
- textarea{width:100%;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px}
- button{background:#059669;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;margin-top:6px}
- button:disabled{background:#475569;cursor:not-allowed}
- .msg{margin-left:10px;font-weight:600} label{display:block;margin:8px 0}
- .muted{color:#94a3b8;font-size:12px} .pairbox{margin-left:8px}
-  textarea.secret{-webkit-text-security:disc;font-family:monospace}
- textarea.secret.shown{-webkit-text-security:none}
- button.mini{background:#334155;padding:4px 10px;font-size:12px;margin-left:8px}
-  .wrap{max-width:880px;margin:0 auto}
-  label small.hint{color:#94a3b8;font-size:11px;margin-left:6px}  
+body{
+    font-family:sans-serif;
+    background:#0f172a;
+    color:#e2e8f0;
+    padding:24px;
+}
+
+.card{
+    background:#1e293b;
+    border:1px solid #334155;
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:16px;
+    max-width:780px;
+}
+
+h1,h2{
+    color:#38bdf8;
+}
+
+h3{
+    color:#7dd3fc;
+    margin:10px 0 4px;
+}
+
+textarea,
+select{
+    width:100%;
+    box-sizing:border-box;
+    background:#0f172a;
+    color:#e2e8f0;
+    border:1px solid #334155;
+    border-radius:6px;
+    padding:8px;
+}
+
+select{
+    min-height:38px;
+}
+
+button{
+    background:#059669;
+    color:#fff;
+    border:none;
+    border-radius:6px;
+    padding:8px 16px;
+    cursor:pointer;
+    margin-top:6px;
+}
+
+button:disabled{
+    background:#475569;
+    cursor:not-allowed;
+}
+
+.msg{
+    margin-left:10px;
+    font-weight:600;
+}
+
+label{
+    display:block;
+    margin:8px 0;
+}
+
+.muted{
+    color:#94a3b8;
+    font-size:12px;
+}
+
+.hint{
+    color:#94a3b8;
+    font-size:11px;
+    margin-left:6px;
+}
+
+.pairbox{
+    margin-left:8px;
+}
+
+textarea.secret{
+    -webkit-text-security:disc;
+    font-family:monospace;
+}
+
+textarea.secret.shown{
+    -webkit-text-security:none;
+}
+
+button.mini{
+    background:#334155;
+    padding:4px 10px;
+    font-size:12px;
+    margin-left:8px;
+}
+
+.wrap{
+    max-width:880px;
+    margin:0 auto;
+}
+
+.wallet-help{
+    border:1px solid #475569;
+    border-radius:8px;
+    padding:10px;
+    margin-top:10px;
+    background:#111827;
+}
+
+.wallet-help strong{
+    color:#7dd3fc;
+}
+
+.wallet-mode{
+    border:1px solid #38bdf8;
+    border-radius:8px;
+    padding:10px;
+    margin:10px 0;
+    background:#0f172a;
+}
 </style>
 </head>
+
 <body>
-<div class="wrap">  
+
+<div class="wrap">
+
 <h1>🔐 Setup Kredensial & Pair</h1>
 
 {% for venue, fields in venues.items() %}
-<div class="card" id="card-{{ venue }}">
-  <h2>{{ venue|capitalize }}
-    {% if saved[venue] %}<small style="color:#86efac">— kredensial tersimpan ✅</small>{% endif %}
-  </h2>
-  {% for name, label in fields %}
-  <!-- <textarea id="{{ venue }}-{{ name }}" rows="{{ 3 if 'pem' in name else 1 }}"
-    placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea> -->
-  <!-- <label>{{ label }}
-    <textarea id="{{ venue }}-{{ name }}"
-      class="{{ 'secret' if ('private' in name or 'secret' in name) else '' }}"
-      rows="{{ 3 if 'pem' in name else 1 }}"
-      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>      
-  </label> -->
 
-  <label>{{ label }}
-    {% if 'opsional' in label %}<small class="hint">(boleh kosong)</small>{% endif %}
-    <textarea id="{{ venue }}-{{ name }}"
-      class="{{ 'secret' if ('private' in name or 'secret' in name) else '' }}"
-      rows="{{ 3 if 'pem' in name else 1 }}"
-      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>
-  </label>
-    
-  {% endfor %}
-  <!-- <button onclick="cek('{{ venue }}')">CEK API</button> -->
-  <button onclick="cek('{{ venue }}')">CEK API</button>
-  <button class="mini" type="button" onclick="toggleSecret('{{ venue }}')">👁 lihat/sembunyikan</button>
-  <span class="msg" id="msg-{{ venue }}"></span>
-  <!-- <label><input type="checkbox" id="pair-{{ venue }}"
-      {% if not cfg['venues'][venue]['valid'] %}disabled{% endif %}
-      onchange="togglePairs('{{ venue }}')">
-    PAIR — centang untuk memuat & memainkan pair venue ini</label> -->
-  <label><input type="checkbox" id="pair-{{ venue }}" disabled
-      onchange="togglePairs('{{ venue }}')">
-    PAIR — centang untuk memuat & memainkan pair venue ini</label>
-    <!-- <div id="pairs-{{ venue }}" style="display:none">
-    <h3>5 Pair Populer (volume 24 jam)</h3><div id="pop-{{ venue }}" class="pairbox"></div>
-    <h3>5 Pair Aktif (likuid)</h3><div id="akt-{{ venue }}" class="pairbox"></div>
-  </div> -->
-  <div id="pairs-{{ venue }}" style="display:none">
-    <h3>Menu Pair — centang kategori yang dimainkan</h3>
-    <div id="cat-{{ venue }}" class="pairbox"></div>
-  </div>
+<div class="card" id="card-{{ venue }}">
+
+<h2>
+    {{ venue|capitalize }}
+
+    {% if saved[venue] %}
+        <small style="color:#86efac">
+            — kredensial tersimpan ✅
+        </small>
+    {% endif %}
+</h2>
+
+{% for field in fields %}
+
+{% set name = field[0] %}
+{% set label = field[1] %}
+{% set kind = field[2] if field|length > 2 else "text" %}
+{% set options = field[3] if field|length > 3 else [] %}
+
+{% if kind == "info" %}
+
+<div class="wallet-help" data-info-name="{{ name }}">
+    {{ label }}
 </div>
+
+{% elif kind == "select" %}
+
+<div class="wallet-mode">
+
+<label for="{{ venue }}-{{ name }}">
+    <strong>{{ label }}</strong>
+</label>
+
+<select
+    id="{{ venue }}-{{ name }}"
+    onchange="walletModeChanged()"
+>
+
+{% for option in options %}
+
+{% set option_value = option[0] %}
+{% set option_label = option[1] %}
+
+<option
+    value="{{ option_value }}"
+    {% if venue == "limitless" and
+          name == "wallet_mode" and
+          limitless_mode == option_value %}
+        selected
+    {% endif %}
+>
+    {{ option_label }}
+</option>
+
 {% endfor %}
 
-<button id="next" disabled onclick="simpanPairs()">BUKA PENGATURAN PAIR →</button>
-<p class="muted">Aktif bila: ≥2 venue tercentang PAIR & ≥1 pair dipilih.</p>
-<!-- <p><a href="/" style="color:#38bdf8">← Kembali ke Dashboard</a></p> -->
+</select>
+
+</div>
+
+{% else %}
+
+<label
+    class="field-{{ venue }}-{{ name }}"
+    data-field-name="{{ name }}"
+>
+
+{{ label }}
+
+{% if 'opsional' in label %}
+<small class="hint">
+    (boleh kosong)
+</small>
+{% endif %}
+
+    <!-- class="{{
+        'secret'
+        if ('private' in name or 'secret' in name)
+        else ''
+    }}"
+ -->
+
+<textarea
+    id="{{ venue }}-{{ name }}"
+    class="{{
+        'secret'
+        if ('private' in name or 'secret' in name or 'proxy' in name)
+        else ''
+    }}"    
+    rows="{{ 3 if 'pem' in name else 1 }}"
+    placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"
+></textarea>
+
+</label>
+
+{% endif %}
+
+{% endfor %}
+
+<button onclick="cek('{{ venue }}')">
+    CEK API
+</button>
+
+<button
+    class="mini"
+    type="button"
+    onclick="toggleSecret('{{ venue }}')"
+>
+    👁 lihat/sembunyikan
+</button>
+
+<span
+    class="msg"
+    id="msg-{{ venue }}"
+></span>
+
+<label>
+
+<input
+    type="checkbox"
+    id="pair-{{ venue }}"
+    disabled
+    onchange="togglePairs('{{ venue }}')"
+>
+
+PAIR — centang untuk memuat & memainkan pair venue ini
+
+</label>
+
+<div
+    id="pairs-{{ venue }}"
+    style="display:none"
+>
+
+<h3>
+    Menu Pair — centang kategori yang dimainkan
+</h3>
+
+<div
+    id="cat-{{ venue }}"
+    class="pairbox"
+></div>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+<button
+    id="next"
+    disabled
+    onclick="simpanPairs()"
+>
+    BUKA PENGATURAN PAIR →
+</button>
+
+<p class="muted">
+Aktif bila: ≥2 venue tercentang PAIR & ≥1 pair dipilih.
+</p>
 
 <script>
+
 function toggleSecret(venue){
-  document.querySelectorAll('#card-'+venue+' textarea.secret')
-    .forEach(t => t.classList.toggle('shown'));
-}
-function fmt(v){
-  if (v >= 1e6) return '$'+(v/1e6).toFixed(1)+'M';
-  if (v >= 1e3) return '$'+(v/1e3).toFixed(1)+'K';
-  return '$'+Math.round(v);
-}  
-async function cek(venue){
-  const creds = {};
-  document.querySelectorAll('#card-'+venue+' textarea').forEach(t=>{
-    const v = t.value.trim();
-    if (v) creds[t.id.substring(venue.length+1)] = v;
-  });
-  if (Object.keys(creds).length){
-    await fetch('/api/credentials',{method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify({venue, creds})});
-  }
-  const el = document.getElementById('msg-'+venue);
-  el.textContent = '…memeriksa';
-  const r = await fetch('/api/cek-api',{method:'POST',
-    headers:{'Content-Type':'application/json'}, body:JSON.stringify({venue})});
-  const d = await r.json();
-  el.textContent = d.ok ? '✅ API '+venue+' VALID' : '❌ '+d.message;
-  el.style.color = d.ok ? '#86efac' : '#fca5a5';
-  const cb = document.getElementById('pair-'+venue);
-  cb.disabled = !d.ok;
-  if (!d.ok){ cb.checked = false; togglePairs(venue); }
-  update();
+
+    document
+        .querySelectorAll(
+            '#card-'+venue+' textarea.secret'
+        )
+        .forEach(
+            t => t.classList.toggle('shown')
+        );
 }
 
-// async function togglePairs(venue){
-//   const cb = document.getElementById('pair-'+venue);
-//   const box = document.getElementById('pairs-'+venue);
-//   if (!cb.checked){ box.style.display='none'; update(); return; }
-//   box.style.display = 'block';
-//   document.getElementById('pop-'+venue).innerHTML = '…memuat';
-//   document.getElementById('akt-'+venue).innerHTML = '';
-//   try {
-//     const r = await fetch('/api/markets?venue='+venue);
-//     if (!r.ok) throw new Error('HTTP '+r.status);
-//     const d = await r.json();
-//     render(venue,'pop-'+venue, d.populer || [], 'vol');
-//     render(venue,'akt-'+venue, d.aktif || [], 'liq');
-//   } catch(e) {
-//     document.getElementById('pop-'+venue).innerHTML =
-//       '<span class="muted">⚠ gagal memuat: '+e.message+'</span>';
-//   }
-//   update();
-// }
+
+function fmt(v){
+
+    if(v >= 1e6)
+        return '$'+(v/1e6).toFixed(1)+'M';
+
+    if(v >= 1e3)
+        return '$'+(v/1e3).toFixed(1)+'K';
+
+    return '$'+Math.round(v);
+}
+
+
+/*
+ * Limitless wallet selector
+ *
+ * smartWallet = Wallet Limitless
+ * eoa         = Wallet Pribadi
+ */
+function walletModeChanged(){
+
+    const modeEl =
+        document.getElementById(
+            'limitless-wallet_mode'
+        );
+
+    if(!modeEl)
+        return;
+
+    const mode = modeEl.value;
+
+    const profile =
+        document.querySelector(
+            '[data-field-name="smart_wallet_profile_id"]'
+        );
+
+    const pk =
+        document.querySelector(
+            '[data-field-name="wallet_pk"]'
+        );
+
+    if(profile){
+
+        profile.style.display =
+            mode === 'smartWallet'
+            ? 'block'
+            : 'none';
+    }
+
+    if(pk){
+
+        pk.style.display =
+            mode === 'eoa'
+            ? 'block'
+            : 'none';
+    }
+}
+
+
+async function cek(venue){
+
+    const creds = {};
+
+    document
+        .querySelectorAll(
+            '#card-'+venue+' textarea'
+        )
+        .forEach(t => {
+
+            const v = t.value.trim();
+
+            if(v){
+
+                creds[
+                    t.id.substring(
+                        venue.length + 1
+                    )
+                ] = v;
+            }
+
+        });
+
+
+    /*
+     * Select values harus ikut dikirim.
+     */
+    document
+        .querySelectorAll(
+            '#card-'+venue+' select'
+        )
+        .forEach(s => {
+
+            const v = s.value.trim();
+
+            if(v){
+
+                creds[
+                    s.id.substring(
+                        venue.length + 1
+                    )
+                ] = v;
+            }
+
+        });
+
+
+    if(Object.keys(creds).length){
+
+        await fetch(
+            '/api/credentials',
+            {
+                method:'POST',
+                headers:{
+                    'Content-Type':
+                    'application/json'
+                },
+                body:JSON.stringify({
+                    venue,
+                    creds
+                })
+            }
+        );
+    }
+
+
+    const el =
+        document.getElementById(
+            'msg-'+venue
+        );
+
+    el.textContent =
+        '…memeriksa';
+
+
+    const r =
+        await fetch(
+            '/api/cek-api',
+            {
+                method:'POST',
+                headers:{
+                    'Content-Type':
+                    'application/json'
+                },
+                body:JSON.stringify({
+                    venue
+                })
+            }
+        );
+
+
+    const d =
+        await r.json();
+
+
+    el.textContent =
+        d.ok
+        ? '✅ API '+venue+' VALID'
+        : '❌ '+d.message;
+
+
+    el.style.color =
+        d.ok
+        ? '#86efac'
+        : '#fca5a5';
+
+
+    const cb =
+        document.getElementById(
+            'pair-'+venue
+        );
+
+
+    cb.disabled = !d.ok;
+
+
+    if(!d.ok){
+
+        cb.checked = false;
+
+        togglePairs(venue);
+    }
+
+
+    update();
+}
+
 
 async function togglePairs(venue){
-  const cb = document.getElementById('pair-'+venue);
-  const box = document.getElementById('pairs-'+venue);
-  if (!cb.checked){ box.style.display='none'; update(); return; }
-  box.style.display = 'block';
-  const el = document.getElementById('cat-'+venue);
-  el.innerHTML = '…memuat';
-  try {
-    const r = await fetch('/api/markets?venue='+venue);
-    if (!r.ok) throw new Error('HTTP '+r.status);
-    const d = await r.json();
-    // el.innerHTML = (d.categories || []).map(c =>
-    //   `<label><input type="checkbox" class="pair" data-venue="${venue}"
-    //     value="${c.name}" onchange="update()">
-    //     ${c.name} <span class="muted">(${c.count} market)</span></label>`
-    // ).join('') || '<span class="muted">tidak ada menu</span>';
 
-    el.innerHTML = (d.categories || []).map(c =>
-      `<label><input type="checkbox" class="pair" data-venue="${venue}"
-        value="${c.name}" onchange="update()">
-        ${c.name} <span class="muted">(${c.count} market · vol ${fmt(c.vol)})</span></label>`
-    ).join('') || '<span class="muted">tidak ada menu</span>';    
-  } catch(e){
-    el.innerHTML = '<span class="muted">⚠ gagal memuat: '+e.message+'</span>';
-  }
-  update();
+    const cb =
+        document.getElementById(
+            'pair-'+venue
+        );
+
+    const box =
+        document.getElementById(
+            'pairs-'+venue
+        );
+
+
+    if(!cb.checked){
+
+        box.style.display='none';
+
+        update();
+
+        return;
+    }
+
+
+    box.style.display='block';
+
+
+    const el =
+        document.getElementById(
+            'cat-'+venue
+        );
+
+    el.innerHTML =
+        '…memuat';
+
+
+    try{
+
+        const r =
+            await fetch(
+                '/api/markets?venue='+venue
+            );
+
+
+        if(!r.ok)
+            throw new Error(
+                'HTTP '+r.status
+            );
+
+
+        const d =
+            await r.json();
+
+
+        el.innerHTML =
+            (d.categories || [])
+                .map(c =>
+
+                    `<label>
+                        <input
+                            type="checkbox"
+                            class="pair"
+                            data-venue="${venue}"
+                            value="${c.name}"
+                            onchange="update()"
+                        >
+
+                        ${c.name}
+
+                        <span class="muted">
+                            (${c.count} market ·
+                             vol ${fmt(c.vol)})
+                        </span>
+                    </label>`
+
+                )
+                .join('')
+
+            ||
+
+            '<span class="muted">'+
+            'tidak ada menu'+
+            '</span>';
+
+
+    }catch(e){
+
+        el.innerHTML =
+            '<span class="muted">'+
+            '⚠ gagal memuat: '+
+            e.message+
+            '</span>';
+    }
+
+
+    update();
 }
 
-function render(venue, id, rows, metric){
-  document.getElementById(id).innerHTML = rows.map(m =>
-    `<label><input type="checkbox" class="pair" data-venue="${venue}"
-      value="${m.key}" onchange="update()">
-      [${m.cat}] ${m.title} <span class="muted">${metric} ${m[metric]}</span></label>`
-  ).join('') || '<span class="muted">tidak ada data</span>';
-}
 
 function update(){
-  const venuesOn = [...document.querySelectorAll('[id^="pair-"]')]
-                    .filter(c => c.checked).length;
-  const pairsOn = document.querySelectorAll('.pair:checked').length;
-  document.getElementById('next').disabled = !(venuesOn >= 2 && pairsOn >= 1);
+
+    const venuesOn =
+        [
+            ...document.querySelectorAll(
+                '[id^="pair-"]'
+            )
+        ]
+        .filter(
+            c => c.checked
+        )
+        .length;
+
+
+    const pairsOn =
+        document.querySelectorAll(
+            '.pair:checked'
+        ).length;
+
+
+    document.getElementById(
+        'next'
+    ).disabled =
+        !(
+            venuesOn >= 2 &&
+            pairsOn >= 1
+        );
 }
+
 
 async function simpanPairs(){
-  const pairs = {};
-  document.querySelectorAll('.pair:checked').forEach(b=>{
-    (pairs[b.dataset.venue] = pairs[b.dataset.venue] || []).push(b.value);
-  });
-  await fetch('/api/pairs',{method:'POST',
-    headers:{'Content-Type':'application/json'}, body:JSON.stringify({pairs})});
-  location.href = '/limits';
+
+    const pairs = {};
+
+
+    document
+        .querySelectorAll(
+            '.pair:checked'
+        )
+        .forEach(b => {
+
+            (
+                pairs[b.dataset.venue]
+                =
+                pairs[b.dataset.venue]
+                ||
+                []
+            ).push(b.value);
+
+        });
+
+
+    await fetch(
+        '/api/pairs',
+        {
+            method:'POST',
+            headers:{
+                'Content-Type':
+                'application/json'
+            },
+            body:JSON.stringify({
+                pairs
+            })
+        }
+    );
+
+
+    location.href =
+        '/limits';
 }
+
+
+/*
+ * Jalankan sekali ketika halaman dibuka.
+ */
+walletModeChanged();
+
 </script>
+
 </div>
+
 </body>
 </html>
-
-<!-- ================================================================================= -->
-<!-- <!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<title>Setup Venue — Arb Bot</title>
-<style>
- body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;padding:24px}
- .card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:16px;max-width:640px}
- h1,h2{color:#38bdf8}
- textarea{width:100%;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px}
- button{background:#059669;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer}
- .msg{margin-left:10px;font-weight:600}
- label{display:block;margin:8px 0}
-</style>
-</head>
-<body>
-<h1>🔐 Setup Kredensial Venue</h1>
-
-{% for venue, fields in venues.items() %}
-<div class="card" id="card-{{ venue }}">
-  <h2>{{ venue|capitalize }}
-      {% if saved[venue] %}<small style="color:#86efac">— kredensial tersimpan ✅</small>{% endif %}
-  </h2>
-  {% for name, label in fields %}
-  <label>{{ label }}
-    <textarea id="{{ venue }}-{{ name }}" rows="{{ 3 if 'pem' in name else 1 }}"
-      placeholder="{{ '••• tersimpan •••' if saved[venue] else '' }}"></textarea>
-  </label>
-  {% endfor %}
-  <button onclick="cek('{{ venue }}')">CEK API</button>
-  <span class="msg" id="msg-{{ venue }}"></span>
-  <label><input type="checkbox" id="pair-{{ venue }}" disabled
-    {% if cfg['venues'][venue]['valid'] %}checked{% endif %}>
-    PAIR — aktif bila API VALID</label>
-</div>
-{% endfor %}
-
-<p><a href="/" style="color:#38bdf8">← Kembali ke Dashboard</a></p>
-
-<script>
-async function cek(venue){
-  const creds = {};
-  document.querySelectorAll('#card-'+venue+' textarea').forEach(t=>{
-    const v = t.value.trim();
-    if (v) creds[t.id.substring(venue.length+1)] = v;
-  });
-  if (Object.keys(creds).length){
-    await fetch('/api/credentials',{method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({venue, creds})});
-  }
-  const el = document.getElementById('msg-'+venue);
-  el.textContent = '…memeriksa';
-  const r = await fetch('/api/cek-api',{method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({venue})});
-  const d = await r.json();
-  el.textContent = d.ok ? '✅ API '+venue+' VALID' : '❌ '+d.message;
-  el.style.color = d.ok ? '#86efac' : '#fca5a5';
-  const cb = document.getElementById('pair-'+venue);
-  cb.disabled = !d.ok; cb.checked = d.ok;
-}
-</script>
-</body>
-</html> -->

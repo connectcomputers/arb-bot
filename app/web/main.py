@@ -1,3 +1,4 @@
+# /app/web/main.py
 """
 UI Dashboard — Tahap 11.
 FastAPI app dengan 7 layar audit untuk klien + kill switch.
@@ -35,27 +36,105 @@ def config_complete(cfg: dict) -> bool:
     return (venues_ok >= 2 and n_pairs >= 1
             and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS))
 
+# VENUES_SCHEMA = {
+#     "polymarket": [
+#         ("private_key", "Private Key Wallet (0x…)"),
+#         ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)"),
+#     ],
+#     "kalshi": [
+#         ("api_key_id", "API Key ID"),
+#         ("private_key_pem", "RSA Private Key (PEM)"),
+#         ("base_url", "Base URL (kosong = produksi)"),
+#     ],
+#     "limitless": [
+#         ("api_key", "API Key", "text"),
+#         ("api_secret", "API Secret (base64)", "text"),
+
+#         ("wallet_mode", "Mode Wallet", "select",
+#         ["smartWallet", "eoa"]),
+
+#         ("smart_wallet_profile_id",
+#         "Limitless Wallet — Profile ID (untuk Managed Wallet)",
+#         "text"),
+
+#         ("smart_wallet_address",
+#         "Limitless Wallet — Address (opsional, untuk verifikasi)",
+#         "text"),
+
+#         ("eoa_profile_id",
+#         "Wallet Pribadi — Limitless Profile ID",
+#         "text"),
+
+#         ("wallet_pk",
+#         "Wallet Pribadi — Private Key (0x + 64 hex)",
+#         "text"),
+
+#         ("_note_sw",
+#         "Wallet Limitless / Managed = server Limitless yang melakukan signing. "
+#         "Tidak membutuhkan private key.",
+#         "info"),
+
+#         ("_note_eoa",
+#         "Wallet Pribadi / EOA = bot melakukan EIP-712 signing. "
+#         "Private key wajib 64 hex.",
+#         "info"),
+#     ]
+# }
+
+# dari chatgpt
 VENUES_SCHEMA = {
     "polymarket": [
-        ("private_key", "Private Key Wallet (0x…)"),
-        ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)"),
+        ("private_key", "Private Key Wallet (0x…)", "text"),
+        ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)", "text"),
     ],
+
     "kalshi": [
-        ("api_key_id", "API Key ID"),
-        ("private_key_pem", "RSA Private Key (PEM)"),
-        ("base_url", "Base URL (kosong = produksi)"),
+        ("api_key_id", "API Key ID", "text"),
+        ("private_key_pem", "RSA Private Key (PEM)", "text"),
+        ("base_url", "Base URL (kosong = produksi)", "text"),
     ],
-    # "limitless": [
-    #     ("api_key", "API Key"),
-    #     ("api_secret", "API Secret"),
-    #     ("partner_wallet", "Partner Wallet Address (opsional, untuk order)"),
-    # ],
+
     "limitless": [
-        ("api_key", "API Key"),
-        ("api_secret", "API Secret"),
-        ("partner_wallet", "Partner Wallet Address (opsional, fase partner)"),
-        ("wallet_pk", "Wallet Private Key dedicated (0x…, untuk order real)"),
-    ],    
+        ("api_key", "API Key", "text"),
+
+        ("api_secret", "API Secret (base64)", "text"),
+
+        (
+            "wallet_mode",
+            "Pilih Wallet untuk Order Limitless",
+            "select",
+            [
+                ("smartWallet", "Wallet Limitless"),
+                ("eoa", "Wallet Pribadi (EOA)"),
+            ],
+        ),
+
+        (
+            "smart_wallet_profile_id",
+            "Limitless Wallet Profile ID",
+            "text",
+        ),
+
+        (
+            "wallet_pk",
+            "Private Key Wallet Pribadi (0x + 64 hex)",
+            "text",
+        ),
+
+        (
+            "_note_sw",
+            "Wallet Limitless: order menggunakan delegated signing "
+            "melalui server-wallet child profile. Tidak membutuhkan private key.",
+            "info",
+        ),
+
+        (
+            "_note_eoa",
+            "Wallet Pribadi: order ditandatangani EOA menggunakan "
+            "private key 0x + 64 hex. Jangan masukkan alamat 0x + 40 hex.",
+            "info",
+        ),
+    ],
 }
 
 app = FastAPI(title="Arb Bot Dashboard", version="1.0")
@@ -120,15 +199,6 @@ async def limits(request: Request):
         "pairs": cfg.get("pairs", {}),
     })
 
-# @app.get("/limits")
-# async def limits(request: Request):
-#     cfg = load_config()
-#     return templates.TemplateResponse(request, "limits.html", {
-#         "limits": {},                      # ← field selalu kosong
-#         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
-#         "pairs": cfg.get("pairs", {}),
-#     })
-
 @app.post("/api/limits")
 async def api_limits(request: Request):
     cfg = load_config()
@@ -142,19 +212,91 @@ async def api_markets(venue: str):
     creds = load_creds().get(venue, {})
     return {"venue": venue, "categories": venue_categories(venue, creds)}
 
+# @app.get("/setup", response_class=HTMLResponse)
+# async def setup(request: Request):
+#     cfg = load_config()
+#     saved = {v: bool(load_creds().get(v)) for v in VENUES_SCHEMA}
+#     return templates.TemplateResponse(request, "setup.html",
+#         {"venues": VENUES_SCHEMA, "cfg": cfg, "saved": saved})
+
 @app.get("/setup", response_class=HTMLResponse)
 async def setup(request: Request):
     cfg = load_config()
-    saved = {v: bool(load_creds().get(v)) for v in VENUES_SCHEMA}
-    return templates.TemplateResponse(request, "setup.html",
-        {"venues": VENUES_SCHEMA, "cfg": cfg, "saved": saved})
+    creds = load_creds()
 
+    saved = {
+        v: bool(creds.get(v))
+        for v in VENUES_SCHEMA
+    }
+
+    limitless = creds.get("limitless", {})
+
+    return templates.TemplateResponse(
+        request,
+        "setup.html",
+        {
+            "venues": VENUES_SCHEMA,
+            "cfg": cfg,
+            "saved": saved,
+            "limitless_mode": limitless.get(
+                "wallet_mode",
+                "smartWallet",
+            ),
+        },
+    )
+
+# @app.post("/api/credentials")
+# async def api_credentials(request: Request):
+#     data = await request.json()
+#     save_creds(data.get("venue"), data.get("creds", {}))
+#     engine.unkill()                  # ✅
+#     return {"saved": True}
+
+# dari chatgpt
 @app.post("/api/credentials")
 async def api_credentials(request: Request):
     data = await request.json()
-    save_creds(data.get("venue"), data.get("creds", {}))
-    engine.unkill()                  # ✅
-    return {"saved": True}
+
+    venue = data.get("venue")
+    incoming = data.get("creds") or {}
+
+    if not venue:
+        return {
+            "saved": False,
+            "message": "venue kosong",
+        }
+
+    current = load_creds().get(venue, {})
+
+    # Merge:
+    # field kosong dari browser tidak menghapus credential
+    # yang sudah tersimpan.
+    merged = dict(current)
+
+    for key, value in incoming.items():
+        if value is None:
+            continue
+
+        value = str(value).strip()
+
+        # Field internal/info tidak disimpan
+        if key.startswith("_"):
+            continue
+
+        # Jangan overwrite credential lama dengan string kosong
+        if value == "":
+            continue
+
+        merged[key] = value
+
+    save_creds(venue, merged)
+
+    engine.unkill()
+
+    return {
+        "saved": True,
+        "venue": venue,
+    }
 
 @app.post("/api/cek-api")
 async def api_cek(request: Request):
@@ -231,16 +373,6 @@ async def index(request: Request):
         "recent_settlements": recent_settlements,
     })
 
-# @app.get("/api/venue-feed")
-# async def venue_feed():
-#     creds = load_creds()
-#     return {"venues": [{
-#         "venue": v,
-#         "valid": bool(s.get("valid")),
-#         "cats": (cfg.get("pairs") or {}).get(v, []),
-#         "positions": get_positions(v, creds.get(v, {})) if s.get("valid") else [],
-#     } for v, s in cfg["venues"].items()]}
-
 @app.get("/api/venue-feed")
 async def venue_feed():
     cfg = load_config()          # ← TAMBAHKAN BARIS INI
@@ -251,11 +383,6 @@ async def venue_feed():
         "cats": (cfg.get("pairs") or {}).get(v, []),
         "positions": get_positions(v, creds.get(v, {})) if s.get("valid") else [],
     } for v, s in cfg["venues"].items()]}
-
-# @app.post("/api/engine/start")
-# async def engine_start(request: Request):
-#     mode = (await request.json()).get("mode", "paper")
-#     return engine.start(mode)        # start menolak sendiri bila kill aktif
 
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
