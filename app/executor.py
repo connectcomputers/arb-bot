@@ -1019,58 +1019,81 @@ async def _lim_eoa_async(
 
             slug = str(ticker).strip()
 
+        # else:
+
+        #     markets = (
+        #         await market_fetcher
+        #         .get_active_markets(
+        #             {
+        #                 "limit": 25,
+        #             }
+        #         )
+        #     )
+
+        #     rows = getattr(
+        #         markets,
+        #         "data",
+        #         None,
+        #     )
+
+        #     if rows is None and isinstance(
+        #         markets,
+        #         dict,
+        #     ):
+
+        #         rows = markets.get(
+        #             "data",
+        #             [],
+        #         )
+
+        #     rows = rows or []
+
+
+        #     m = next(
+        #         (
+        #             x for x in rows
+        #             if x.get("prices")
+        #             and len(x["prices"]) == 2
+        #         ),
+        #         None,
+        #     )
+
+
+        #     if not m:
+
+        #         return (
+        #             False,
+        #             "Limitless EOA: "
+        #             "tidak ada market aktif",
+        #         )
+
+
+        #     slug = m["slug"]
+
         else:
-
-            markets = (
-                await market_fetcher
-                .get_active_markets(
-                    {
-                        "limit": 25,
-                    }
-                )
+            # Ambil markets via httpx langsung (bypass SDK dict bug)
+            r_mk = httpx.get(
+                "https://api.limitless.exchange/markets/active",
+                params={"limit": 25},
+                timeout=15,
             )
-
-            rows = getattr(
-                markets,
-                "data",
-                None,
-            )
-
-            if rows is None and isinstance(
-                markets,
-                dict,
-            ):
-
-                rows = markets.get(
-                    "data",
-                    [],
-                )
-
-            rows = rows or []
-
+            r_mk.raise_for_status()
+            markets_list = r_mk.json().get("data", []) or []
 
             m = next(
                 (
-                    x for x in rows
+                    x for x in markets_list
                     if x.get("prices")
                     and len(x["prices"]) == 2
                 ),
                 None,
             )
 
-
             if not m:
-
-                return (
-                    False,
-                    "Limitless EOA: "
-                    "tidak ada market aktif",
-                )
-
+                return (False, "Limitless EOA: tidak ada market aktif")
 
             slug = m["slug"]
-
-
+            
         market = (
             await market_fetcher
             .get_market(slug)
