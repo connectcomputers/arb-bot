@@ -37,6 +37,28 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
  </div>
 </header>
 
+<!-- SALDO SEMUA VENUE (auto-refresh 30s) -->
+<div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
+  <h2 style="color:#38bdf8;margin:0 0 12px;font-size:16px">💰 Saldo Semua Venue</h2>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">📊 Kalshi</h3>
+      <div id="saldo-kalshi" style="font-size:13px">Loading...</div>
+    </div>
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">💎 Limitless</h3>
+      <div id="saldo-limitless" style="font-size:13px">Loading...</div>
+    </div>
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">🎯 Polymarket</h3>
+      <div id="saldo-polymarket" style="font-size:13px">Loading...</div>
+    </div>
+  </div>
+  <p class="muted" style="margin:8px 0 0;font-size:11px">
+    Auto-refresh setiap 30 detik · <span id="saldo-updated">-</span>
+  </p>
+</div>
+
 <div class="cols" id="cols"></div>
 
 <div class="tabs">
@@ -161,6 +183,50 @@ async function poll(){
   </div>`).join('');
 }
 poll(); 
+
+async function loadSaldo() {
+  try {
+    const r = await fetch('/api/saldo');
+    const d = await r.json();
+    const now = new Date().toLocaleTimeString('id-ID');
+    document.getElementById('saldo-updated').textContent = `terakhir update: ${now}`;
+    
+    // Kalshi
+    const k = d.kalshi;
+    document.getElementById('saldo-kalshi').innerHTML = `
+      <div>Cash: <strong style="color:#86efac">$${(k.cash_usd || 0).toFixed(2)}</strong></div>
+      <div>Portfolio: <strong>$${(k.portfolio_usd || 0).toFixed(2)}</strong></div>
+      <div class="muted">Posisi: ${k.posisi_market || 0} market, ${k.posisi_event || 0} event</div>
+      <div class="muted" style="margin-top:6px">✅ ${k.status}</div>
+    `;
+    
+    // Limitless
+    const l = d.limitless;
+    document.getElementById('saldo-limitless').innerHTML = `
+      <div>USDC (Base): <strong style="color:#86efac">${(l.usdc_base || 0).toFixed(4)}</strong></div>
+      <div class="muted" style="word-break:break-all;font-size:11px;margin-top:4px">${l.smart_wallet || '-'}</div>
+      <div class="muted" style="margin-top:6px">✅ ${l.status}</div>
+    `;
+    
+    // Polymarket
+    const p = d.polymarket;
+    document.getElementById('saldo-polymarket').innerHTML = `
+      <div>Saldo Web: <strong style="color:#86efac">$${(p.web_usd || 0).toFixed(2)}</strong></div>
+      <div class="muted">On-chain: $${(p.usdce_signer || 0).toFixed(2)}</div>
+      <div class="muted" style="color:#fbbf24;margin-top:6px">⚠️ Geoblock (paper trading)</div>
+    `;
+  } catch (e) {
+    console.error('Load saldo error:', e);
+    ['saldo-kalshi','saldo-limitless','saldo-polymarket'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="muted">❌ Error loading</div>';
+    });
+  }
+}
+
+// Load awal + auto-refresh 30 detik
+loadSaldo();
+setInterval(loadSaldo, 30000);
+
 // setInterval(poll, 10000);
 setInterval(()=>{
   const st = window.__st;

@@ -164,6 +164,12 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
 
+@app.get("/api/saldo")
+async def api_saldo():
+    """Endpoint saldo real-time semua venue."""
+    from app.saldo_service import get_all_saldo
+    return get_all_saldo()
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     if not config_complete(load_config()):
