@@ -628,11 +628,18 @@ def _k_market(creds, ticker=None):
                                params={"status": "open", "limit": 500,
                                        "exchange_index": -1}, headers=hdr)
                 r.raise_for_status()
+            cands = []
             for m in r.json().get("markets", []):
                 yes = _k_price(m)
-                if 0.30 <= yes <= 0.70 and m.get("ticker") \
-                   and int(m.get("exchange_index", 0)) == 0:   # ← HANYA SHARD 0
-                    return {"ticker": m["ticker"], "yes": yes}
+                if 0.05 < yes < 0.95 and m.get("ticker"):
+                    cands.append({"ticker": m["ticker"], "yes": yes,
+                                  "shard": int(m.get("exchange_index", 0)),
+                                  "vol": float(m.get("volume_fp") or 0)})
+            if not cands:
+                continue
+            cands.sort(key=lambda x: (x["shard"] != 0, -x["vol"]))  # shard 0 dulu
+            b = cands[0]
+            return {"ticker": b["ticker"], "yes": b["yes"], "shard": b["shard"]}
         except Exception:
             continue
     return None
@@ -1697,6 +1704,13 @@ def _kalshi_market(base):
 
 def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     m = _k_market(creds, ticker=ticker)
+
+    shard = int(m.get("shard", 0))
+    if shard != 0 and not dry:
+        st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
+        if st >= 400:
+            return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
+        
     if not m:
         return False, "tidak ada market kalshi likuid"
 
