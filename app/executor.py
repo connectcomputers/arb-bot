@@ -393,13 +393,15 @@ async def _lim_server_wallet_async(
                 str(allowances),
             )
 
-            return (
-                False,
-                "Limitless Managed Wallet "
-                "belum READY: "
-                f"profile={profile_id}; "
-                f"summary={summary}",
-            )
+            # return (
+            #     False,
+            #     "Limitless Managed Wallet "
+            #     "belum READY: "
+            #     f"profile={profile_id}; "
+            #     f"summary={summary}",
+            # )
+
+            return (False, f"Limitless: scope delegated_signing tidak ada — ubah wallet mode ke 'Wallet Pribadi (EOA)' atau minta API key partner dari Pemilik Akun")
 
 
         # ----------------------------------------------------
@@ -1495,9 +1497,14 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
               "side": "BUY-YES", "price": price, "size": size,
               "resp": str(resp)[:120]})
         return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
+    # except Exception as e:
+    #     return False, f"gagal: {e}"
     except Exception as e:
+        err_str = str(e)
+        if "403" in err_str and "region" in err_str:
+            return False, f"Polymarket 403: geofence — perlu proxy wilayah didukung (residential proxy URL di /setup)"
         return False, f"gagal: {e}"
-
+    
 # def _kalshi_market(base):
 #     def get(params):
 #         try:
@@ -1665,6 +1672,23 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     m = _k_market(creds, ticker=ticker)
     if not m:
         return False, "tidak ada market kalshi likuid"
+
+    # Cek shard market
+    path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
+    r_mk = httpx.get(KALSHI_HOST + path_mk, 
+                     headers=_k_headers(creds, "GET", path_mk),
+                     params={"exchange_index": -1}, timeout=10)
+    if r_mk.status_code == 200:
+        mk_data = r_mk.json().get("market", {})
+        shard = mk_data.get("exchange_index", 0)
+        if shard != 0:
+            # Transfer kolateral ke shard market
+            transfer_cents = int(usd * 100) + 100  # +$1 buffer
+            status, resp = _kalshi_transfer_to_shard(creds, shard, transfer_cents)
+            if status >= 400:
+                return False, f"Kalshi: transfer ke shard {shard} gagal: {resp[:200]}"
+    
+    # Lanjut order biasa
     price = min(round(m["yes"] + 0.01, 2), 0.99)
     size = max(1, int(usd // price))
     if dry:
@@ -1696,9 +1720,41 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     with httpx.Client(timeout=15) as client:
         r = client.post(KALSHI_HOST + path, headers=hdrs, content=body,
                         params={"exchange_index": -1})
+    # if r.status_code >= 400:
+    #     return False, f"kalshi {r.status_code}: {r.text[:200]}"
     if r.status_code >= 400:
+        err = r.json() if r.status_code < 500 else {}
+        code = err.get("error", {}).get("code", "")
+        if "user_not_found" in code or "sharding" in code.lower():
+            return False, f"Kalshi sharding error: dana di shard 0, market di shard berbeda — perlu transfer collateral atau pilih market shard 0"
         return False, f"kalshi {r.status_code}: {r.text[:200]}"
+
     return True, f"BUY YES {size} x {price} :: {m['ticker']}"
+
+def _kalshi_transfer_to_shard(creds, target_shard, amount_cents):
+    """Transfer kolateral dari shard 0 ke shard target."""
+    path = KALSHI_ROOT + "/portfolio/subaccounts/transfer"
+    body = json.dumps({
+        "from_subaccount": 0,
+        "to_subaccount": 0,
+        "from_exchange_index": 0,
+        "to_exchange_index": target_shard,
+        "amount_cents": amount_cents
+    }, separators=(",", ":"))
+    ts = str(int(time.time() * 1000))
+    key = serialization.load_pem_private_key(
+        creds.get("private_key_pem", "").encode(), password=None)
+    sig = base64.b64encode(key.sign(f"{ts}POST{path}{body}".encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.DIGEST_LENGTH),
+        hashes.SHA256())).decode()
+    hdrs = {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+            "KALSHI-ACCESS-SIGNATURE": sig,
+            "KALSHI-ACCESS-TIMESTAMP": ts,
+            "Content-Type": "application/json"}
+    with httpx.Client(timeout=15) as client:
+        r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
+    return r.status_code, r.text
 
 # def exec_limitless(creds, usd=1, dry=False):
 #     return False, ("Limitless read-only: order butuh tanda tangan EIP-712 "

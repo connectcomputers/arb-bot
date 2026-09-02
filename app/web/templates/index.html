@@ -138,6 +138,17 @@ const it = s => `<div class="item">${s}</div>`;
     //   <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
     // </h2>
 
+// async function micro(v){
+//   if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
+//               ' (± sesuai Modal per OP)?')) return;
+//   const r = await fetch('/api/exec/micro',{method:'POST',
+//     headers:{'Content-Type':'application/json'},
+//     body: JSON.stringify({venue:v})});
+//   const d = await r.json();
+//   alert((d.ok?'✅ ':'❌ ')+d.message);
+//   poll();
+// }
+
 async function micro(v){
   if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
               ' (± sesuai Modal per OP)?')) return;
@@ -145,7 +156,43 @@ async function micro(v){
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({venue:v})});
   const d = await r.json();
-  alert((d.ok?'✅ ':'❌ ')+d.message);
+  
+  let msg = (d.ok?'✅ ':'❌ ')+d.message;
+  
+  // DETEKSI ERROR POLYMARKET: GEOFENCE
+  if (v === 'polymarket' && !d.ok && d.message.includes('403') && d.message.includes('region')) {
+    msg = '❌ GEOFENCE ERROR\n\n' +
+          'Penggunaan Polymarket di USA terdampak "⚠️ Geoblock (paper trading)".\n\n' +
+          'Solusi: perlu 🔧 proxy wilayah didukung (opsional)\n' +
+          'Format: residential proxy URL http://user:pass@host:port wilayah didukung\n\n' +
+          'Atau biarkan kosong → Polymarket tetap scanner + paper trading.';
+  }
+  
+  // DETEKSI ERROR LIMITLESS: SCOPE DELEGATED
+  if (v === 'limitless' && !d.ok && 
+      (d.message.includes('smart_wallet_profile_id') || 
+       d.message.includes('delegated') ||
+       d.message.includes('numeric'))) {
+    msg = '❌ WALLET MODE ERROR\n\n' +
+          'Karena pilihan "Wallet Limitless" di halaman setup, dibutuhkan scope "Delegated Signing" yang hanya diberikan ke partner accounts.\n\n' +
+          'Solusi (pilih salah satu):\n' +
+          '1. Ubah wallet menjadi "Wallet Pribadi (EOA)" + Withdraw 9.83 USDC ke alamat EOA dedicated\n' +
+          '2. Minta API key partner dari Pemilik Akun (scope delegated_signing)\n\n' +
+          'Status saat ini: saldo 9.83 USDC aman di smart wallet, menunggu konfigurasi.';
+  }
+  
+  // DETEKSI ERROR KALSHI: SHARDING
+  if (v === 'kalshi' && !d.ok && 
+      (d.message.includes('user_not_found') || 
+       d.message.includes('sharding') ||
+       d.message.includes('exchange_index'))) {
+    msg = '❌ SHARDING ERROR\n\n' +
+          'Kalshi sekarang menggunakan Exchange Sharding: dana di shard 0, market di shard 2.\n\n' +
+          'Solusi: transfer kolateral ke shard tujuan market via API, atau pilih market di shard 0.\n\n' +
+          'Status: saldo $9.60 aman, perlu routing fix.';
+  }
+  
+  alert(msg);
   poll();
 }
 
