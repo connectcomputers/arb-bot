@@ -165,6 +165,16 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         all_lines = f.readlines()
         return [json.loads(line) for line in all_lines[-lines:]]
 
+@app.post("/api/engine/reset-spend")
+async def engine_reset_spend():
+    """Reset counter belanja harian (cap) — untuk tes/demo."""
+    import time as _t
+    st = engine._read()
+    st["spend"] = {"today": _t.strftime("%Y-%m-%d"), "amount": 0.0}
+    st.pop("auto_stop", None)
+    engine._write(st)
+    return {"ok": True, "message": "cap harian direset (spend=$0.00)"}
+
 @app.get("/api/saldo")
 async def api_saldo():
     """Endpoint saldo real-time semua venue."""

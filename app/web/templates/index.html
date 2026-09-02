@@ -33,6 +33,7 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
   <button class="blue" onclick="start('real')">💰 Mulai Real</button>
   <button class="gray" onclick="stop()">⏹ Stop</button>
   <button class="red" onclick="kill()">🛑 Kill Switch</button>
+  <button class="gray" onclick="resetSpend()">🔄 Reset Cap</button>
   <button class="gray" onclick="location.href='/setup'">⚙️ Setup</button>
  </div>
 </header>
@@ -190,6 +191,16 @@ async function micro(v){
       'bila ticker manual beda shard. Coba lagi tombol 🎯.';
   }
 
+  if(!d.ok && d.message.includes('cap harian')){
+    msg = '❌ CAP HARIAN TERCAPAI (guardrail risiko)\n\n' +
+      'Order REAL dihentikan untuk SEMUA venue — ini bukan error venue.\n\n' +
+      'Status masing-masing venue bila cap dibuka:\n' +
+      '• KALSHI: ✅ siap (sharding + auto-transfer terbukti)\n' +
+      '• POLYMARKET: ⚠️ geoblock USA — perlu proxy wilayah didukung\n' +
+      '• LIMITLESS: ⚠️ butuh scope Delegated Signing / mode EOA\n\n' +
+      'Naikkan batas di /limits, reset counter (mode tes), atau tunggu besok.';
+  }
+    
   alert(msg);
   poll();
 }
@@ -291,6 +302,14 @@ async function loadSaldo() {
 // Load awal + auto-refresh 30 detik
 loadSaldo();
 setInterval(loadSaldo, 30000);
+
+async function resetSpend(){
+  if(!confirm('Reset counter belanja harian (cap)?\nHanya untuk tes/demo — guardrail risiko dinolkan hari ini.')) return;
+  const r = await fetch('/api/engine/reset-spend',{method:'POST'});
+  const d = await r.json();
+  alert((d.ok?'✅ ':'❌ ')+d.message);
+  poll();
+}
 
 // setInterval(poll, 10000);
 setInterval(()=>{
