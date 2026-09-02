@@ -156,42 +156,40 @@ async function micro(v){
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({venue:v})});
   const d = await r.json();
-  
   let msg = (d.ok?'✅ ':'❌ ')+d.message;
-  
-  // DETEKSI ERROR POLYMARKET: GEOFENCE
-  if (v === 'polymarket' && !d.ok && d.message.includes('403') && d.message.includes('region')) {
-    msg = '❌ GEOFENCE ERROR\n\n' +
-          'Penggunaan Polymarket di USA terdampak "⚠️ Geoblock (paper trading)".\n\n' +
-          'Solusi: perlu 🔧 proxy wilayah didukung (opsional)\n' +
-          'Format: residential proxy URL http://user:pass@host:port wilayah didukung\n\n' +
-          'Atau biarkan kosong → Polymarket tetap scanner + paper trading.';
+
+  if(!d.ok && v==='polymarket' &&
+     (d.message.includes('geofence') || d.message.includes('403'))){
+    msg = '❌ GEOFENCE / GEOBLOCK\n\n' +
+      'Penggunaan Polymarket di USA terdampak "⚠️ Geoblock (paper trading)", ' +
+      'perlu 🔧 proxy wilayah didukung (opsional → residential proxy URL: ' +
+      'http://user:pass@host:port wilayah didukung) agar aplikasi bot ini ' +
+      'bisa meng-eksekusi order real.\n\n' +
+      'Isi di /setup → field "Proxy URL eksekusi". Bila dikosongkan, ' +
+      'Polymarket tetap scanner + paper trading.';
   }
-  
-  // DETEKSI ERROR LIMITLESS: SCOPE DELEGATED
-  if (v === 'limitless' && !d.ok && 
-      (d.message.includes('smart_wallet_profile_id') || 
-       d.message.includes('delegated') ||
-       d.message.includes('numeric'))) {
+
+  if(!d.ok && v==='limitless' &&
+     (d.message.includes('smart_wallet_profile_id') || d.message.includes('numeric'))){
     msg = '❌ WALLET MODE ERROR\n\n' +
-          'Karena pilihan "Wallet Limitless" di halaman setup, dibutuhkan scope "Delegated Signing" yang hanya diberikan ke partner accounts.\n\n' +
-          'Solusi (pilih salah satu):\n' +
-          '1. Ubah wallet menjadi "Wallet Pribadi (EOA)" + Withdraw 9.83 USDC ke alamat EOA dedicated\n' +
-          '2. Minta API key partner dari Pemilik Akun (scope delegated_signing)\n\n' +
-          'Status saat ini: saldo 9.83 USDC aman di smart wallet, menunggu konfigurasi.';
+      'Karena pilihan "Wallet Limitless" di halaman setup, dibutuhkan scope ' +
+      '(Delegated Signing) agar bot bisa tanda tangan ATAS NAMA wallet web ' +
+      '(tanpa private key) — scope ini hanya untuk partner accounts.\n\n' +
+      'ATAU ubah pilihan wallet menjadi "Wallet Pribadi (EOA)" dan masukkan ' +
+      'Private Key Wallet Pribadi (0x + 64 hex) pada field yang tersedia ' +
+      '(saldo 9.83 USDC di-Withdraw sekali ke alamat EOA tersebut).';
   }
-  
-  // DETEKSI ERROR KALSHI: SHARDING
-  if (v === 'kalshi' && !d.ok && 
-      (d.message.includes('user_not_found') || 
-       d.message.includes('sharding') ||
-       d.message.includes('exchange_index'))) {
-    msg = '❌ SHARDING ERROR\n\n' +
-          'Kalshi sekarang menggunakan Exchange Sharding: dana di shard 0, market di shard 2.\n\n' +
-          'Solusi: transfer kolateral ke shard tujuan market via API, atau pilih market di shard 0.\n\n' +
-          'Status: saldo $9.60 aman, perlu routing fix.';
+
+  if(!d.ok && v==='kalshi' &&
+     (d.message.includes('shard') || d.message.includes('user_not_found'))){
+    msg = '❌ KALSHI EXCHANGE SHARDING\n\n' +
+      'Kalshi kini memecah trading ke beberapa shard: dana akun di shard 0, ' +
+      'sedangkan market target di shard lain → order ditolak sampai kolateral ' +
+      'dialokasikan ke shard market.\n\n' +
+      'Perbaikan aktif: bot memilih market shard 0 + auto-transfer kolateral ' +
+      'bila ticker manual beda shard. Coba lagi tombol 🎯.';
   }
-  
+
   alert(msg);
   poll();
 }

@@ -605,7 +605,8 @@ def _k_get_market(creds, ticker):
 #         try:
 #             with httpx.Client(timeout=10) as client:
 #                 r = client.get(host + KALSHI_ROOT + "/markets",
-#                                params={"status": "open", "limit": 500}, headers=hdr)
+#                                params={"status": "open", "limit": 500,
+#                                        "exchange_index": -1}, headers=hdr)
 #                 r.raise_for_status()
 #             for m in r.json().get("markets", []):
 #                 yes = _k_price(m)
@@ -615,9 +616,10 @@ def _k_get_market(creds, ticker):
 #             continue
 #     return None
 
+# --- 1) _k_market: hanya market shard 0 ---
 def _k_market(creds, ticker=None):
     if ticker:
-        return _k_get_market(creds, ticker)      # ← endpoint tunggal, terbukti 200
+        return _k_get_market(creds, ticker)
     for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", KALSHI_ROOT + "/markets")),
                       ("https://api.elections.kalshi.com", None)):
         try:
@@ -628,11 +630,36 @@ def _k_market(creds, ticker=None):
                 r.raise_for_status()
             for m in r.json().get("markets", []):
                 yes = _k_price(m)
-                if 0.30 <= yes <= 0.70 and m.get("ticker"):
+                if 0.30 <= yes <= 0.70 and m.get("ticker") \
+                   and int(m.get("exchange_index", 0)) == 0:   # ← HANYA SHARD 0
                     return {"ticker": m["ticker"], "yes": yes}
         except Exception:
             continue
     return None
+
+# --- 2) transfer antar-shard (signature TANPA body) ---
+def _kalshi_shard_transfer(creds, to_shard, cents):
+    path = KALSHI_ROOT + "/portfolio/intra_exchange_instance_transfer"
+    body = json.dumps({
+        "source": "event_contract", "destination": "event_contract",
+        "amount": cents * 100,                     # centicents
+        "source_exchange_shard": 0, "destination_exchange_shard": to_shard,
+        "source_subaccount": 0, "destination_subaccount": 0,
+    }, separators=(",", ":"))
+    ts = str(int(time.time() * 1000))
+    key = serialization.load_pem_private_key(
+        creds["private_key_pem"].encode(), password=None)
+    sig = base64.b64encode(key.sign(f"{ts}POST{path}".encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.DIGEST_LENGTH),
+        hashes.SHA256())).decode()
+    hdrs = {"KALSHI-ACCESS-KEY": creds["api_key_id"],
+            "KALSHI-ACCESS-SIGNATURE": sig,
+            "KALSHI-ACCESS-TIMESTAMP": ts,
+            "Content-Type": "application/json"}
+    with httpx.Client(timeout=15) as cl:
+        r = cl.post(KALSHI_HOST + path, headers=hdrs, content=body)
+    return r.status_code, r.text
 
 def _rpc(method, params=None):
     r = httpx.post(RPC_BASE, json={"jsonrpc": "2.0", "id": 1,
@@ -1673,21 +1700,32 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     if not m:
         return False, "tidak ada market kalshi likuid"
 
-    # Cek shard market
+    # # Cek shard market
+    # path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
+    # r_mk = httpx.get(KALSHI_HOST + path_mk, 
+    #                  headers=_k_headers(creds, "GET", path_mk),
+    #                  params={"exchange_index": -1}, timeout=10)
+    # if r_mk.status_code == 200:
+    #     mk_data = r_mk.json().get("market", {})
+    #     shard = mk_data.get("exchange_index", 0)
+    #     if shard != 0:
+    #         # Transfer kolateral ke shard market
+    #         transfer_cents = int(usd * 100) + 100  # +$1 buffer
+    #         status, resp = _kalshi_transfer_to_shard(creds, shard, transfer_cents)
+    #         if status >= 400:
+    #             return False, f"Kalshi: transfer ke shard {shard} gagal: {resp[:200]}"
+
+# --- 3) di exec_kalshi, ganti blok transfer lama dengan: ---
     path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
-    r_mk = httpx.get(KALSHI_HOST + path_mk, 
-                     headers=_k_headers(creds, "GET", path_mk),
-                     params={"exchange_index": -1}, timeout=10)
+    r_mk = httpx.get(KALSHI_HOST + path_mk,
+                     headers=_k_headers(creds, "GET", path_mk), timeout=10)
     if r_mk.status_code == 200:
-        mk_data = r_mk.json().get("market", {})
-        shard = mk_data.get("exchange_index", 0)
+        shard = int(r_mk.json().get("market", {}).get("exchange_index", 0))
         if shard != 0:
-            # Transfer kolateral ke shard market
-            transfer_cents = int(usd * 100) + 100  # +$1 buffer
-            status, resp = _kalshi_transfer_to_shard(creds, shard, transfer_cents)
-            if status >= 400:
-                return False, f"Kalshi: transfer ke shard {shard} gagal: {resp[:200]}"
-    
+            st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
+            if st >= 400:
+                return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
+
     # Lanjut order biasa
     price = min(round(m["yes"] + 0.01, 2), 0.99)
     size = max(1, int(usd // price))
