@@ -12,6 +12,7 @@ import httpx
 import hashlib
 import asyncio
 import threading
+import os
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -561,13 +562,31 @@ def _k_price(m):
             return v / 100 if v > 1 else v
     return 0.0
 
+# def _k_get_market(creds, ticker):
+#     path = KALSHI_ROOT + "/markets/" + ticker
+#     for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", path)),
+#                       ("https://api.elections.kalshi.com", None)):
+#         try:
+#             with httpx.Client(timeout=10) as client:
+#                 # r = client.get(host + path, headers=hdr)
+#                 # 1) di _k_get_market — baris: r = client.get(host + path, headers=hdr)
+#                 r = client.get(host + path, headers=hdr, params={"exchange_index": -1})
+#                 r.raise_for_status()
+#             m = r.json().get("market") or {}
+#             if m.get("ticker"):
+#                 return {"ticker": m["ticker"], "yes": _k_price(m) or 0.50}
+#         except Exception:
+#             continue
+#     return None
+
 def _k_get_market(creds, ticker):
     path = KALSHI_ROOT + "/markets/" + ticker
     for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", path)),
                       ("https://api.elections.kalshi.com", None)):
         try:
             with httpx.Client(timeout=10) as client:
-                r = client.get(host + path, headers=hdr)
+                r = client.get(host + path, headers=hdr,
+                               params={"exchange_index": -1})
                 r.raise_for_status()
             m = r.json().get("market") or {}
             if m.get("ticker"):
@@ -575,6 +594,24 @@ def _k_get_market(creds, ticker):
         except Exception:
             continue
     return None
+
+# def _k_market(creds, ticker=None):
+#     if ticker:
+#         return _k_get_market(creds, ticker)      # ← endpoint tunggal, terbukti 200
+#     for host, hdr in ((KALSHI_HOST, _k_headers(creds, "GET", KALSHI_ROOT + "/markets")),
+#                       ("https://api.elections.kalshi.com", None)):
+#         try:
+#             with httpx.Client(timeout=10) as client:
+#                 r = client.get(host + KALSHI_ROOT + "/markets",
+#                                params={"status": "open", "limit": 500}, headers=hdr)
+#                 r.raise_for_status()
+#             for m in r.json().get("markets", []):
+#                 yes = _k_price(m)
+#                 if 0.30 <= yes <= 0.70 and m.get("ticker"):
+#                     return {"ticker": m["ticker"], "yes": yes}
+#         except Exception:
+#             continue
+#     return None
 
 def _k_market(creds, ticker=None):
     if ticker:
@@ -584,7 +621,8 @@ def _k_market(creds, ticker=None):
         try:
             with httpx.Client(timeout=10) as client:
                 r = client.get(host + KALSHI_ROOT + "/markets",
-                               params={"status": "open", "limit": 500}, headers=hdr)
+                               params={"status": "open", "limit": 500,
+                                       "exchange_index": -1}, headers=hdr)
                 r.raise_for_status()
             for m in r.json().get("markets", []):
                 yes = _k_price(m)
@@ -1406,6 +1444,14 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
     if not dry and not creds.get("proxy_address"):                      # ← TAMBAH
         return (False, "Poly real butuh Deposit/Proxy Wallet Address — "
                        "isi di /setup (deposit wallet flow wajib)")     # ← TAMBAH
+
+    # >>> TAMBAH DI SINI <<<
+    # import os
+    proxy_url = str(creds.get("proxy_url") or "").strip()
+    if proxy_url:
+        os.environ["HTTPS_PROXY"] = proxy_url
+        os.environ["HTTP_PROXY"] = proxy_url
+
     try:
         # from py_clob_client_v2 import ClobClient
         # from py_clob_client_v2.clob_types import OrderArgs, OrderType
@@ -1452,24 +1498,6 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
     except Exception as e:
         return False, f"gagal: {e}"
 
-
-# def _kalshi_market(base):
-#     re_ = httpx.get(base + "/trade-api/v2/events",
-#                     params={"limit": 100, "status": "open"}, timeout=15)
-#     evs = sorted([e for e in re_.json().get("events", [])
-#                   if not (e.get("ticker") or "").startswith("KXMVE")],
-#                  key=lambda e: float(e.get("volume") or 0), reverse=True)
-#     for ev in evs[:10]:
-#         rm = httpx.get(base + "/trade-api/v2/markets",
-#                        params={"event_ticker": ev.get("ticker"),
-#                                "status": "open"}, timeout=12)
-#         for m in rm.json().get("markets", []):
-#             ask = float(m.get("yes_ask_dollars") or 0)
-#             if 0.05 < ask < 0.95:
-#                 return {"t": m["ticker"], "ask": ask,
-#                         "q": m.get("title") or ev.get("ticker")}
-#     return None
-
 # def _kalshi_market(base):
 #     def get(params):
 #         try:
@@ -1505,13 +1533,37 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
 #             break
 #     return best
 
+# def _kalshi_market(base):
+#     best = None
+#     for ser in SERIES_CANDIDATES:
+#         try:
+#             r = httpx.get(base + "/trade-api/v2/markets",
+#                           params={"limit": 50, "status": "open",
+#                                   "series_ticker": ser}, timeout=12)
+#         except Exception:
+#             continue
+#         if r.status_code != 200:
+#             continue
+#         for m in r.json().get("markets", []):
+#             t = m.get("ticker") or ""
+#             if t.startswith("KXMVE"):
+#                 continue
+#             ask = float(m.get("yes_ask_dollars") or 0)
+#             vol = float(m.get("volume_fp") or 0)
+#             if 0.05 < ask < 0.95 and (best is None or vol > best["vol"]):
+#                 best = {"t": t, "ask": ask, "vol": vol, "q": m.get("title") or t}
+#         if best and best["vol"] > 0:
+#             break
+#     return best
+
 def _kalshi_market(base):
     best = None
     for ser in SERIES_CANDIDATES:
         try:
             r = httpx.get(base + "/trade-api/v2/markets",
                           params={"limit": 50, "status": "open",
-                                  "series_ticker": ser}, timeout=12)
+                                  "series_ticker": ser,
+                                  "exchange_index": -1}, timeout=12)
         except Exception:
             continue
         if r.status_code != 200:
@@ -1638,8 +1690,12 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
             "KALSHI-ACCESS-SIGNATURE": sig,
             "KALSHI-ACCESS-TIMESTAMP": ts,
             "Content-Type": "application/json"}
+    # with httpx.Client(timeout=15) as client:
+    #     r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
+# 3) di exec_kalshi — POST order:
     with httpx.Client(timeout=15) as client:
-        r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
+        r = client.post(KALSHI_HOST + path, headers=hdrs, content=body,
+                        params={"exchange_index": -1})
     if r.status_code >= 400:
         return False, f"kalshi {r.status_code}: {r.text[:200]}"
     return True, f"BUY YES {size} x {price} :: {m['ticker']}"

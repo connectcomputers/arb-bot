@@ -40,7 +40,7 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 <!-- SALDO SEMUA VENUE (auto-refresh 30s) -->
 <div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
   <h2 style="color:#38bdf8;margin:0 0 12px;font-size:16px">💰 Saldo Semua Venue</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+  <!-- <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
     <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
       <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">📊 Kalshi</h3>
       <div id="saldo-kalshi" style="font-size:13px">Loading...</div>
@@ -53,7 +53,27 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
       <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">🎯 Polymarket</h3>
       <div id="saldo-polymarket" style="font-size:13px">Loading...</div>
     </div>
+  </div> -->
+<!-- 💰 SALDO SEMUA VENUE — grid identik dengan kolom venue -->
+<div style="margin-bottom:14px">
+  <!-- <h2 style="color:#38bdf8;margin:0 0 8px;font-size:15px">💰 Saldo Semua Venue
+    <span class="muted" id="saldo-updated" style="float:right">-</span>
+  </h2> -->
+  <div class="cols">
+    <div class="col" style="min-height:0">
+      <h2>🎯 POLYMARKET</h2>
+      <div id="saldo-polymarket" class="item">Loading…</div>
+    </div>
+    <div class="col" style="min-height:0">
+      <h2>📊 KALSHI</h2>
+      <div id="saldo-kalshi" class="item">Loading…</div>
+    </div>
+    <div class="col" style="min-height:0">
+      <h2>💎 LIMITLESS</h2>
+      <div id="saldo-limitless" class="item">Loading…</div>
+    </div>
   </div>
+</div>
   <p class="muted" style="margin:8px 0 0;font-size:11px">
     Auto-refresh setiap 30 detik · <span id="saldo-updated">-</span>
   </p>

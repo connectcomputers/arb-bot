@@ -86,6 +86,7 @@ VENUES_SCHEMA = {
     "polymarket": [
         ("private_key", "Private Key Wallet (0x…)", "text"),
         ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)", "text"),
+        ("proxy_url", "Proxy URL eksekusi (opsional: http://user:pass@host:port wilayah didukung)", "text"),
     ],
 
     "kalshi": [
