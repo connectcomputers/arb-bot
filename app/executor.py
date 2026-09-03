@@ -20,6 +20,7 @@ from eth_account import Account
 
 from datetime import datetime, timezone
 from eth_account import Account
+from limitless_sdk import Client, HMACCredentials
 
 EXEC_LOG = Path("data") / "exec_log.jsonl"
 APPROVED_FLAG = Path("data") / "lim_approved.json"
@@ -314,14 +315,22 @@ async def _lim_server_wallet_async(
 
     try:
 
+        # client = Client(
+        #     base_url="https://api.limitless.exchange",
+        #     hmac_credentials=HMACCredentials(
+        #         token_id=api_key,
+        #         secret=api_secret,
+        #     ),
+        # )
+
+        # Buat client dengan HMACCredentials (token_id + secret)
         client = Client(
             base_url="https://api.limitless.exchange",
             hmac_credentials=HMACCredentials(
-                token_id=api_key,
-                secret=api_secret,
+                tokenId=creds["api_key"],      # ← field alias "token_id" di model
+                secret=creds["api_secret"],
             ),
         )
-
 
         # ----------------------------------------------------
         # MARKET
@@ -673,26 +682,38 @@ def _rpc(method, params=None):
                    "method": method, "params": params or []}, timeout=15)
     return r.json().get("result")
 
-
-# def _lim_hmac(creds, method, path):
+# def _lim_hmac(creds, method, path, body=None):
 #     ts = datetime.now(timezone.utc).isoformat()
-#     msg = f"{ts}\n{method}\n{path}\n"
+#     if body:
+#         msg = f"{ts}\n{method}\n{path}\n{body}"
+#     else:
+#         msg = f"{ts}\n{method}\n{path}\n"
 #     sig = base64.b64encode(hmac.new(base64.b64decode(creds["api_secret"]),
 #                    msg.encode(), hashlib.sha256).digest()).decode()
 #     return {"lmts-api-key": creds["api_key"],
-#             "lmts-timestamp": ts, "lmts-signature": sig}
+#             "lmts-timestamp": ts, "lmts-signature": sig,
+#             "Content-Type": "application/json"}
 
 def _lim_hmac(creds, method, path, body=None):
-    ts = datetime.now(timezone.utc).isoformat()
-    if body:
-        msg = f"{ts}\n{method}\n{path}\n{body}"
-    else:
-        msg = f"{ts}\n{method}\n{path}\n"
-    sig = base64.b64encode(hmac.new(base64.b64decode(creds["api_secret"]),
-                   msg.encode(), hashlib.sha256).digest()).decode()
-    return {"lmts-api-key": creds["api_key"],
-            "lmts-timestamp": ts, "lmts-signature": sig,
-            "Content-Type": "application/json"}
+    """HMAC auth untuk Limitless — disesuaikan persis dengan SDK."""
+    # Match SDK: milliseconds + Z suffix
+    ts = datetime.now(timezone.utc).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
+    body_str = body if body else ""  # empty string, tanpa trailing \n
+    msg = f"{ts}\n{method.upper()}\n{path}\n{body_str}"
+    sig = base64.b64encode(
+        hmac.new(
+            base64.b64decode(creds["api_secret"]),
+            msg.encode(), hashlib.sha256
+        ).digest()
+    ).decode()
+    return {
+        "lmts-api-key": creds["api_key"],
+        "lmts-timestamp": ts,
+        "lmts-signature": sig,
+        "Content-Type": "application/json",
+    }
 
 # def _lim_switch_eoa(creds):
 #     r = httpx.put("https://api.limitless.exchange/profiles",
