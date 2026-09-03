@@ -487,15 +487,20 @@ class LimitlessExecutor(Executor):
     ) -> OrderResult:
 
         address = self._validate_eoa()
-        api_key = self._eoa_api_key()
-
+        hmac_credentials=HMACCredentials(
+            token_id=self.creds.get("api_key"),
+            secret=self.creds.get("api_secret"),
+        ),
         private_key = str(
             self.creds.get("wallet_pk") or ""
         ).strip()
 
         http_client = HttpClient(
             base_url=LIMITLESS_BASE_URL,
-            api_key=api_key,
+            hmac_credentials=HMACCredentials(
+                token_id=self.creds.get("api_key"),
+                secret=self.creds.get("api_secret"),
+            ),
         )
 
         try:
@@ -922,11 +927,16 @@ class LimitlessExecutor(Executor):
                     await client.close()
 
             # EOA
-            api_key = self._eoa_api_key()
-
+            hmac_credentials=HMACCredentials(
+                token_id=self.creds.get("api_key"),
+                secret=self.creds.get("api_secret"),
+            ),
             http_client = HttpClient(
                 base_url=LIMITLESS_BASE_URL,
-                api_key=api_key,
+                hmac_credentials=HMACCredentials(
+                    token_id=self.creds.get("api_key"),
+                    secret=self.creds.get("api_secret"),
+                ),
             )
 
             try:
@@ -1005,11 +1015,19 @@ class LimitlessExecutor(Executor):
                 finally:
                     await client.close()
 
-            api_key = self._eoa_api_key()
+            hmac_credentials=HMACCredentials(
 
+                token_id=self.creds.get("api_key"),
+
+                secret=self.creds.get("api_secret"),
+
+            ),
             http_client = HttpClient(
                 base_url=LIMITLESS_BASE_URL,
-                api_key=api_key,
+                hmac_credentials=HMACCredentials(
+                    token_id=self.creds.get("api_key"),
+                    secret=self.creds.get("api_secret"),
+                ),
             )
 
             try:
