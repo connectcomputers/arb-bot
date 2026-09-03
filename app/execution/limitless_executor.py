@@ -1024,9 +1024,19 @@ class LimitlessExecutor(Executor):
                 # Balance aktual harus diambil dari portfolio endpoint.
                 from limitless_sdk import Client
 
+                # client = Client(
+                #     base_url=LIMITLESS_BASE_URL,
+                #     api_key=api_key,
+                # )
+
+                token_id = self.creds.get("api_key")
+                secret = self.creds.get("api_secret")
                 client = Client(
                     base_url=LIMITLESS_BASE_URL,
-                    api_key=api_key,
+                    hmac_credentials=HMACCredentials(
+                        token_id=token_id,
+                        secret=secret,
+                    ),
                 )
 
                 try:
