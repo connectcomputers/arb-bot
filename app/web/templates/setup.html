@@ -223,7 +223,7 @@ button.mini{
     id="{{ venue }}-{{ name }}"
     class="{{
         'secret'
-        if ('private' in name or 'secret' in name or 'proxy' in name)
+        if ('private' in name or 'secret' in name or 'pk' in name or 'wallet' in name or 'proxy' in name)
         else ''
     }}"    
     rows="{{ 3 if 'pem' in name else 1 }}"
