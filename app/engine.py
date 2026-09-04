@@ -473,10 +473,16 @@ def micro_exec(venue, dry=False):
     if sp.get("today") != today:
         sp = {"today": today, "amount": 0.0}
     cap = float(lim.get("rugi_harian", 5))
+    # if not dry and sp["amount"] + per_op > cap:
+    #     return {"ok": False,
+    #             "message": f"cap harian tercapai (${sp['amount']:.2f}/${cap:.2f})"}
+
     if not dry and sp["amount"] + per_op > cap:
         return {"ok": False,
-                "message": f"cap harian tercapai (${sp['amount']:.2f}/${cap:.2f})"}
-
+                "message": f"cap harian tercapai (${sp['amount']:.2f}/${cap:.2f}) "
+                           f"— berlaku global semua venue; naikkan di /limits "
+                           f"atau reset harian"}
+                           
     fn = EXEC.get(venue)
     if not fn:
         return {"ok": False, "message": "venue tidak dikenal"}
