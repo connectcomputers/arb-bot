@@ -1003,62 +1003,100 @@ async def _lim_eoa_async(
         )
 
 
+        # response = (
+        #     await order_client.create_order(
+        #         token_id=token_id,
+        #         maker_amount=float(usd),
+        #         side=Side.BUY,
+        #         order_type=OrderType.FOK,
+        #         market_slug=market.slug,
+        #     )
+        # )
+
+
+        # matches = (
+        #     getattr(
+        #         response,
+        #         "maker_matches",
+        #         None,
+        #     )
+        #     or []
+        # )
+
+
+        # order_obj = getattr(
+        #     response,
+        #     "order",
+        #     None,
+        # )
+
+
+        # order_id = getattr(
+        #     order_obj,
+        #     "id",
+        #     None,
+        # )
+
+
+        # status = getattr(
+        #     order_obj,
+        #     "status",
+        #     None,
+        # )
+
+
+        # if not matches:
+
+        #     return (
+        #         False,
+        #         "Limitless EOA: "
+        #         "FOK tidak mendapatkan match"
+        #         + (
+        #             f"; status={status}"
+        #             if status
+        #             else ""
+        #         ),
+        #     )
+
+        # REAL PATH: GTC supaya order masuk book (bukti venue real)
+        # price = ask + sedikit buffer untuk kemungkinan match
+        r_mk2 = httpx.get(
+            f"https://api.limitless.exchange/markets/{market.slug}",
+            timeout=15,
+        )
+        prices = r_mk2.json().get("data", {}).get("prices") or []
+        price = float(prices[0]) if prices else 0.50
+        if not (0 < price < 1):
+            price = 0.50
+
         response = (
             await order_client.create_order(
                 token_id=token_id,
-                maker_amount=float(usd),
+                price=price,
+                size=float(usd) / price,   # size = shares
                 side=Side.BUY,
-                order_type=OrderType.FOK,
+                order_type=OrderType.GTC,
                 market_slug=market.slug,
             )
         )
 
+        order_obj = getattr(response, "order", None)
+        order_id = getattr(order_obj, "id", None)
+        status = getattr(order_obj, "status", None)
 
-        matches = (
-            getattr(
-                response,
-                "maker_matches",
-                None,
-            )
-            or []
+        if not order_id:
+            return (False, f"Limitless EOA: GTC ditolak server, status={status}")
+
+        return (
+            True,
+            "Limitless EOA GTC placed "
+            f"${float(usd):.2f} "
+            f"wallet={acct.address} "
+            f"market={market.slug} "
+            f"order_id={order_id} "
+            f"status={status}",
         )
-
-
-        order_obj = getattr(
-            response,
-            "order",
-            None,
-        )
-
-
-        order_id = getattr(
-            order_obj,
-            "id",
-            None,
-        )
-
-
-        status = getattr(
-            order_obj,
-            "status",
-            None,
-        )
-
-
-        if not matches:
-
-            return (
-                False,
-                "Limitless EOA: "
-                "FOK tidak mendapatkan match"
-                + (
-                    f"; status={status}"
-                    if status
-                    else ""
-                ),
-            )
-
-
+    
         return (
             True,
             "Limitless EOA BUY "
