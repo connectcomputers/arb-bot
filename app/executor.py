@@ -24,6 +24,25 @@ from limitless_sdk import Client, HMACCredentials
 EXEC_LOG = Path("data") / "exec_log.jsonl"
 APPROVED_FLAG = Path("data") / "lim_approved.json"
 
+# ---- Polymarket on-chain helpers (Polygon) ----
+POLY_USDC = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"   # USDC.e on Polygon PoS
+RPC_POLY  = "https://polygon-rpc.com"
+
+def _poly_usdc_onchain(addr: str) -> float:
+    """Baca saldo USDC.e on-chain untuk sebuah alamat Polygon."""
+    data = "0x70a08231" + addr[2:].lower().rjust(64, "0")
+    try:
+        r = httpx.post(
+            RPC_POLY,
+            json={"jsonrpc": "2.0", "id": 1,
+                  "method": "eth_call",
+                  "params": [{"to": POLY_USDC, "data": data}, "latest"]},
+            timeout=10,
+        )
+        return int(r.json().get("result") or "0x0", 16) / 1e6
+    except Exception:
+        return 0.0
+    
 SERIES_CANDIDATES = ["KXMLB", "KXNFL", "KXNBA", "KXNHL", "KXELEC", "KXPOL",
                      "KXCPI", "KXFED", "KXBTC", "KXETH", "KXSPX", "KXGOLD"]
 
@@ -613,6 +632,35 @@ def _exec_limitless_server_wallet(
         )
     )
 
+def _lim_slug_deadline(slug):
+    """Estimasi deadline epoch dari slug up-or-down; None bila tak berpola."""
+    import re as _re
+    m = _re.search(r"-(\d+)-(min|hour|hr)-(\d{9,10})$", str(slug))
+    if not m:
+        return None
+    n, unit, ts = int(m.group(1)), m.group(2), int(m.group(3))
+    return ts + n * {"min": 60, "hour": 3600, "hr": 3600}[unit]
+
+
+def _lim_pick_market(rows, min_left=180, exclude=None):
+    """Pilih market aktif bersisa >= min_left detik; utamakan sisa terpanjang."""
+    now = time.time()
+    cands = []
+    for x in rows or []:
+        slug = str(x.get("slug") or "")
+        if exclude and slug == exclude:
+            continue
+        if not (x.get("prices") and len(x["prices"]) == 2):
+            continue
+        dl = _lim_slug_deadline(slug)
+        left = (dl - now) if dl else 7200
+        if left >= min_left:
+            cands.append((left, x))
+    if not cands:
+        return None
+    cands.sort(key=lambda t: -t[0])
+    return cands[0][1]
+
 async def _lim_eoa_async(
     creds,
     usd,
@@ -793,18 +841,23 @@ async def _lim_eoa_async(
             r_mk.raise_for_status()
             markets_list = r_mk.json().get("data", []) or []
 
-            m = next(
-                (
-                    x for x in markets_list
-                    if x.get("prices")
-                    and len(x["prices"]) == 2
-                ),
-                None,
-            )
+            # m = next(
+            #     (
+            #         x for x in markets_list
+            #         if x.get("prices")
+            #         and len(x["prices"]) == 2
+            #     ),
+            #     None,
+            # )
+
+            # if not m:
+            #     return (False, "Limitless EOA: tidak ada market aktif")
+
+            m = _lim_pick_market(markets_list, min_left=180)
 
             if not m:
-                return (False, "Limitless EOA: tidak ada market aktif")
-
+                return (False, "Limitless EOA: tidak ada market aktif bersisa >= 3 menit")
+            
             slug = m["slug"]
             
         market = (
@@ -1086,10 +1139,18 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
     if dry:
         return True, f"[DRY] BUY YES {size} x {price} :: {m['q'][:50]}"
     # ---- GUARDRAIL: order real wajib proxy (deposit wallet flow) ----
-    if not dry and not creds.get("proxy_address"):                      # ← TAMBAH
-        return (False, "Poly real butuh Deposit/Proxy Wallet Address — "
-                       "isi di /setup (deposit wallet flow wajib)")     # ← TAMBAH
+    # if not dry and not creds.get("proxy_address"):                      # ← TAMBAH
+    #     return (False, "Poly real butuh Deposit/Proxy Wallet Address — "
+    #                    "isi di /setup (deposit wallet flow wajib)")     # ← TAMBAH
 
+    # ---- GUARDRAIL: real butuh proxy_address (mode web) ATAU dana di EOA ----
+    if not dry and not creds.get("proxy_address"):
+        from eth_account import Account as _Acc
+        _addr = _Acc.from_key(creds.get("private_key", "")).address
+        if _poly_usdc_onchain(_addr) <= 0:
+            return (False, "Poly real butuh proxy_address (mode web) "
+                           "atau dana USDC di wallet pribadi (mode EOA)")
+        
     # >>> TAMBAH DI SINI <<<
     proxy_url = str(creds.get("proxy_url") or "").strip()
     if proxy_url:
@@ -1105,10 +1166,16 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
             "chain_id": 137,
             "key": creds.get("private_key", ""),
         }
-        proxy = creds.get("proxy_address")
+        # proxy = creds.get("proxy_address")
+        # if proxy:
+        #     client_args["funder"] = proxy          # ← deposit wallet flow
+        #     client_args["signature_type"] = 2     # POLY_PROXY — workaround resmi            
+        proxy = str(creds.get("proxy_address") or "").strip()
         if proxy:
-            client_args["funder"] = proxy          # ← deposit wallet flow
-            client_args["signature_type"] = 2     # POLY_PROXY — workaround resmi            
+            client_args["funder"] = proxy        # mode web/connect (type 2)
+            client_args["signature_type"] = 2
+        # else: mode EOA murni — signature_type 0 default, funder = key itu sendiri
+        
         c = ClobClient(**client_args)
         try:
             api = c.create_or_derive_api_key()

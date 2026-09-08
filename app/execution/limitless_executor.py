@@ -97,6 +97,33 @@ def _to_order_type(order_type) -> Any:
 
     raise ValueError(f"Order type Limitless tidak didukung: {value}")
 
+def _lim_slug_deadline(slug):
+    """Estimasi deadline epoch dari slug up-or-down; None bila tak berpola."""
+    import re as _re
+    m = _re.search(r"-(\d+)-(min|hour|hr)-(\d{9,10})$", str(slug))
+    if not m:
+        return None
+    n, unit, ts = int(m.group(1)), m.group(2), int(m.group(3))
+    return ts + n * {"min": 60, "hour": 3600, "hr": 3600}[unit]
+
+def _lim_pick_market(rows, min_left=180, exclude=None):
+    """Pilih market aktif bersisa >= min_left detik; utamakan sisa terpanjang."""
+    now = time.time()
+    cands = []
+    for x in rows or []:
+        slug = str(x.get("slug") or "")
+        if exclude and slug == exclude:
+            continue
+        if not (x.get("prices") and len(x["prices"]) == 2):
+            continue
+        dl = _lim_slug_deadline(slug)
+        left = (dl - now) if dl else 7200
+        if left >= min_left:
+            cands.append((left, x))
+    if not cands:
+        return None
+    cands.sort(key=lambda t: -t[0])
+    return cands[0][1]
 
 def _run(coro):
     """
@@ -187,22 +214,30 @@ def exec_limitless(
                 [],
             )
 
-            market = next(
-                (
-                    x
-                    for x in data
-                    if x.get("prices")
-                    and len(x["prices"]) == 2
-                ),
-                None,
-            )
+            # market = next(
+            #     (
+            #         x
+            #         for x in data
+            #         if x.get("prices")
+            #         and len(x["prices"]) == 2
+            #     ),
+            #     None,
+            # )
+
+            # if not market:
+            #     return (
+            #         False,
+            #         "Limitless: tidak ada market aktif.",
+            #     )
+
+            market = _lim_pick_market(data, min_left=180)
 
             if not market:
                 return (
                     False,
-                    "Limitless: tidak ada market aktif.",
+                    "Limitless: tidak ada market aktif bersisa >= 3 menit.",
                 )
-
+            
             slug = market["slug"]
 
         # --------------------------------------------------------
