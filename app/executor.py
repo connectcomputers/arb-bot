@@ -1190,6 +1190,9 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
                            "atau dana USDC di wallet pribadi (mode EOA)")
         
     # >>> TAMBAH DI SINI <<<
+    _old_proxy_env = {k: os.environ.get(k)
+                      for k in ("HTTPS_PROXY", "HTTP_PROXY",
+                                "https_proxy", "http_proxy")}
     proxy_url = str(creds.get("proxy_url") or "").strip()
     if proxy_url:
         os.environ["HTTPS_PROXY"] = proxy_url
@@ -1234,7 +1237,13 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         if "403" in err_str and "region" in err_str:
             return False, f"Polymarket 403: geofence — perlu proxy wilayah didukung (residential proxy URL di /setup)"
         return False, f"gagal: {e}"
-    
+    finally:
+        for _k, _v in _old_proxy_env.items():
+            if _v is None:
+                os.environ.pop(_k, None)
+            else:
+                os.environ[_k] = _v
+                    
 def _kalshi_market(base):
     best = None
     for ser in SERIES_CANDIDATES:
