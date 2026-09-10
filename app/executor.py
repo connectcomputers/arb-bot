@@ -1211,11 +1211,45 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         # if proxy:
         #     client_args["funder"] = proxy          # ← deposit wallet flow
         #     client_args["signature_type"] = 2     # POLY_PROXY — workaround resmi            
+        # proxy = str(creds.get("proxy_address") or "").strip()
+        # if proxy:
+        #     client_args["funder"] = proxy        # mode web/connect (type 2)
+        #     # client_args["signature_type"] = 2
+        #     client_args["signature_type"] = 1    # akun email/Magic = Gnosis Safe flow            
+
         proxy = str(creds.get("proxy_address") or "").strip()
-        if proxy:
-            client_args["funder"] = proxy        # mode web/connect (type 2)
-            # client_args["signature_type"] = 2
-            client_args["signature_type"] = 1    # akun email/Magic = Gnosis Safe flow            
+        last_err = None
+        for st in ([1, 2] if proxy else [0]):
+            client_args = {
+                "host": "https://clob.polymarket.com",
+                "chain_id": 137,
+                "key": creds.get("private_key", ""),
+            }
+            if proxy:
+                client_args["funder"] = proxy
+                client_args["signature_type"] = st
+            c = ClobClient(**client_args)
+            try:
+                try:
+                    api = c.create_or_derive_api_key()
+                except Exception:
+                    api = c.derive_api_key()
+                if api is not None and hasattr(c, "set_api_creds"):
+                    c.set_api_creds(api)
+                order = c.create_order(OrderArgs(token_id=m["yes"], price=price,
+                                                 size=size, side=BUY))
+                resp = c.post_order(order, OrderType.FAK)
+            except Exception as e:
+                last_err = e
+                if "maker address not allowed" in str(e) or "invalid signature" in str(e).lower():
+                    continue
+                return False, f"gagal: {e}"
+            _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
+                  "side": "BUY-YES", "price": price, "size": size,
+                  "sig_type": st, "resp": str(resp)[:120]})
+            return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
+        return False, f"gagal: {last_err}"
+    
         # else: mode EOA murni — signature_type 0 default, funder = key itu sendiri
         
         c = ClobClient(**client_args)
