@@ -1214,7 +1214,8 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         proxy = str(creds.get("proxy_address") or "").strip()
         if proxy:
             client_args["funder"] = proxy        # mode web/connect (type 2)
-            client_args["signature_type"] = 2
+            # client_args["signature_type"] = 2
+            client_args["signature_type"] = 1    # akun email/Magic = Gnosis Safe flow            
         # else: mode EOA murni — signature_type 0 default, funder = key itu sendiri
         
         c = ClobClient(**client_args)
