@@ -98,6 +98,7 @@ def get_saldo_polymarket(c):
     try:
         res["signer"] = Account.from_key(c.get("private_key", "")).address
         res["proxy"] = c.get("proxy_address", "")
+        res["geoblock"] = False        
         
         def bal(tok, a):
             data = "0x70a08231" + a[2:].lower().rjust(64, "0")
@@ -156,6 +157,7 @@ def get_saldo_polymarket(c):
         res["status"] = "ok"
 
     except Exception as e:
+        res["geoblock"] = ("403" in str(e)) or ("region" in str(e).lower())        
         res["error"] = str(e)
     return res
 

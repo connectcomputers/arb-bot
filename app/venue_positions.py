@@ -15,7 +15,9 @@ def _poly(creds):
     pk = creds.get("private_key", "")
     if not pk:
         return []
-    addr = Account.from_key(pk).address
+    # addr = Account.from_key(pk).address
+
+    addr = (creds.get("proxy_address") or "").strip() or Account.from_key(pk).address
     with poly_proxy(creds.get("proxy_url")):
         r = httpx.get("https://data-api.polymarket.com/positions",
                       params={"user": addr, "limit": 20}, timeout=15)
@@ -46,7 +48,10 @@ def _kalshi(creds):
     return [{"title": (p.get("market_ticker") or p.get("ticker") or "?")[:60],
              "size": float(p.get("quantity") or p.get("position") or 0),
              "value": round(float(p.get("market_value") or 0), 2)}
-            for p in r.json().get("positions", [])]
+            # for p in r.json().get("positions", [])]
+
+            for p in (r.json().get("positions") or r.json().get("market_positions") or [])
+            if float(p.get("quantity") or p.get("position") or 0) != 0]
 
 
 def _limitless(creds):
