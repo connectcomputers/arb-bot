@@ -144,11 +144,14 @@ app = FastAPI(title="Arb Bot Dashboard", version="1.0")
 async def _gate_setup(request, call_next):
     """Belum ada venue tervalidasi → paksa ke /setup."""
     if request.url.path == "/":
-        from app.config_store import load_creds as _lc
+        from app.config_store import load_creds as _lc, load_config as _lcfg
         from fastapi.responses import RedirectResponse as _RR
+        _vs = ("polymarket", "kalshi", "limitless")
+        _cfg = (_lcfg() or {}).get("venue_valid", {}) or {}
         _cr = _lc() or {}
-        if not any((_cr.get(v) or {}).get("api_valid")
-                   for v in ("polymarket", "kalshi", "limitless")):
+        _ok = any(_cfg.get(v) for v in _vs) or \
+              any((_cr.get(v) or {}).get("api_valid") for v in _vs)
+        if not _ok:
             return _RR("/setup", status_code=302)
     return await call_next(request)
 
@@ -333,15 +336,22 @@ async def api_cek(request: Request):
     venue = (await request.json()).get("venue")
     # ok, msg = check_venue(venue, load_creds().get(venue, {}))
 
-    _allc = load_creds() or {}
-    _cr = dict(_allc.get(venue, {}) or {})
+    # _allc = load_creds() or {}
+    # _cr = dict(_allc.get(venue, {}) or {})
+    # ok, msg = check_venue(venue, _cr)
+    # if ok:
+    #     _cr["api_valid"] = True
+    # else:
+    #     _cr.pop("api_valid", None)
+    # _allc[venue] = _cr
+    # save_creds(_allc)   # sesuaikan nama bila hasil grep berbeda (mis. update_creds)
+
+    _cr = dict((load_creds() or {}).get(venue, {}) or {})
     ok, msg = check_venue(venue, _cr)
-    if ok:
-        _cr["api_valid"] = True
-    else:
-        _cr.pop("api_valid", None)
-    _allc[venue] = _cr
-    save_creds(_allc)   # sesuaikan nama bila hasil grep berbeda (mis. update_creds)
+    try:
+        set_venue_valid(venue, bool(ok))
+    except Exception as _e:
+        print("warn set_venue_valid:", _e)
 
     set_venue_valid(venue, ok)
     return {"ok": ok, "message": msg}   # cek saja TIDAK membuka kunci
