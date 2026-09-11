@@ -1257,10 +1257,35 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
             client_args["funder"] = proxy
             client_args["signature_type"] = 3  # POLY_1271 untuk deposit wallet post-2026
         
-        c = ClobClient(**client_args)
+        # c = ClobClient(**client_args)
         
-        # SKIP create_or_derive_api_key() — BROKEN untuk deposit wallets
-        # Langsung place order tanpa set API creds
+        # # SKIP create_or_derive_api_key() — BROKEN untuk deposit wallets
+        # # Langsung place order tanpa set API creds
+
+        c = ClobClient(**client_args)
+
+        # L2 creds: pakai cache bila ada, sonst derive + simpan otomatis
+        import json as _json
+        from pathlib import Path as _Path
+        from py_clob_client_v2 import ApiCreds
+        _cf = _Path("data") / "poly_clob_creds.json"
+        api = None
+        if _cf.exists():
+            try:
+                d = _json.loads(_cf.read_text())
+                api = ApiCreds(api_key=d["api_key"], api_secret=d["api_secret"],
+                               api_passphrase=d["api_passphrase"])
+            except Exception:
+                api = None
+        if api is None:
+            api = c.create_or_derive_api_key()
+            _cf.parent.mkdir(exist_ok=True)
+            _cf.write_text(_json.dumps({
+                "api_key": api.api_key,
+                "api_secret": api.api_secret,
+                "api_passphrase": api.api_passphrase,
+            }))
+        c.set_api_creds(api)
         
         # # FAK BUY = market order di v2
         # market_order = MarketOrderArgs(
@@ -1293,7 +1318,7 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
             options=PartialCreateOrderOptions(tick_size=str(m.get("tick") or "0.01")),
             order_type=OrderType.FAK,
         )
-                
+
         _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
               "side": "BUY-YES", "price": price, "size": size,
               "resp": str(resp)[:120]})
