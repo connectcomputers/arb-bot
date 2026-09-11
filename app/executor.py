@@ -1198,81 +1198,52 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         os.environ["HTTPS_PROXY"] = proxy_url
         os.environ["HTTP_PROXY"] = proxy_url
 
+    # try:
+    #     # Pakai library OFFICIAL py_clob_client (bukan _v2) untuk Magic flow
+    #     from py_clob_client.client import ClobClient
+    #     from py_clob_client.clob_types import OrderArgs, OrderType
+    #     # from py_clob_client.constants import BUY
+    #     from py_clob_client.order_builder.constants import BUY
+        
+    #     client_args = {
+    #         "host": "https://clob.polymarket.com",
+    #         "chain_id": 137,
+    #         "key": creds.get("private_key", ""),
+    #     }
+    #     proxy = str(creds.get("proxy_address") or "").strip()
+    #     if proxy:
+    #         client_args["funder"] = proxy
+    #         client_args["signature_type"] = 1  # POLY_GNOSIS_SAFE untuk Magic
+        
+    #     c = ClobClient(**client_args)
+        
+    #     # Derive API key (library official menangani Magic flow)
+    #     try:
+    #         api = c.create_or_derive_api_key()
+    #     except Exception:
+    #         api = c.derive_api_key()
+        
+    #     if api is not None and hasattr(c, "set_api_creds"):
+    #         c.set_api_creds(api)
+        
+    #     order = c.create_order(OrderArgs(
+    #         token_id=m["yes"],
+    #         price=price,
+    #         size=size,
+    #         side=BUY
+    #     ))
+        
+    #     resp = c.post_order(order, OrderType.FAK)
+        
+    #     _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
+    #           "side": "BUY-YES", "price": price, "size": size,
+    #           "resp": str(resp)[:120]})
+    #     return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
+
     try:
-        # from py_clob_client_v2 import ClobClient
-        # from py_clob_client_v2.clob_types import OrderArgs, OrderType
-        # from py_clob_client_v2.order_builder.constants import BUY
-        # client_args = {
-        #     "host": "https://clob.polymarket.com",
-        #     "chain_id": 137,
-        #     "key": creds.get("private_key", ""),
-        # }
-        # # proxy = creds.get("proxy_address")
-        # # if proxy:
-        # #     client_args["funder"] = proxy          # ← deposit wallet flow
-        # #     client_args["signature_type"] = 2     # POLY_PROXY — workaround resmi            
-        # # proxy = str(creds.get("proxy_address") or "").strip()
-        # # if proxy:
-        # #     client_args["funder"] = proxy        # mode web/connect (type 2)
-        # #     # client_args["signature_type"] = 2
-        # #     client_args["signature_type"] = 1    # akun email/Magic = Gnosis Safe flow            
-
-        # proxy = str(creds.get("proxy_address") or "").strip()
-        # last_err = None
-        # for st in ([1, 2] if proxy else [0]):
-        #     client_args = {
-        #         "host": "https://clob.polymarket.com",
-        #         "chain_id": 137,
-        #         "key": creds.get("private_key", ""),
-        #     }
-        #     if proxy:
-        #         client_args["funder"] = proxy
-        #         client_args["signature_type"] = st
-        #     c = ClobClient(**client_args)
-        #     try:
-        #         try:
-        #             api = c.create_or_derive_api_key()
-        #         except Exception:
-        #             api = c.derive_api_key()
-        #         if api is not None and hasattr(c, "set_api_creds"):
-        #             c.set_api_creds(api)
-        #         order = c.create_order(OrderArgs(token_id=m["yes"], price=price,
-        #                                          size=size, side=BUY))
-        #         resp = c.post_order(order, OrderType.FAK)
-        #     except Exception as e:
-        #         last_err = e
-        #         if "maker address not allowed" in str(e) or "invalid signature" in str(e).lower():
-        #             continue
-        #         return False, f"gagal: {e}"
-        #     _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
-        #           "side": "BUY-YES", "price": price, "size": size,
-        #           "sig_type": st, "resp": str(resp)[:120]})
-        #     return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
-        # return False, f"gagal: {last_err}"
-    
-        # # else: mode EOA murni — signature_type 0 default, funder = key itu sendiri
-        
-        # c = ClobClient(**client_args)
-        # try:
-        #     api = c.create_or_derive_api_key()
-        # except Exception:
-        #     api = c.derive_api_key()
-        # if api is not None and hasattr(c, "set_api_creds"):
-        #     c.set_api_creds(api)
-        # order = c.create_order(OrderArgs(token_id=m["yes"], price=price,
-        #                                  size=size, side=BUY))
-        # resp = c.post_order(order, OrderType.FAK)
-        
-        # _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
-        #       "side": "BUY-YES", "price": price, "size": size,
-        #       "resp": str(resp)[:120]})
-        # return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
-
-        # Pakai library OFFICIAL py_clob_client (bukan _v2) untuk Magic flow
-        from py_clob_client.client import ClobClient
-        from py_clob_client.clob_types import OrderArgs, OrderType
-        # from py_clob_client.constants import BUY
-        from py_clob_client.order_builder.constants import BUY
+        # Library v2 resmi Polymarket (post-2026)
+        from py_clob_client_v2 import ClobClient, OrderArgs, MarketOrderArgs, OrderType
+        from py_clob_client_v2 import Side
         
         client_args = {
             "host": "https://clob.polymarket.com",
@@ -1282,33 +1253,31 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         proxy = str(creds.get("proxy_address") or "").strip()
         if proxy:
             client_args["funder"] = proxy
-            client_args["signature_type"] = 1  # POLY_GNOSIS_SAFE untuk Magic
+            client_args["signature_type"] = 3  # POLY_1271 untuk deposit wallet post-2026
         
         c = ClobClient(**client_args)
         
-        # Derive API key (library official menangani Magic flow)
-        try:
-            api = c.create_or_derive_api_key()
-        except Exception:
-            api = c.derive_api_key()
+        # SKIP create_or_derive_api_key() — BROKEN untuk deposit wallets
+        # Langsung place order tanpa set API creds
         
-        if api is not None and hasattr(c, "set_api_creds"):
-            c.set_api_creds(api)
-        
-        order = c.create_order(OrderArgs(
+        # FAK BUY = market order di v2
+        market_order = MarketOrderArgs(
             token_id=m["yes"],
-            price=price,
-            size=size,
-            side=BUY
-        ))
+            amount=float(usd),  # dalam USDC
+            side=Side.BUY,
+        )
         
-        resp = c.post_order(order, OrderType.FAK)
+        resp = c.create_and_post_market_order(
+            market_order,
+            options={"tick_size": "0.01"},
+            order_type=OrderType.FAK,
+        )
         
         _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
               "side": "BUY-YES", "price": price, "size": size,
               "resp": str(resp)[:120]})
         return True, f"BUY YES {size} x {price} :: {m['q'][:40]}"
-    
+        
     except Exception as e:
         err_str = str(e)
         if "403" in err_str and "region" in err_str:
