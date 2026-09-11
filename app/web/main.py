@@ -139,6 +139,19 @@ VENUES_SCHEMA = {
 }
 
 app = FastAPI(title="Arb Bot Dashboard", version="1.0")
+
+@app.middleware("http")
+async def _gate_setup(request, call_next):
+    """Belum ada venue tervalidasi → paksa ke /setup."""
+    if request.url.path == "/":
+        from app.config_store import load_creds as _lc
+        from fastapi.responses import RedirectResponse as _RR
+        _cr = _lc() or {}
+        if not any((_cr.get(v) or {}).get("api_valid")
+                   for v in ("polymarket", "kalshi", "limitless")):
+            return _RR("/setup", status_code=302)
+    return await call_next(request)
+
 templates = Jinja2Templates(directory="app/web/templates")
 
 # Paths
@@ -318,7 +331,18 @@ async def api_credentials(request: Request):
 @app.post("/api/cek-api")
 async def api_cek(request: Request):
     venue = (await request.json()).get("venue")
-    ok, msg = check_venue(venue, load_creds().get(venue, {}))
+    # ok, msg = check_venue(venue, load_creds().get(venue, {}))
+
+    _allc = load_creds() or {}
+    _cr = dict(_allc.get(venue, {}) or {})
+    ok, msg = check_venue(venue, _cr)
+    if ok:
+        _cr["api_valid"] = True
+    else:
+        _cr.pop("api_valid", None)
+    _allc[venue] = _cr
+    save_creds(_allc)   # sesuaikan nama bila hasil grep berbeda (mis. update_creds)
+
     set_venue_valid(venue, ok)
     return {"ok": ok, "message": msg}   # cek saja TIDAK membuka kunci
 

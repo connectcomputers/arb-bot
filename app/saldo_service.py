@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 from app.config_store import load_creds
 from app.executor import _lim_hmac
+from app.proxy_util import poly_proxyed
 
 
 def kalshi_get(creds, path):
@@ -53,8 +54,19 @@ def get_saldo_limitless(c):
         me = httpx.get("https://api.limitless.exchange/profiles/me",
                        headers=_lim_hmac(c, "GET", "/profiles/me"),
                        timeout=10).json()
+        # sw = me.get("smartWallet")
+        # res["smart_wallet"] = sw
+
         sw = me.get("smartWallet")
+        if not sw:
+            pk = c.get("private_key") or ""
+            if pk:
+                from eth_account import Account
+                sw = Account.from_key(pk).address
         res["smart_wallet"] = sw
+        if not sw:
+            res["error"] = "smartWallet/EOA tidak ditemukan"
+            return res
         
         USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
         data = "0x70a08231" + sw[2:].lower().rjust(64, "0")
@@ -69,6 +81,7 @@ def get_saldo_limitless(c):
     return res
 
 
+@poly_proxyed
 def get_saldo_polymarket(c):
     from eth_account import Account
     res = {"venue": "polymarket", "status": "unknown"}

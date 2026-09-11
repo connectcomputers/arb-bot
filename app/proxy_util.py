@@ -30,3 +30,13 @@ def poly_proxy(proxy_url: str = None):
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
+def poly_proxyed(fn):
+    """Decorator: jalankan fungsi saldo dengan proxy Polymarket terisolasi."""
+    import functools
+
+    @functools.wraps(fn)
+    def wrapper(c, *a, **kw):
+        with poly_proxy((c or {}).get("proxy_url")):
+            return fn(c, *a, **kw)
+    return wrapper                
