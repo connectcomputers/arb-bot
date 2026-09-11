@@ -1255,7 +1255,8 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         proxy = str(creds.get("proxy_address") or "").strip()
         if proxy:
             client_args["funder"] = proxy
-            client_args["signature_type"] = 3  # POLY_1271 untuk deposit wallet post-2026
+            # client_args["signature_type"] = 3  # POLY_1271 untuk deposit wallet post-2026
+            client_args["signature_type"] = 2   # POLY_PROXY: signer=EOA, maker=ProfileProxy
         
         # c = ClobClient(**client_args)
         
