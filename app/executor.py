@@ -1165,7 +1165,9 @@ def _poly_market():
                 toks = json.loads(ids)
             except Exception:
                 continue
-            return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask}
+            # return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask}
+            return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask,
+                    "tick": m.get("orderPriceMinTickSize") or 0.01}            
     return None
 
 def exec_polymarket(creds, usd=2, dry=False, ticker=None):
@@ -1260,19 +1262,38 @@ def exec_polymarket(creds, usd=2, dry=False, ticker=None):
         # SKIP create_or_derive_api_key() — BROKEN untuk deposit wallets
         # Langsung place order tanpa set API creds
         
-        # FAK BUY = market order di v2
-        market_order = MarketOrderArgs(
-            token_id=m["yes"],
-            amount=float(usd),  # dalam USDC
-            side=Side.BUY,
-        )
+        # # FAK BUY = market order di v2
+        # market_order = MarketOrderArgs(
+        #     token_id=m["yes"],
+        #     amount=float(usd),  # dalam USDC
+        #     side=Side.BUY,
+        # )
         
+        # resp = c.create_and_post_market_order(
+        #     market_order,
+        #     options={"tick_size": "0.01"},
+        #     order_type=OrderType.FAK,
+        # )
+
+        # FAK BUY = market order di v2 (amount maks 2 desimal + price cap)
+        from py_clob_client_v2 import PartialCreateOrderOptions
+        amt = round(float(usd), 2)
+        cap = min(round(price + 0.01, 2), 0.99)
+        try:
+            market_order = MarketOrderArgs(
+                token_id=m["yes"], amount=amt, side=Side.BUY, price=cap,
+            )
+        except Exception:
+            market_order = MarketOrderArgs(
+                token_id=m["yes"], amount=amt, side=Side.BUY,
+            )
+
         resp = c.create_and_post_market_order(
-            market_order,
-            options={"tick_size": "0.01"},
+            order_args=market_order,
+            options=PartialCreateOrderOptions(tick_size=str(m.get("tick") or "0.01")),
             order_type=OrderType.FAK,
         )
-        
+                
         _log({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "venue": "polymarket",
               "side": "BUY-YES", "price": price, "size": size,
               "resp": str(resp)[:120]})
