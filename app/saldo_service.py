@@ -114,7 +114,7 @@ def get_saldo_limitless(c):
             res["pos_err"] = str(e)[:80]
         res["posisi_usd"] = round(pv, 2)
         res["portfolio_usd"] = round((res.get("usdc_base") or 0) + pv, 2)
-        
+
         res["status"] = "ok"
     except Exception as e:
         res["error"] = str(e)
@@ -150,7 +150,11 @@ def get_saldo_polymarket(c):
         res["usdce_proxy"] = bal(USDCe, res["proxy"])
 
         # Saldo REAL: cash di ledger CLOB + nilai posisi dari data-api
-        funder = (c.get("proxy_address") or "").strip()
+        # funder = (c.get("proxy_address") or "").strip()
+
+        from app.config_store import get_poly_funder
+        funder = get_poly_funder()
+        
         cash = None
         try:
             import json as _j
