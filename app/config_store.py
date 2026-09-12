@@ -79,7 +79,18 @@ DEFAULT_LIMITLESS_CREDS = {
     "wallet_pk": "",
 }
 
+def get_poly_funder() -> str:
+    cfg = load_config() or {}
+    f = str(cfg.get("poly_funder") or "").strip()
+    if f:
+        return f
+    return str(((load_creds() or {}).get("polymarket") or {}).get("proxy_address") or "").strip()
 
+def set_poly_funder(addr: str):
+    cfg = load_config() or {}
+    cfg["poly_funder"] = addr.strip()
+    save_config(cfg)
+    
 def _ensure():
     DATA_DIR.mkdir(
         exist_ok=True

@@ -17,7 +17,11 @@ def _poly(creds):
         return []
     # addr = Account.from_key(pk).address
 
-    addr = (creds.get("proxy_address") or "").strip() or Account.from_key(pk).address
+    # addr = (creds.get("proxy_address") or "").strip() or Account.from_key(pk).address
+
+    from app.config_store import get_poly_funder
+    addr = get_poly_funder() or Account.from_key(pk).address
+    
     with poly_proxy(creds.get("proxy_url")):
         r = httpx.get("https://data-api.polymarket.com/positions",
                       params={"user": addr, "limit": 20}, timeout=15)
