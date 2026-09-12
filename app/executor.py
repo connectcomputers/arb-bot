@@ -1383,16 +1383,40 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     shard = int(m.get("shard", 0))    
 
 # --- 3) di exec_kalshi, ganti blok transfer lama dengan: ---
+    # path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
+    # r_mk = httpx.get(KALSHI_HOST + path_mk,
+    #                  headers=_k_headers(creds, "GET", path_mk), timeout=10)
+    # if r_mk.status_code == 200:
+    #     shard = int(r_mk.json().get("market", {}).get("exchange_index", 0))
+    #     if shard != 0:
+    #         st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
+    #         if st >= 400:
+    #             return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
+
     path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
     r_mk = httpx.get(KALSHI_HOST + path_mk,
                      headers=_k_headers(creds, "GET", path_mk), timeout=10)
     if r_mk.status_code == 200:
         shard = int(r_mk.json().get("market", {}).get("exchange_index", 0))
-        if shard != 0:
-            st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
+    if shard != 0 and not dry:
+        path_b = KALSHI_ROOT + "/portfolio/balance"
+        r_b = httpx.get(KALSHI_HOST + path_b,
+                        headers=_k_headers(creds, "GET", path_b), timeout=10)
+        bd = {}
+        if r_b.status_code == 200:
+            for x in r_b.json().get("balance_breakdown", []):
+                bd[int(x.get("exchange_index", 0))] = float(x.get("balance", 0)) * 100
+        need = int(usd * 100) + 25
+        have = bd.get(shard, 0.0)
+        if have < need:
+            deficit = int(min(need - have, bd.get(0, 0.0)))
+            if deficit <= 0:
+                return False, (f"Kalshi: kolateral shard 0 kosong "
+                               f"(${bd.get(0, 0.0)/100:.2f}), shard {shard} kurang")
+            st, resp = _kalshi_shard_transfer(creds, shard, deficit)
             if st >= 400:
                 return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
-
+            
     # Lanjut order biasa
     price = min(round(m["yes"] + 0.01, 2), 0.99)
     size = max(1, int(usd // price))
