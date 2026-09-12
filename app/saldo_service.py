@@ -157,23 +157,23 @@ def get_saldo_polymarket(c):
 
                 # cash = float(ba.get("balance", 0)) / 1e6
 
-                ba, _cerr = None, None
-                for _call in (
-                    lambda: cl.get_balance_allowance("COLLATERAL"),
-                    lambda: cl.get_balance_allowance(),
-                    lambda: cl.get_balance_allowance(asset_type="COLLATERAL"),
-                ):
-                    try:
-                        ba = _call()
-                        break
-                    except TypeError as _te:
-                        _cerr = str(_te)[:80]; continue
-                    except Exception as _e:
-                        _cerr = str(_e)[:100]; break
+                ba = None
+                try:
+                    from py_clob_client_v2.clob_types import (
+                        BalanceAllowanceParams, AssetType)
+                    params = BalanceAllowanceParams(asset_type=AssetType.COLLATERAL)
+                except Exception:
+                    from py_clob_client_v2.clob_types import BalanceAllowanceParams
+                    params = BalanceAllowanceParams(asset_type="COLLATERAL")
+                try:
+                    ba = cl.get_balance_allowance(params)
+                except Exception as _e:
+                    res["cash_err"] = str(_e)[:100]
                 if ba is not None:
-                    cash = float(ba.get("balance", 0)) / 1e6
-                elif _cerr:
-                    res["cash_err"] = _cerr
+                    if isinstance(ba, dict):
+                        cash = float(ba.get("balance", ba.get("amount", 0))) / 1e6
+                    else:
+                        cash = float(getattr(ba, "balance", 0) or 0) / 1e6
 
         except Exception as e:
             res["cash_err"] = str(e)[:100]
