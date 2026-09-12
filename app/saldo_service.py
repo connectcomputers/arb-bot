@@ -97,6 +97,24 @@ def get_saldo_limitless(c):
                              "params": [{"to": USDC, "data": data}, "latest"]},
                        timeout=10)
         res["usdc_base"] = int(r.json().get("result") or "0x0", 16) / 1e6
+
+        pv = 0.0
+        try:
+            rp = httpx.get("https://api.limitless.exchange/portfolio/positions",
+                           headers=_lim_hmac(c, "GET", "/portfolio/positions"),
+                           timeout=10)
+            dd = rp.json()
+            for p in (dd.get("data") or dd.get("positions") or []):
+                v = float(p.get("value") or p.get("curValue") or 0)
+                if v == 0:
+                    v = float(p.get("size") or 0) * \
+                        float(p.get("curPrice") or p.get("price") or 0)
+                pv += v
+        except Exception as e:
+            res["pos_err"] = str(e)[:80]
+        res["posisi_usd"] = round(pv, 2)
+        res["portfolio_usd"] = round((res.get("usdc_base") or 0) + pv, 2)
+        
         res["status"] = "ok"
     except Exception as e:
         res["error"] = str(e)
