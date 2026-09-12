@@ -289,7 +289,6 @@ async function loadSaldo() {
     document.getElementById('saldo-polymarket').innerHTML = `
       <div>Saldo Web: <strong style="color:#86efac">$${(p.web_usd || 0).toFixed(2)}</strong></div>
       <div class="muted">On-chain: $${(p.usdce_signer || 0).toFixed(2)}</div>
-      <div class="muted" style="color:#fbbf24;margin-top:6px">⚠️ Geoblock (paper trading)</div>
     `;
   } catch (e) {
     console.error('Load saldo error:', e);
