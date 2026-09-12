@@ -1366,16 +1366,21 @@ def _kalshi_market(base):
     return best
 
 def exec_kalshi(creds, usd=2, dry=False, ticker=None):
-    m = _k_market(creds, ticker=ticker)
+    # m = _k_market(creds, ticker=ticker)
 
-    shard = int(m.get("shard", 0))
-    if shard != 0 and not dry:
-        st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
-        if st >= 400:
-            return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
+    # shard = int(m.get("shard", 0))
+    # if shard != 0 and not dry:
+    #     st, resp = _kalshi_shard_transfer(creds, shard, int(usd * 100) + 100)
+    #     if st >= 400:
+    #         return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
         
+    # if not m:
+    #     return False, "tidak ada market kalshi likuid"
+
+    m = _k_market(creds, ticker=ticker)
     if not m:
         return False, "tidak ada market kalshi likuid"
+    shard = int(m.get("shard", 0))    
 
 # --- 3) di exec_kalshi, ganti blok transfer lama dengan: ---
     path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
@@ -1418,8 +1423,12 @@ def exec_kalshi(creds, usd=2, dry=False, ticker=None):
     #     r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
 # 3) di exec_kalshi — POST order:
     with httpx.Client(timeout=15) as client:
+        # r = client.post(KALSHI_HOST + path, headers=hdrs, content=body,
+        #                 params={"exchange_index": -1})
+
         r = client.post(KALSHI_HOST + path, headers=hdrs, content=body,
-                        params={"exchange_index": -1})
+                        params={"exchange_index": shard})
+                
     # if r.status_code >= 400:
     #     return False, f"kalshi {r.status_code}: {r.text[:200]}"
     if r.status_code >= 400:
