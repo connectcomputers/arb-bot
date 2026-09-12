@@ -586,9 +586,16 @@ def _k_market(creds, ticker=None, exclude=()):
                     continue
                 if _is_banned(m):
                     continue
+                # px = _yes_px(m)
+                # if not (0.05 < px < 0.95):
+                #     continue
+
                 px = _yes_px(m)
-                if not (0.05 < px < 0.95):
+                # Filter harga terjangkau: 1 kontrak harus ≤ $0.50
+                # (karena size minimal Kalshi = 1 kontrak)
+                if not (0.05 < px < 0.50):
                     continue
+
                 vol = _vol(m)
                 if best is None or vol > best["vol"]:
                     best = {"ticker": t, "yes": px,
@@ -1604,7 +1611,8 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
     """Eksekusi order Kalshi dengan retry otomatis bila kena 403 kategori."""
     excl = set()
     last_err = None
-    for _try in range(8):
+    # for _try in range(8):
+    for _try in range(12):  # lebih banyak iterasi untuk skip market mahal    
         m = _k_market(creds, ticker=ticker, exclude=excl)
         if not m:
             return False, last_err or "tidak ada market kalshi likuid yang diizinkan"
@@ -1644,11 +1652,34 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
             if not ok:
                 return False, f"Kalshi pre-flight gagal: {msg}"
             
+        # price = min(round(m["yes"] + 0.01, 2), 0.99)
+        # size = max(1, int(usd // price))
+        # if dry:
+        #     return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
+
         price = min(round(m["yes"] + 0.01, 2), 0.99)
         size = max(1, int(usd // price))
+        
+        # Pre-check: cost actual tidak melebihi saldo shard
+        actual_cost = size * price
+        if not dry:
+            path_b = KALSHI_ROOT + "/portfolio/balance"
+            r_b = httpx.get(KALSHI_HOST + path_b,
+                            headers=_k_headers(creds, "GET", path_b), timeout=10)
+            if r_b.status_code == 200:
+                bd = {int(x["exchange_index"]): float(x["balance"]) * 100
+                      for x in r_b.json().get("balance_breakdown", [])}
+                shard_balance = bd.get(shard, 0) / 100
+                if actual_cost > shard_balance:
+                    # Skip market ini, coba yang lebih murah
+                    excl.add(m["ticker"])
+                    last_err = (f"market {m['ticker']} terlalu mahal: "
+                                f"butuh ${actual_cost:.2f}, shard {shard} cuma ${shard_balance:.2f}")
+                    continue
+        
         if dry:
             return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
-
+        
         path = KALSHI_ROOT + "/portfolio/events/orders"
         body = json.dumps({
             "ticker": m["ticker"], "side": "bid",
