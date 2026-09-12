@@ -1253,7 +1253,11 @@ def exec_polymarket(creds, usd=1.0, dry=False, ticker=None):
             "chain_id": 137,
             "key": creds.get("private_key", ""),
         }
-        proxy = str(creds.get("proxy_address") or "").strip()
+        # proxy = str(creds.get("proxy_address") or "").strip()
+
+        from app.config_store import get_poly_funder
+        proxy = get_poly_funder()
+        
         if proxy:
             client_args["funder"] = proxy
             client_args["signature_type"] = 3  # POLY_1271 untuk deposit wallet post-2026
