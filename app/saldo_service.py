@@ -41,8 +41,16 @@ def get_saldo_kalshi(c):
         r2 = kalshi_get(c, '/trade-api/v2/portfolio/positions')
         if r2.status_code == 200:
             pos = r2.json()
-            res["posisi_market"] = len(pos.get("market_positions", []))
-            res["posisi_event"] = len(pos.get("event_positions", []))
+            # res["posisi_market"] = len(pos.get("market_positions", []))
+            # res["posisi_event"] = len(pos.get("event_positions", []))
+
+            mp = [p for p in pos.get("market_positions", [])
+                  if float(p.get("quantity") or 0) != 0]
+            ep = [p for p in pos.get("event_positions", [])
+                  if float(p.get("quantity") or p.get("position") or 0) != 0]
+            res["posisi_market"] = len(mp)
+            res["posisi_event"] = len(ep)
+                        
     except Exception as e:
         res["error"] = str(e)
     return res
@@ -60,8 +68,12 @@ def get_saldo_limitless(c):
         sw = me.get("smartWallet")
         if not sw:
             from eth_account import Account
-            for k in ("private_key", "eoa_private_key", "private_key_eoa",
-                      "eoa_key", "wallet_private_key"):
+            # for k in ("private_key", "eoa_private_key", "private_key_eoa",
+            #           "eoa_key", "wallet_private_key"):
+
+            for k in ("wallet_pk", "private_key", "eoa_private_key",
+                      "private_key_eoa", "eoa_key", "wallet_private_key"):
+                
                 if c.get(k):
                     try:
                         sw = Account.from_key(c[k]).address
@@ -135,7 +147,14 @@ def get_saldo_polymarket(c):
                                 creds=ApiCreds(api_key=dd["api_key"],
                                                api_secret=dd["api_secret"],
                                                api_passphrase=dd["api_passphrase"]))
-                ba = cl.get_balance_allowance()
+                # ba = cl.get_balance_allowance()
+
+                from py_clob_client_v2.clob_types import AssetType
+                try:
+                    ba = cl.get_balance_allowance(asset_type=AssetType.COLLATERAL)
+                except Exception:
+                    ba = cl.get_balance_allowance(asset_type="COLLATERAL")
+
                 cash = float(ba.get("balance", 0)) / 1e6
         except Exception as e:
             res["cash_err"] = str(e)[:100]
