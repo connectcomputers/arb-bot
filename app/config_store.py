@@ -79,18 +79,35 @@ DEFAULT_LIMITLESS_CREDS = {
     "wallet_pk": "",
 }
 
+# def get_poly_funder() -> str:
+#     cfg = load_config() or {}
+#     f = str(cfg.get("poly_funder") or "").strip()
+#     if f:
+#         return f
+#     return str(((load_creds() or {}).get("polymarket") or {}).get("proxy_address") or "").strip()
+
+from pathlib import Path as _Path
+_FUNDER_FILE = _Path("data/poly_funder.txt")
+
 def get_poly_funder() -> str:
-    cfg = load_config() or {}
-    f = str(cfg.get("poly_funder") or "").strip()
-    if f:
-        return f
+    try:
+        v = _FUNDER_FILE.read_text().strip()
+        if v:
+            return v
+    except Exception:
+        pass
     return str(((load_creds() or {}).get("polymarket") or {}).get("proxy_address") or "").strip()
 
+# def set_poly_funder(addr: str):
+#     cfg = load_config() or {}
+#     cfg["poly_funder"] = addr.strip()
+#     save_config(cfg)
+
 def set_poly_funder(addr: str):
-    cfg = load_config() or {}
-    cfg["poly_funder"] = addr.strip()
-    save_config(cfg)
-    
+    _FUNDER_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _FUNDER_FILE.write_text(addr.strip())
+
+
 def _ensure():
     DATA_DIR.mkdir(
         exist_ok=True
