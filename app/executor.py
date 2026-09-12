@@ -601,12 +601,14 @@ def _k_market(creds, ticker=None, exclude=()):
     return best
 
 # --- 2) transfer antar-shard (signature TANPA body) ---
-def _kalshi_shard_transfer(creds, to_shard, cents):
+# def _kalshi_shard_transfer(creds, to_shard, cents):
+def _kalshi_shard_transfer(creds, to_shard, cents, source_shard=0):
     path = KALSHI_ROOT + "/portfolio/intra_exchange_instance_transfer"
     body = json.dumps({
         "source": "event_contract", "destination": "event_contract",
         "amount": cents * 100,                     # centicents
-        "source_exchange_shard": 0, "destination_exchange_shard": to_shard,
+        # "source_exchange_shard": 0, "destination_exchange_shard": to_shard,
+        "source_exchange_shard": int(source_shard), "destination_exchange_shard": to_shard,
         "source_subaccount": 0, "destination_subaccount": 0,
     }, separators=(",", ":"))
     ts = str(int(time.time() * 1000))
@@ -1475,6 +1477,63 @@ def exec_polymarket(creds, usd=1.0, dry=False, ticker=None):
 def _kalshi_market(base, ticker=None, exclude=()):
     return _k_market({"base_url": base}, ticker=ticker, exclude=exclude)
 
+def _kalshi_ensure_shard_balance(creds, target_shard, need_cents, dry=False):
+    """Pastikan shard target punya cukup saldo; auto-transfer dari shard terkaya bila perlu.
+    Return: (ok, message). Jika ok=False, pesan menjelaskan kenapa."""
+    KALSHI_HOST = "https://api.elections.kalshi.com"
+    KALSHI_ROOT = "/trade-api/v2"
+
+    path_b = KALSHI_ROOT + "/portfolio/balance"
+    r_b = httpx.get(KALSHI_HOST + path_b,
+                    headers=_k_headers(creds, "GET", path_b), timeout=10)
+    if r_b.status_code != 200:
+        return False, f"gagal baca balance: {r_b.status_code}"
+
+    bd = {}
+    for x in r_b.json().get("balance_breakdown", []):
+        bd[int(x.get("exchange_index", 0))] = float(x.get("balance", 0)) * 100
+
+    have_target = bd.get(target_shard, 0.0)
+    if have_target >= need_cents:
+        return True, f"shard {target_shard} sudah cukup (${have_target/100:.2f})"
+
+    deficit = int(need_cents - have_target)
+    # Cari shard sumber: shard terkaya selain target
+    sources = [(sh, bal) for sh, bal in bd.items() if sh != target_shard and bal > 0]
+    sources.sort(key=lambda x: -x[1])
+    if not sources:
+        return False, f"tidak ada shard lain dengan saldo (target={target_shard}, butuh ${need_cents/100:.2f})"
+
+    # Kumpulkan dari beberapa shard bila perlu
+    transferred = 0
+    used_shards = []
+    for src_sh, src_bal in sources:
+        take = int(min(deficit - transferred, src_bal))
+        if take <= 0:
+            continue
+        if dry:
+            transferred += take
+            used_shards.append(f"shard {src_sh} (${src_bal/100:.2f})")
+            if transferred >= deficit:
+                break
+            continue
+        st, resp = _kalshi_shard_transfer(creds, target_shard, take, source_shard=src_sh)
+        if st >= 400:
+            return False, (f"transfer shard {src_sh}→{target_shard} gagal {st}: "
+                           f"{resp[:150]}")
+        transferred += take
+        used_shards.append(f"shard {src_sh}")
+        if transferred >= deficit:
+            break
+
+    if transferred < deficit:
+        total_avail = sum(b for s, b in sources)
+        return False, (f"saldo total tidak cukup: butuh ${need_cents/100:.2f}, "
+                       f"tersedia ${total_avail/100:.2f} di {len(sources)} shard")
+
+    msg = f"transfer ${transferred/100:.2f} dari {', '.join(used_shards)} → shard {target_shard}"
+    return True, msg
+
 # def exec_kalshi(creds, usd=2, dry=False, ticker=None):
 #     m = _k_market(creds, ticker=ticker)
 
@@ -1560,25 +1619,31 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
         if r_mk.status_code == 200:
             shard = int(r_mk.json().get("market", {}).get("exchange_index", 0))
 
-        if shard != 0 and not dry:
-            path_b = KALSHI_ROOT + "/portfolio/balance"
-            r_b = httpx.get(KALSHI_HOST + path_b,
-                            headers=_k_headers(creds, "GET", path_b), timeout=10)
-            bd = {}
-            if r_b.status_code == 200:
-                for x in r_b.json().get("balance_breakdown", []):
-                    bd[int(x.get("exchange_index", 0))] = float(x.get("balance", 0)) * 100
-            need = int(usd * 100) + 25
-            have = bd.get(shard, 0.0)
-            if have < need:
-                deficit = int(min(need - have, bd.get(0, 0.0)))
-                if deficit <= 0:
-                    return False, (f"Kalshi: kolateral shard 0 kosong "
-                                   f"(${bd.get(0, 0.0)/100:.2f}), shard {shard} kurang")
-                st, resp = _kalshi_shard_transfer(creds, shard, deficit)
-                if st >= 400:
-                    return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
+        # if shard != 0 and not dry:
+        #     path_b = KALSHI_ROOT + "/portfolio/balance"
+        #     r_b = httpx.get(KALSHI_HOST + path_b,
+        #                     headers=_k_headers(creds, "GET", path_b), timeout=10)
+        #     bd = {}
+        #     if r_b.status_code == 200:
+        #         for x in r_b.json().get("balance_breakdown", []):
+        #             bd[int(x.get("exchange_index", 0))] = float(x.get("balance", 0)) * 100
+        #     need = int(usd * 100) + 25
+        #     have = bd.get(shard, 0.0)
+        #     if have < need:
+        #         deficit = int(min(need - have, bd.get(0, 0.0)))
+        #         if deficit <= 0:
+        #             return False, (f"Kalshi: kolateral shard 0 kosong "
+        #                            f"(${bd.get(0, 0.0)/100:.2f}), shard {shard} kurang")
+        #         st, resp = _kalshi_shard_transfer(creds, shard, deficit)
+        #         if st >= 400:
+        #             return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
 
+        need = int(usd * 100) + 25
+        if not dry:
+            ok, msg = _kalshi_ensure_shard_balance(creds, shard, need, dry=False)
+            if not ok:
+                return False, f"Kalshi pre-flight gagal: {msg}"
+            
         price = min(round(m["yes"] + 0.01, 2), 0.99)
         size = max(1, int(usd // price))
         if dry:
