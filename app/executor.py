@@ -1170,7 +1170,8 @@ def _poly_market():
                     "tick": m.get("orderPriceMinTickSize") or 0.01}            
     return None
 
-def exec_polymarket(creds, usd=2, dry=False, ticker=None):
+# def exec_polymarket(creds, usd=2, dry=False, ticker=None):
+def exec_polymarket(creds, usd=1.0, dry=False, ticker=None):
     m = _poly_market()
     if not m:
         return False, "tidak ada market likuid"
