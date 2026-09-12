@@ -23,7 +23,14 @@ def _poly(creds):
                       params={"user": addr, "limit": 20}, timeout=15)
     return [{"title": (p.get("title") or p.get("market") or "?")[:60],
              "size": round(float(p.get("size") or 0), 2),
-             "value": round(float(p.get("curValue") or p.get("value") or 0), 2)}
+            #  "value": round(float(p.get("curValue") or p.get("value") or 0), 2)}
+
+             "value": round(next((float(p[k]) for k in
+                      ("curValue", "currentValue", "usdcValue", "marketValue", "value")
+                      if float(p.get(k) or 0) > 0),
+                      float(p.get("size") or 0) *
+                      float(p.get("curPrice") or p.get("price") or 0)), 2)}
+                      
             for p in r.json() if float(p.get("size") or 0) > 0]
 
 

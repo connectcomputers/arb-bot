@@ -50,7 +50,7 @@ def get_saldo_kalshi(c):
                   if float(p.get("quantity") or p.get("position") or 0) != 0]
             res["posisi_market"] = len(mp)
             res["posisi_event"] = len(ep)
-                        
+
     except Exception as e:
         res["error"] = str(e)
     return res
@@ -149,13 +149,32 @@ def get_saldo_polymarket(c):
                                                api_passphrase=dd["api_passphrase"]))
                 # ba = cl.get_balance_allowance()
 
-                from py_clob_client_v2.clob_types import AssetType
-                try:
-                    ba = cl.get_balance_allowance(asset_type=AssetType.COLLATERAL)
-                except Exception:
-                    ba = cl.get_balance_allowance(asset_type="COLLATERAL")
+                # from py_clob_client_v2.clob_types import AssetType
+                # try:
+                #     ba = cl.get_balance_allowance(asset_type=AssetType.COLLATERAL)
+                # except Exception:
+                #     ba = cl.get_balance_allowance(asset_type="COLLATERAL")
 
-                cash = float(ba.get("balance", 0)) / 1e6
+                # cash = float(ba.get("balance", 0)) / 1e6
+
+                ba, _cerr = None, None
+                for _call in (
+                    lambda: cl.get_balance_allowance("COLLATERAL"),
+                    lambda: cl.get_balance_allowance(),
+                    lambda: cl.get_balance_allowance(asset_type="COLLATERAL"),
+                ):
+                    try:
+                        ba = _call()
+                        break
+                    except TypeError as _te:
+                        _cerr = str(_te)[:80]; continue
+                    except Exception as _e:
+                        _cerr = str(_e)[:100]; break
+                if ba is not None:
+                    cash = float(ba.get("balance", 0)) / 1e6
+                elif _cerr:
+                    res["cash_err"] = _cerr
+
         except Exception as e:
             res["cash_err"] = str(e)[:100]
         pv = 0.0
@@ -163,8 +182,20 @@ def get_saldo_polymarket(c):
             try:
                 rp = httpx.get("https://data-api.polymarket.com/positions",
                                params={"user": addr, "limit": 100}, timeout=15)
+                # for p in rp.json():
+                #     pv += float(p.get("curValue") or 0)
+
                 for p in rp.json():
-                    pv += float(p.get("curValue") or 0)
+                    v = 0.0
+                    for k in ("curValue", "currentValue", "usdcValue",
+                              "marketValue", "value"):
+                        if float(p.get(k) or 0) > 0:
+                            v = float(p[k]); break
+                    if v == 0.0:
+                        v = float(p.get("size") or 0) * \
+                            float(p.get("curPrice") or p.get("price") or 0)
+                    pv += v
+                    
                 if pv > 0:
                     break
             except Exception as e:
