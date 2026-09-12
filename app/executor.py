@@ -495,21 +495,40 @@ def _k_get_market(creds, ticker):
 #     return None
 
 def _k_market(creds, ticker=None, exclude=()):
-    """Pilih market Kalshi likuid yang diizinkan akun.
-
-    Return: dict(ticker, yes, shard, vol, q) atau None.
-    - exclude : kumpulan ticker yang harus dilewati (mis. kena 403 kategori)
-    - kategori terlarang akun WA-state disaring di sini
-    - shard (exchange_index) ikut dikembalikan untuk routing kolateral
-    """
+    """Pilih market Kalshi likuid yang diizinkan akun WA-state.
+    Filter berbasis PREFIX TICKER (konsisten) + kategori (backup)."""
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
     root = "/trade-api/v2"
-    series_list = list(globals().get("SERIES_CANDIDATES") or [])
-    if not series_list:
-        series_list = ["KXBTC", "KXETH", "KXSOL", "KXHYPE", "KXDOGE",
-                       "KXXRP", "KXECON", "KXFED", "KXCPI"]
-    restricted = {"sports", "politics", "elections", "culture",
-                  "tech", "science", "tech_and_science", "mentions"}
+
+    # PRIORITAS: crypto & ekonomi (pasti diizinkan)
+    series_allowed = ["KXBTC", "KXETH", "KXSOL", "KXXRP", "KXDOGE", "KXHYPE",
+                      "KXCRYPTO", "KXECON", "KXFED", "KXCPI", "KXMACRO", "KXFIN"]
+    # Prefix ticker yang DILARANG akun WA-state
+    prefix_banned = ("KXMLB", "KXNFL", "KXNBA", "KXNHL", "KXMLS", "KXUFC",
+                     "KXSOCCER", "KXBOXING", "KXTENNIS", "KXF1", "KXMMA",
+                     "KXELECTION", "KXPOLITICS", "KXTRUMP", "KXBIDEN",
+                     "KXCONGRESS", "KXSENATE", "KXGOV", "KXHARRIS",
+                     "KXMOVIE", "KXMUSIC", "KXTV", "KXCELEB", "KXOSCAR",
+                     "KXTECH", "KXAI", "KXSCIENCE", "KXMENTION")
+    # Kategori string yang DILARANG (backup)
+    cat_banned = {"sports", "politics", "elections", "culture", "tech",
+                  "science", "tech_and_science", "mentions", "baseball",
+                  "football", "basketball", "hockey", "soccer", "mlb",
+                  "nfl", "nba", "nhl", "ufc", "mma"}
+
+    def _is_banned(mk):
+        t = (mk.get("ticker") or "").upper()
+        if any(t.startswith(p) for p in prefix_banned):
+            return True
+        cat = str(mk.get("category") or "").strip().lower()
+        if cat and cat in cat_banned:
+            return True
+        title = (mk.get("title") or "").lower()
+        banned_kw = ("mlb", "nfl", "nba", "nhl", "ufc", "trump", "biden",
+                      "harris", "election", "congress", "senate")
+        if any(kw in title for kw in banned_kw):
+            return True
+        return False
 
     def _yes_px(mk):
         for key, div in (("yes_ask_dollars", 1.0), ("yes_ask", 100.0),
@@ -532,15 +551,17 @@ def _k_market(creds, ticker=None, exclude=()):
                     continue
         return 0.0
 
-    # ticker manual → ambil langsung dari endpoint detail
+    # ticker manual
     if ticker:
         try:
             rd = httpx.get(base + root + "/markets/" + ticker, timeout=12)
             if rd.status_code == 200:
                 mk = rd.json().get("market", {}) or {}
+                if _is_banned(mk):
+                    return None
                 px = _yes_px(mk)
                 if px > 0:
-                    return {"ticker": ticker, "t": ticker, "yes": px, "ask": px,
+                    return {"ticker": ticker, "yes": px,
                             "shard": int(mk.get("exchange_index", 0)),
                             "vol": max(_vol(mk), 1.0),
                             "q": mk.get("title") or ticker}
@@ -548,10 +569,10 @@ def _k_market(creds, ticker=None, exclude=()):
             pass
         return None
 
+    # scan series yang DIIZINKAN dulu (crypto/econ)
     best = None
-    for ser in series_list:
-        for params in ({"limit": 50, "status": "open", "series_ticker": ser,
-                        "exchange_index": -1},
+    for ser in series_allowed:
+        for params in ({"limit": 50, "status": "open", "series_ticker": ser, "exchange_index": -1},
                        {"limit": 50, "status": "open", "series_ticker": ser}):
             try:
                 r = httpx.get(base + root + "/markets", params=params, timeout=12)
@@ -561,19 +582,16 @@ def _k_market(creds, ticker=None, exclude=()):
                 continue
             for m in (r.json().get("markets", []) or []):
                 t = m.get("ticker") or ""
-                if not t or t.startswith("KXMVE"):
+                if not t or t.startswith("KXMVE") or t in exclude:
                     continue
-                if t in exclude:
-                    continue
-                cat = str(m.get("category") or "").strip().lower()
-                if cat in restricted:
+                if _is_banned(m):
                     continue
                 px = _yes_px(m)
                 if not (0.05 < px < 0.95):
                     continue
                 vol = _vol(m)
                 if best is None or vol > best["vol"]:
-                    best = {"ticker": t, "t": t, "yes": px, "ask": px,
+                    best = {"ticker": t, "yes": px,
                             "shard": int(m.get("exchange_index", 0)),
                             "vol": vol, "q": m.get("title") or t}
             if best:
@@ -1524,26 +1542,24 @@ def _kalshi_market(base, ticker=None, exclude=()):
 #     return True, f"BUY YES {size} x {price} :: {m['ticker']}"
 
 def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
-    """Eksekusi order Kalshi dengan retry otomatis bila kena pembatasan kategori."""
+    """Eksekusi order Kalshi dengan retry otomatis bila kena 403 kategori."""
     excl = set()
     last_err = None
-    for _try in range(6):
+    for _try in range(8):
         m = _k_market(creds, ticker=ticker, exclude=excl)
         if not m:
-            return False, last_err or "tidak ada market kalshi likuid"
-        
+            return False, last_err or "tidak ada market kalshi likuid yang diizinkan"
+
         shard = int(m.get("shard", 0))
         KALSHI_HOST = "https://api.elections.kalshi.com"
         KALSHI_ROOT = "/trade-api/v2"
-        
-        # Konfirmasi shard dari endpoint detail market
+
         path_mk = KALSHI_ROOT + "/markets/" + m["ticker"]
         r_mk = httpx.get(KALSHI_HOST + path_mk,
                          headers=_k_headers(creds, "GET", path_mk), timeout=10)
         if r_mk.status_code == 200:
             shard = int(r_mk.json().get("market", {}).get("exchange_index", 0))
-        
-        # Transfer shard hanya bila diperlukan
+
         if shard != 0 and not dry:
             path_b = KALSHI_ROOT + "/portfolio/balance"
             r_b = httpx.get(KALSHI_HOST + path_b,
@@ -1562,24 +1578,20 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
                 st, resp = _kalshi_shard_transfer(creds, shard, deficit)
                 if st >= 400:
                     return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
-        
-        # Eksekusi order
+
         price = min(round(m["yes"] + 0.01, 2), 0.99)
         size = max(1, int(usd // price))
         if dry:
             return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
-        
+
         path = KALSHI_ROOT + "/portfolio/events/orders"
         body = json.dumps({
-            "ticker": m["ticker"],
-            "side": "bid",
-            "count": f"{size:.2f}",
-            "price": f"{price:.4f}",
+            "ticker": m["ticker"], "side": "bid",
+            "count": f"{size:.2f}", "price": f"{price:.4f}",
             "client_order_id": str(_uuid.uuid4()),
             "time_in_force": "good_till_canceled",
             "self_trade_prevention_type": "taker_at_cross",
         }, separators=(",", ":"))
-        
         ts = str(int(time.time() * 1000))
         key = serialization.load_pem_private_key(
             creds.get("private_key_pem", "").encode(), password=None)
@@ -1587,27 +1599,22 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
             padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
                         salt_length=padding.PSS.DIGEST_LENGTH),
             hashes.SHA256())).decode()
-        
         hdrs = {"KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
                 "KALSHI-ACCESS-SIGNATURE": sig,
                 "KALSHI-ACCESS-TIMESTAMP": ts,
                 "Content-Type": "application/json"}
-        
+
         with httpx.Client(timeout=15) as client:
             r = client.post(KALSHI_HOST + path, headers=hdrs, content=body,
                             params={"exchange_index": shard})
-        
-        # Retry bila kena pembatasan kategori
+
         if r.status_code == 403 and "not_currently_allowed" in r.text:
             excl.add(m["ticker"])
             last_err = f"market {m['ticker']} kena pembatasan kategori akun; lewati"
             continue
-        
         if r.status_code >= 400:
             return False, f"kalshi {r.status_code}: {r.text[:200]}"
-        
         return True, f"kalshi BUY YES {size} x {price} :: {m['ticker']}"
-    
     return False, last_err or "kalshi: kehabisan kandidat market yang diizinkan"
 
 def _kalshi_transfer_to_shard(creds, target_shard, amount_cents):
