@@ -155,6 +155,20 @@ async def _gate_setup(request, call_next):
             return _RR("/setup", status_code=302)
     return await call_next(request)
 
+@app.on_event("startup")
+def _reset_stale_engine_state():
+    """Proses baru = engine pasti belum jalan; jangan warisi running:true."""
+    import json as _j
+    from pathlib import Path as _P
+    p = _P("data/live_state.json")
+    try:
+        d = _j.loads(p.read_text())
+        if d.get("running"):
+            d["running"] = False
+            p.write_text(_j.dumps(d, indent=2))
+    except Exception:
+        pass
+    
 templates = Jinja2Templates(directory="app/web/templates")
 
 # Paths

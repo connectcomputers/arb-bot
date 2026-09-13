@@ -29,12 +29,12 @@ import os
 from pathlib import Path
 from copy import deepcopy
 
+MIN_ORDER_USD = {"polymarket": 1.0, "kalshi": 0.10, "limitless": 0.10}
 
 DATA_DIR = Path("data")
 
 CRED_FILE = DATA_DIR / "credentials.json"
 CONF_FILE = DATA_DIR / "trading_config.json"
-
 
 DEFAULT_CONFIG = {
     "mode": "paper",
