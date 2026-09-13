@@ -280,8 +280,7 @@ async function loadSaldo() {
     const l = d.limitless;
     document.getElementById('saldo-limitless').innerHTML = `
       <div>Cash (Base): <strong style="color:#86efac">${(l.usdc_base || 0).toFixed(4)}</strong> · Portfolio: <strong style="color:#93c5fd">${(l.posisi_usd || 0).toFixed(2)}</strong></div>
-      <div class="muted">Total: $${(l.portfolio_usd || 0).toFixed(2)} · ${l.smart_wallet || '-'}</div>
-      <div class="muted" style="word-break:break-all;font-size:11px;margin-top:4px">${l.smart_wallet || '-'}</div>
+      <div class="muted">Total: $${(l.portfolio_usd || 0).toFixed(2)}</div>
       <div class="muted" style="margin-top:6px">✅ ${l.status}</div>
     `;
     
