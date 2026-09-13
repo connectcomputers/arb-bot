@@ -17,7 +17,8 @@ STATE = Path("data") / "live_state.json"
 KILL = Path("data") / "kill.json"
 FEES = {"polymarket": 0.0, "kalshi": 0.04, "limitless": 0.004}
 
-INTERVAL = 30
+# INTERVAL = 30
+INTERVAL = 60
 
 _thr = None
 _run = False
@@ -345,7 +346,7 @@ def _loop():
                         from app.config_store import MIN_ORDER_USD as _MO
                         _usd = max(per_op, _MO.get(venue, 0.0))
                         ok, msg = fn(load_creds().get(venue, {}), usd=_usd)
-                        
+
                         if ok:
                             sp["amount"] = round(sp["amount"] + per_op, 2)
                             st.setdefault("trades", []).append({
