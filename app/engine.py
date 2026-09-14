@@ -190,8 +190,15 @@ def _scan():
                     comparisons += 1
                     n_pair += 1
                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
+                    # s = sim(ma["title"], mb["title"])
+                    # same = (ka and ka == kb) or s >= 0.5
+
                     s = sim(ma["title"], mb["title"])
-                    same = (ka and ka == kb) or s >= 0.5
+                    if ma["cat"] == "crypto":
+                        same = bool(ka and kb and ka == kb)   # crypto wajib kunci struktural sama
+                    else:
+                        same = s >= 0.5
+                        
                     if not same:
                         if s >= 0.25:
                             near.append({"a": a, "b": b, "s": round(s, 2),
