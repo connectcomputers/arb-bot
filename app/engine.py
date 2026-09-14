@@ -228,7 +228,7 @@ def _scan():
             "ts": time.strftime("%H:%M:%S"),
             "epoch": int(time.time()),
             "duration": round(time.time() - t0, 1)}
-    return matches[:10], info, near[:5], log[-40:]
+    return matches[:10], info, near[:5], log[-150:]
 
 
 # === Main Loop ===
