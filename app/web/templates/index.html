@@ -331,4 +331,26 @@ setInterval(()=>{
   document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; });
 },1000);
 </script>
-</div></body></html>
+</div>
+<script>
+(function(){
+  function fix(){
+    document.querySelectorAll('div,span,h3,h4,b,strong,i,u').forEach(function(el){
+      if (el.children.length === 0 && /^eksekusi$/i.test((el.textContent||'').trim())) {
+        var c = el.nextElementSibling;
+        if (c && !c.dataset.scrollfix) {
+          c.style.maxHeight = '240px';
+          c.style.overflowY = 'auto';
+          c.style.border = '1px solid #1e293b';
+          c.style.padding = '4px';
+          c.style.borderRadius = '6px';
+          c.dataset.scrollfix = '1';
+        }
+      }
+    });
+  }
+  setInterval(fix, 1500);
+  fix();
+})();
+</script>
+</body></html>
