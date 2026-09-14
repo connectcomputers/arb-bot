@@ -93,19 +93,48 @@ def sim(a, b):
     ta, tb = _tok(a), _tok(b)
     return len(ta & tb) / len(ta | tb) if ta and tb else 0.0
 
+_orig_read, _orig_write = _read, _write
+_state_lock = threading.Lock()
+_scan_lock = threading.Lock()
+LOOP_LOG = Path("data") / "engine_loop.log"
+_last_scan_ts = 0.0
+SCAN_EVERY_SEC = 120
+_wd_on = False
+
+
+# def _read():
+#     if STATE.exists():
+#         try:
+#             return json.loads(STATE.read_text())
+#         except Exception:
+#             pass
+#     return {"running": False, "mode": "paper", "matches": [], "trades": []}
 
 def _read():
-    if STATE.exists():
-        try:
-            return json.loads(STATE.read_text())
-        except Exception:
-            pass
-    return {"running": False, "mode": "paper", "matches": [], "trades": []}
+    with _state_lock:
+        return _orig_read()
 
+# def _write(st):
+#     STATE.parent.mkdir(exist_ok=True)
+#     STATE.write_text(json.dumps(st, indent=1))
 
 def _write(st):
-    STATE.parent.mkdir(exist_ok=True)
-    STATE.write_text(json.dumps(st, indent=1))
+    with _state_lock:
+        return _orig_write(st)
+
+def _log_loop(msg: str):
+    try:
+        with open(LOOP_LOG, "a") as f:
+            f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}\n")
+    except Exception:
+        pass
+
+def _scan_shared():
+    global _last_scan_ts
+    with _scan_lock:
+        out = _scan()
+        _last_scan_ts = time.time()
+        return out
 
 # def _scan():
 #     cfg = load_config()
@@ -259,6 +288,7 @@ def _scan():
 
 # def _loop():
 #     global _run
+#     errs = 0
 #     while _run:
 #         try:
 #             cfg = load_config()
@@ -268,60 +298,83 @@ def _scan():
 #             lim = cfg.get("limits", {})
 #             minp = float(lim.get("min_profit", 0.5)) / 100
 #             per_op = float(lim.get("modal_per_op", 2))
-            
-#             # cap belanja harian
+#             cap = float(lim.get("rugi_harian", 5))
+
 #             today = time.strftime("%Y-%m-%d")
 #             sp = st.get("spend", {})
 #             if sp.get("today") != today:
 #                 sp = {"today": today, "amount": 0.0}
-#             cap = float(lim.get("rugi_harian", 5))
-            
+
 #             for m in st["matches"]:
-#                 if m["pi"] >= minp:
-#                     # auto-exec bila mode = real & cap belum tercapai
-#                     if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
-#                         from app.executor import EXEC
-#                         for venue in [m["a"], m["b"]]:
-#                             fn = EXEC.get(venue)
-#                             if fn:
-#                                 ok, msg = fn(load_creds().get(venue, {}), usd=per_op)
-#                                 if ok:
-#                                     sp["amount"] = round(sp["amount"] + per_op, 2)
-#                                     st.setdefault("trades", []).append({
-#                                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-#                                         "mode": "real-auto",
-#                                         "venues": [venue], "pi": m["pi"],
-#                                         "size": per_op, "note": msg[:60]})
-#                                     st["trades"] = st["trades"][-50:]
-#                     else:
-#                         # paper mode atau cap tercapai
-#                         st.setdefault("trades", []).append({
-#                             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-#                             "mode": st.get("mode", "paper"),
-#                             "venues": [m["a"], m["b"]], "pi": m["pi"],
-#                             "size": per_op})
-#                         st["trades"] = st["trades"][-50:]
-            
+#                 if m["pi"] < minp:
+#                     continue
+#                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
+#                     from app.executor import EXEC
+#                     for venue in (m["a"], m["b"]):
+#                         fn = EXEC.get(venue)
+#                         if not fn:
+#                             continue
+#                         # ok, msg = fn(load_creds().get(venue, {}), usd=per_op)
+
+#                         from app.config_store import MIN_ORDER_USD as _MO
+#                         _usd = max(per_op, _MO.get(venue, 0.0))
+#                         ok, msg = fn(load_creds().get(venue, {}), usd=_usd)
+
+#                         if ok:
+#                             sp["amount"] = round(sp["amount"] + per_op, 2)
+#                             st.setdefault("trades", []).append({
+#                                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+#                                 "mode": "real-auto", "venues": [venue],
+#                                 "pi": m["pi"], "size": per_op, "note": msg[:60]})
+#                             st["trades"] = st["trades"][-50:]
+#                 else:
+#                     st.setdefault("trades", []).append({
+#                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+#                         "mode": st.get("mode", "paper"),
+#                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op})
+#                     st["trades"] = st["trades"][-50:]
+
 #             st["spend"] = sp
 #             st["interval"] = INTERVAL
+#             errs = 0
 #             st.pop("last_error", None)
+
+#             # ---- AUTO-STOP 1: cap rugi harian ----
+#             if sp["amount"] >= cap:
+#                 st["auto_stop"] = (f"{time.strftime('%H:%M:%S')} "
+#                                    f"cap rugi harian tercapai ${sp['amount']:.2f}")
+#                 _write(st)
+#                 stop()
+#                 break
 #             _write(st)
 #             time.sleep(INTERVAL)
 #         except Exception as e:
+#             errs += 1
 #             st = _read()
 #             st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
+#             # ---- AUTO-STOP 2: 5 error beruntun ----
+#             if errs >= 5:
+#                 st["auto_stop"] = (f"{time.strftime('%H:%M:%S')} "
+#                                    f"5 error beruntun: {type(e).__name__}")
+#                 _write(st)
+#                 stop()
+#                 break
 #             _write(st)
 #             time.sleep(5)
 
 def _loop():
     global _run
     errs = 0
+    _log_loop("loop start")
     while _run:
+        t0 = time.time()
         try:
             cfg = load_config()
             st = _read()
             st["running"] = True
-            st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+            if (time.time() - _last_scan_ts >= SCAN_EVERY_SEC) or not st.get("matches"):
+                st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
+                st["interval"] = INTERVAL
             lim = cfg.get("limits", {})
             minp = float(lim.get("min_profit", 0.5)) / 100
             per_op = float(lim.get("modal_per_op", 2))
@@ -332,6 +385,7 @@ def _loop():
             if sp.get("today") != today:
                 sp = {"today": today, "amount": 0.0}
 
+            added = 0
             for m in st["matches"]:
                 if m["pi"] < minp:
                     continue
@@ -341,12 +395,9 @@ def _loop():
                         fn = EXEC.get(venue)
                         if not fn:
                             continue
-                        # ok, msg = fn(load_creds().get(venue, {}), usd=per_op)
-
                         from app.config_store import MIN_ORDER_USD as _MO
                         _usd = max(per_op, _MO.get(venue, 0.0))
                         ok, msg = fn(load_creds().get(venue, {}), usd=_usd)
-
                         if ok:
                             sp["amount"] = round(sp["amount"] + per_op, 2)
                             st.setdefault("trades", []).append({
@@ -354,43 +405,48 @@ def _loop():
                                 "mode": "real-auto", "venues": [venue],
                                 "pi": m["pi"], "size": per_op, "note": msg[:60]})
                             st["trades"] = st["trades"][-50:]
+                            added += 1
                 else:
                     st.setdefault("trades", []).append({
                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         "mode": st.get("mode", "paper"),
                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op})
                     st["trades"] = st["trades"][-50:]
+                    added += 1
 
             st["spend"] = sp
-            st["interval"] = INTERVAL
             errs = 0
             st.pop("last_error", None)
 
-            # ---- AUTO-STOP 1: cap rugi harian ----
             if sp["amount"] >= cap:
                 st["auto_stop"] = (f"{time.strftime('%H:%M:%S')} "
                                    f"cap rugi harian tercapai ${sp['amount']:.2f}")
                 _write(st)
+                _log_loop("auto-stop cap harian")
                 stop()
                 break
             _write(st)
-            time.sleep(INTERVAL)
+            _log_loop(f"cycle ok matches={len(st.get('matches') or [])} +trades={added}")
+            time.sleep(max(5, INTERVAL - (time.time() - t0)))
         except Exception as e:
             errs += 1
+            _log_loop(f"cycle error {type(e).__name__}: {e}")
             st = _read()
             st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
-            # ---- AUTO-STOP 2: 5 error beruntun ----
             if errs >= 5:
                 st["auto_stop"] = (f"{time.strftime('%H:%M:%S')} "
                                    f"5 error beruntun: {type(e).__name__}")
                 _write(st)
+                _log_loop("auto-stop 5 error")
                 stop()
                 break
             _write(st)
             time.sleep(5)
-                        
+    _log_loop("loop exit")
+
 # def refresh():
-#     """Scan baru sekarang juga (dipakai saat halaman dashboard dibuka)."""
+#     if KILL.exists() or not _run:     # ← kunci: tidak scan saat berhenti/kill
+#         return status()
 #     st = _read()
 #     st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
 #     st["interval"] = INTERVAL
@@ -398,29 +454,59 @@ def _loop():
 #     return st
 
 def refresh():
-    if KILL.exists() or not _run:     # ← kunci: tidak scan saat berhenti/kill
+    if KILL.exists() or not _run:
         return status()
     st = _read()
-    st["matches"], st["info"], st["near"], st["scanlog"] = _scan()
+    if time.time() - _last_scan_ts >= 45:
+        st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
     st["interval"] = INTERVAL
     _write(st)
     return st
 
+# def start(mode):
+#     global _thr, _run
+#     if KILL.exists():
+#         return False, "kill switch aktif — buka kunci dulu"
+#     if _run:
+#         return False, "sudah berjalan"
+#     st = _read()
+#     st["mode"] = mode
+#     _write(st)
+#     _run = True
+#     _thr = threading.Thread(target=_loop, daemon=True)
+#     _thr.start()
+#     return True, f"engine {mode} dimulai"
+
+def _watchdog():
+    global _thr
+    while True:
+        time.sleep(20)
+        try:
+            if _run and (_thr is None or not _thr.is_alive()):
+                _log_loop("watchdog: respawn loop")
+                _thr = threading.Thread(target=_loop, daemon=True)
+                _thr.start()
+        except Exception:
+            pass
+
 def start(mode):
-    global _thr, _run
+    global _thr, _run, _wd_on
     if KILL.exists():
         return False, "kill switch aktif — buka kunci dulu"
     if _run:
         return False, "sudah berjalan"
     st = _read()
     st["mode"] = mode
+    st.pop("auto_stop", None)
     _write(st)
     _run = True
     _thr = threading.Thread(target=_loop, daemon=True)
     _thr.start()
+    if not _wd_on:
+        _wd_on = True
+        threading.Thread(target=_watchdog, daemon=True).start()
     return True, f"engine {mode} dimulai"
-
-
+    
 # def stop():
 #     global _run
 #     _run = False
