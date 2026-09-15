@@ -464,7 +464,8 @@ def start(mode):
     if KILL.exists():
         return False, "kill switch aktif — buka kunci dulu"
     if _run:
-        return False, "sudah berjalan"
+        current = st.get("mode", "unknown") if (st := _read()) else "unknown"
+        return False, f"sudah berjalan dalam mode {current.upper()}. Klik Stop dulu, lalu Mulai {mode.capitalize()}."
     st = _read()
     st["mode"] = mode
     st.pop("auto_stop", None)
