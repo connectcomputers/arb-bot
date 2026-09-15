@@ -535,7 +535,15 @@ async def api_config():
     }
 
 
-@app.post("/api/kill-switch")
+
+
+    return load_config()
+
+@app.get("/api/alerts")
+async def api_alerts():
+    """Kembalikan daftar alert aktif untuk banner dashboard."""
+    from app.alert import get_active_alerts
+    return {"alerts": get_active_alerts()}@app.post("/api/kill-switch")
 async def kill_switch():
     """KILL SWITCH: Stop service + alert Telegram."""
     try:
