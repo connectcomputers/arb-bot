@@ -1780,7 +1780,7 @@ async def _reap_limitless_stale_async(max_age_min):
         
         # Fetch open orders (async)
         try:
-            resp = await client.http.get("/portfolio/orders", params={"status": "open"})
+            resp = await client.http.get("/portfolio/orders")
             if resp.status_code != 200:
                 return 0, [], f"fetch orders gagal: {resp.status_code}"
             orders_data = resp.json()
@@ -1789,11 +1789,17 @@ async def _reap_limitless_stale_async(max_age_min):
         
         # Parse orders (bisa list atau dict dengan key 'orders')
         if isinstance(orders_data, dict):
-            open_orders = orders_data.get("orders", orders_data.get("data", []))
+            all_orders = orders_data.get("orders", orders_data.get("data", []))
         elif isinstance(orders_data, list):
-            open_orders = orders_data
+            all_orders = orders_data
         else:
             return 0, [], f"unexpected response type: {type(orders_data)}"
+        
+        if not all_orders:
+            return 0, [], None
+        
+        # Filter open orders di client-side (status field bisa 'open', 'pending', dll)
+        open_orders = [o for o in all_orders if o.get("status", "").lower() in ("open", "pending", "active")]
         
         if not open_orders:
             return 0, [], None
