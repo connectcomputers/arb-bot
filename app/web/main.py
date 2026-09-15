@@ -614,3 +614,39 @@ async def api_baseline_set(request: Request):
         return {"ok": True, "message": "baseline tersimpan"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+@app.get("/api/pnl")
+async def api_pnl():
+    """Hitung P/L sederhana dari trades."""
+    from pathlib import Path as _P2
+    import json
+    
+    try:
+        state = json.loads(_P2("data/live_state.json").read_text())
+        trades = state.get("trades", [])
+    except Exception:
+        trades = []
+    
+    # P/L sederhana: asumsi semua order real menang (optimistic)
+    # Atau: P/L = 0 sampai posisi resolve
+    real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
+    
+    # Hitung per venue
+    pnl_by_venue = {}
+    for t in real_trades:
+        for v in t.get("venues", []):
+            pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl": 0})
+            pnl_by_venue[v]["count"] += 1
+            pnl_by_venue[v]["invested"] += t.get("size", 0)
+            # P/L = 0 sampai resolve (atau bisa ditambah logic cek resolve)
+    
+    total_invested = sum(v["invested"] for v in pnl_by_venue.values())
+    total_pnl = sum(v["pnl"] for v in pnl_by_venue.values())
+    
+    return {
+        "by_venue": pnl_by_venue,
+        "total_invested": total_invested,
+        "total_pnl": total_pnl,
+        "note": "P/L = 0 sampai posisi resolve (market selesai)"
+    }
