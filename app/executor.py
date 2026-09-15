@@ -1742,102 +1742,109 @@ def _kalshi_transfer_to_shard(creds, target_shard, amount_cents):
 REAPER_MAX_AGE_MIN = 10
 
 def reap_limitless_stale(max_age_min=None):
-    """Batalkan order GTC Limitless mode EOA yang sudah terbuka > max_age_min.
-    Return: (count_cancelled, list_of_cancelled_tickers, error_message_or_None)."""
+    """Sync wrapper untuk reaper (dipanggil dari loop engine)."""
     if max_age_min is None:
         max_age_min = REAPER_MAX_AGE_MIN
+    return _run_async(_reap_limitless_stale_async(max_age_min))
+
+async def _reap_limitless_stale_async(max_age_min):
+    """Async implementation: fetch open orders, cancel yang stale."""
     from app.config_store import load_creds
     creds = load_creds().get("limitless", {})
     if not creds:
         return 0, [], "tidak ada creds limitless"
-
+    
     mode = _limitless_wallet_mode(creds)
     if mode != "eoa":
         return 0, [], f"skip: mode {mode} (bukan EOA)"
-
+    
     api_key = str(creds.get("api_key") or "").strip()
     api_secret = str(creds.get("api_secret") or "").strip()
-    wallet_pk = str(creds.get("wallet_pk") or "").strip()
-    if not api_key or not api_secret or not wallet_pk:
-        return 0, [], "api_key/api_secret/wallet_pk kosong"
-
+    if not api_key or not api_secret:
+        return 0, [], "api_key/api_secret kosong"
+    
     try:
-        import time as _t
-        from datetime import datetime, timezone
         from limitless_sdk import Client, HMACCredentials
         from limitless_sdk.orders import OrderClient
         from eth_account import Account
-
+        import time as _t
+        
         hmac_creds = HMACCredentials(tokenId=api_key, secret=api_secret)
         client = Client(hmac_credentials=hmac_creds)
-        acct = Account.from_key(wallet_pk)
-        order_client = OrderClient(client.http, acct)
-
-        # Ambil open orders via client API
-        open_orders = []
+        
+        wallet_pk = str(creds.get("wallet_pk") or creds.get("private_key") or "").strip()
+        if not wallet_pk:
+            return 0, [], "wallet_pk kosong di creds limitless"
+        wallet = Account.from_key(wallet_pk)
+        order_client = OrderClient(client, wallet)
+        
+        # Fetch open orders (async)
         try:
-            resp = client.http.get("/orders", params={"status": "open"})
-            if isinstance(resp, list):
-                open_orders = resp
-            elif isinstance(resp, dict):
-                open_orders = resp.get("orders", resp.get("data", []))
-        except Exception:
-            pass
-
+            resp = await client.http.get("/portfolio/orders", params={"status": "open"})
+            if resp.status_code != 200:
+                return 0, [], f"fetch orders gagal: {resp.status_code}"
+            orders_data = resp.json()
+        except Exception as fetch_err:
+            return 0, [], f"fetch orders exception: {type(fetch_err).__name__}: {fetch_err}"
+        
+        # Parse orders (bisa list atau dict dengan key 'orders')
+        if isinstance(orders_data, dict):
+            open_orders = orders_data.get("orders", orders_data.get("data", []))
+        elif isinstance(orders_data, list):
+            open_orders = orders_data
+        else:
+            return 0, [], f"unexpected response type: {type(orders_data)}"
+        
         if not open_orders:
-            # Fallback: coba endpoint portfolio
-            try:
-                resp = client.http.get("/portfolio/orders", params={"status": "open"})
-                if isinstance(resp, list):
-                    open_orders = resp
-                elif isinstance(resp, dict):
-                    open_orders = resp.get("orders", resp.get("data", []))
-            except Exception:
-                pass
-
-        if not open_orders:
-            return 0, [], None  # bersih, bukan error
-
-        # Filter: order yang umurnya > max_age_min
+            return 0, [], None
+        
+        # Filter stale orders
         now = _t.time()
         stale = []
         for o in open_orders:
-            if isinstance(o, dict):
-                ts_val = o.get("created_at") or o.get("createdAt") or o.get("timestamp") or 0
-                oid = o.get("id") or o.get("order_id") or "?"
-                ticker = o.get("ticker") or o.get("market") or o.get("marketSlug") or oid
-            else:
-                ts_val = getattr(o, "created_at", None) or getattr(o, "createdAt", None) or 0
-                oid = getattr(o, "id", None) or getattr(o, "order_id", None) or "?"
-                ticker = getattr(o, "ticker", None) or getattr(o, "market", None) or str(oid)
-
-            if isinstance(ts_val, str):
+            ts = (o.get("created_at") or o.get("createdAt") or o.get("timestamp") or 0)
+            if isinstance(ts, str):
                 try:
-                    ts_val = datetime.fromisoformat(ts_val.replace("Z", "+00:00")).timestamp()
+                    from datetime import datetime
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
                 except Exception:
-                    ts_val = 0
-            age_min = (now - ts_val) / 60 if ts_val else 999
+                    ts = 0
+            age_min = (now - ts) / 60 if ts else 0
             if age_min > max_age_min:
-                stale.append({"id": oid, "ticker": ticker, "age": age_min})
-
+                ticker = o.get("ticker") or o.get("market") or o.get("id") or "?"
+                order_id = o.get("id") or o.get("order_id")
+                stale.append({"obj": o, "ticker": ticker, "id": order_id, "age": age_min})
+        
         if not stale:
             return 0, [], None
-
-        # Cancel
+        
+        # Cancel stale orders
         cancelled = []
         for s in stale:
             try:
-                client.http.delete(f"/orders/{s['id']}")
-                cancelled.append(s["ticker"])
+                # Coba beberapa pola cancel
+                for cancel_method in ("cancel_order", "cancel", "delete_order"):
+                    method = getattr(order_client, cancel_method, None)
+                    if not method:
+                        continue
+                    try:
+                        # Coba panggil dengan order object atau order_id
+                        try:
+                            result = method(s["obj"])
+                        except TypeError:
+                            result = method(s["id"])
+                        # Jika async, await
+                        if hasattr(result, "__await__"):
+                            await result
+                        cancelled.append(s["ticker"])
+                        break
+                    except Exception:
+                        continue
             except Exception:
-                try:
-                    client.http.post(f"/orders/{s['id']}/cancel")
-                    cancelled.append(s["ticker"])
-                except Exception:
-                    pass
-
+                continue
+        
         return len(cancelled), cancelled, None
-
+    
     except Exception as e:
         return 0, [], f"error: {type(e).__name__}: {str(e)[:100]}"
     
