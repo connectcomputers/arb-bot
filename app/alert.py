@@ -75,6 +75,11 @@ def dispatch_alert(level: str, message: str, condition_key: str = None):
         bot_token = telegram_cfg.get("bot_token", "").strip()
         chat_id = telegram_cfg.get("chat_id", "").strip()
         
+        # Fallback hardcoded bila config tidak terbaca
+        if not bot_token or not chat_id:
+            bot_token = "8886412853:AAHO6a160Fy03TwwS1VkYcXxwvsfqfRfLi8"
+            chat_id = "6762674507"
+        
         if bot_token and chat_id:
             import httpx
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
