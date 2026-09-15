@@ -24,7 +24,10 @@ font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;
 .matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
 padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 </style></head>
-<body><div class="wrap">
+<body>
+<div id="alert-banner" style="display:none;background:#dc2626;color:white;padding:12px;margin:8px;border-radius:6px;font-size:14px">
+  <strong>⚠️ Alert Aktif:</strong> <span id="alert-message"></span>
+</div><div class="wrap">
 <header>
  <h1>🚀 Arb Bot Dashboard</h1>
  <div>
@@ -205,7 +208,22 @@ async function micro(v){
   poll();
 }
 
-async function poll(){
+async function poll_alerts(){
+  fetch('/api/alerts').then(r=>r.json()).then(d=>{
+    const alerts = d.alerts || [];
+    const banner = document.getElementById('alert-banner');
+    const msg = document.getElementById('alert-message');
+    if (alerts.length > 0) {
+      banner.style.display = 'block';
+      msg.textContent = alerts.map(a=>a.message).join(' | ');
+    } else {
+      banner.style.display = 'none';
+    }
+  }).catch(()=>{});
+}
+
+function poll(){
+  poll_alerts();
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
     fetch('/api/engine/status').then(r=>r.json())]);
