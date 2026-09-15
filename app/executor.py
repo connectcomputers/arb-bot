@@ -683,6 +683,7 @@ def exec_limitless(
     usd=2,
     dry=False,
     ticker=None,
+    side="YES",
 ):
     """
     Compatibility layer utama Limitless.
@@ -781,6 +782,7 @@ async def _lim_eoa_async(
     usd,
     dry=False,
     ticker=None,
+    side="YES",
 ):
     """
     Limitless order menggunakan wallet pribadi EOA.
@@ -1250,6 +1252,7 @@ def _exec_limitless_eoa(
     usd,
     dry=False,
     ticker=None,
+    side="YES",
 ):
 
     return _run_async(
@@ -1258,6 +1261,7 @@ def _exec_limitless_eoa(
             usd,
             dry=dry,
             ticker=ticker,
+            side=side,
         )
     )
 
