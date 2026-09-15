@@ -1544,7 +1544,7 @@ def _kalshi_ensure_shard_balance(creds, target_shard, need_cents, dry=False):
     msg = f"transfer ${transferred/100:.2f} dari {', '.join(used_shards)} → shard {target_shard}"
     return True, msg
 
-# def exec_kalshi(creds, usd=2, dry=False, ticker=None):
+# def exec_kalshi(creds, usd=2, dry=False, ticker=None, side="YES"):
 #     m = _k_market(creds, ticker=ticker)
 
 #     shard = int(m.get("shard", 0))
@@ -1575,7 +1575,7 @@ def _kalshi_ensure_shard_balance(creds, target_shard, need_cents, dry=False):
 #     path = KALSHI_ROOT + "/portfolio/events/orders"
 #     body = json.dumps({
 #         "ticker": m["ticker"],
-#         "side": "bid",
+#         "side": "bid" if (side or "YES").upper() == "YES" else "ask",
 #         "count": f"{size:.2f}",
 #         "price": f"{price:.4f}",
 #         "client_order_id": str(_uuid.uuid4()),
