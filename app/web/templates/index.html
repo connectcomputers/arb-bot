@@ -247,7 +247,7 @@ async function poll(){
     </h2>
     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
     <h4>Open Positions (OP)</h4>
-    ${v.positions.length ? v.positions.map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
+    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
                          : '<div class="muted">tidak ada</div>'}
 
     <h4>🔄 Screening Realtime</h4>
