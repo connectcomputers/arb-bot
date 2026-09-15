@@ -566,3 +566,50 @@ async def kill_switch():
         return {"status": "stopped", "message": "Service stopped + alert sent"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/reconciliation")
+async def api_reconciliation():
+    """Data rekonsiliasi: saldo baseline vs sekarang + trades."""
+    from app.baseline import load_baseline
+    import json
+    
+    baseline = load_baseline()
+    
+    try:
+        state = json.loads(pathlib.Path("data/live_state.json").read_text())
+        trades = state.get("trades", [])
+        spend = state.get("spend", {})
+    except Exception:
+        trades = []
+        spend = {}
+    
+    real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
+    paper_trades = [t for t in trades if t.get("mode") == "paper"]
+    
+    by_venue = {}
+    for t in real_trades:
+        for v in t.get("venues", []):
+            by_venue.setdefault(v, {"count": 0, "size": 0})
+            by_venue[v]["count"] += 1
+            by_venue[v]["size"] += t.get("size", 0)
+    
+    return {
+        "baseline": baseline,
+        "trades_real": len(real_trades),
+        "trades_paper": len(paper_trades),
+        "spend_today": spend.get("amount", 0),
+        "by_venue": by_venue,
+        "recent_trades": real_trades[-10:]
+    }
+
+@app.post("/api/baseline/set")
+async def api_baseline_set(request: Request):
+    """Set baseline saldo untuk rekonsiliasi."""
+    from app.baseline import save_baseline
+    try:
+        body = await request.json()
+        save_baseline(body)
+        return {"ok": True, "message": "baseline tersimpan"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
