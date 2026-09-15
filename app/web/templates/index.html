@@ -223,7 +223,6 @@ async function poll_alerts(){
 }
 
 function poll(){
-  poll_alerts();
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
     fetch('/api/engine/status').then(r=>r.json())]);
@@ -372,5 +371,7 @@ setInterval(()=>{
   setInterval(fix, 1500);
   fix();
 })();
+
+setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
 </script>
 </body></html>
