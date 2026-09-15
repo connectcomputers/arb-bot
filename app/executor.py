@@ -1281,19 +1281,22 @@ def _poly_market():
             except Exception:
                 continue
             # return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask}
-            return {"q": m.get("question") or "?", "yes": toks[0], "ask": ask,
+            return {"q": m.get("question") or "?", "yes": toks[0], "no": toks[1] if len(toks) > 1 else toks[0], "ask": ask, "toks": toks,
                     "tick": m.get("orderPriceMinTickSize") or 0.01}            
     return None
 
 # def exec_polymarket(creds, usd=2, dry=False, ticker=None):
-def exec_polymarket(creds, usd=1.0, dry=False, ticker=None):
+def exec_polymarket(creds, usd=1.0, dry=False, ticker=None, side="YES"):
     m = _poly_market()
     if not m:
         return False, "tidak ada market likuid"
+    toks = m.get("toks") or [m["yes"]]  # fallback
+    chosen_side = (side or "YES").upper()
+    token_idx = 1 if chosen_side == "NO" and len(toks) > 1 else 0
     price = min(round(m["ask"] + 0.01, 2), 0.99)
     size = max(1, int(usd // price))
     if dry:
-        return True, f"[DRY] BUY YES {size} x {price} :: {m['q'][:50]}"
+        return True, f"[DRY] BUY {chosen_side} {size} x {price} :: {m['q'][:50]}"
     # ---- GUARDRAIL: order real wajib proxy (deposit wallet flow) ----
     # if not dry and not creds.get("proxy_address"):                      # ← TAMBAH
     #     return (False, "Poly real butuh Deposit/Proxy Wallet Address — "
