@@ -253,7 +253,11 @@ def _loop():
             if time.time() - _last_reaper_ts >= REAPER_EVERY_SEC:
                 _last_reaper_ts = time.time()
                 from app.executor import reap_limitless_stale
-                count, tickers, err = reap_limitless_stale()
+                try:
+                    count, tickers, err = reap_limitless_stale()
+                except Exception as reaper_exc:
+                    _log_loop(f"reaper exception: {type(reaper_exc).__name__}: {reaper_exc}")
+                    count, tickers, err = 0, [], None
                 if count > 0:
                     _log_loop(f"reaper: cancelled {count} stale orders: {tickers}")
                     st.setdefault("trades", []).append({
