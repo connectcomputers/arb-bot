@@ -340,12 +340,12 @@ setInterval(()=>{
   // const txt = age < 3 ? '🔄 sedang scanning…'
   //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
   // const txt = age < 3 ? '🔄 sedang scanning…'
-  //   : age > iv*2 ? '⚠ scan tertunda — memicu scan baru…'
+  //   : age > iv*2 ? '⚠ memindai ulang — hasil menyusul…'
   //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
 
   const txt = !st.running ? '⏹ mesin berhenti — mulai lagi bila siap'
     : age < 3 ? '🔄 sedang scanning…'
-    : age > iv*2 ? '⚠ scan tertunda — memicu scan baru…'
+    : age > iv*2 ? '⚠ memindai ulang — hasil menyusul…'
     : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;  
   document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; });
 },1000);
@@ -460,6 +460,7 @@ function setBaseline(){
 loadRecon();
 setInterval(loadRecon, 60000);  // refresh tiap menit
 </script>
+<button onclick="resetHistory()" style="margin-left:8px;background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">🧹 Reset Riwayat Demo</button>
 <button onclick="setBaseline()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer">
   Set Baseline Sekarang
 </button>
@@ -486,6 +487,14 @@ function loadPnl(){
     }
     el.innerHTML = h;
   }).catch(()=>{});
+}
+function resetHistory(){
+  if(!confirm('Hapus riwayat trades & spend untuk tampilan demo bersih? Backup otomatis dibuat di server.')) return;
+  fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{
+    alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal'));
+    if (window.loadRecon) loadRecon();
+    if (window.loadPnl) loadPnl();
+  }).catch(e=>alert('❌ '+e));
 }
 loadPnl(); setInterval(loadPnl, 60000);
 </script>

@@ -141,8 +141,10 @@ def _log_loop(msg: str):
 def _scan_shared():
     global _last_scan_ts
     with _scan_lock:
+        _log_loop("scan start")
         out = _scan()
         _last_scan_ts = time.time()
+        _log_loop(f"scan finish: {len(out[0])} matches")
         return out
 
 
