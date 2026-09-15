@@ -440,9 +440,9 @@ function setBaseline(){
   if(!confirm('Simpan saldo sekarang sebagai baseline rekonsiliasi?')) return;
   fetch('/api/saldo').then(r=>r.json()).then(s=>{
     const baseline = {
-      polymarket: s.polymarket?.total_usd || 0,
-      kalshi: s.kalshi?.total_usd || 0,
-      limitless: s.limitless?.total_usd || 0
+      polymarket: s.polymarket?.web_usd || s.polymarket?.cash_usd || 0,
+      kalshi: (s.kalshi?.cash_usd || 0) + (s.kalshi?.portfolio_usd || 0),
+      limitless: s.limitless?.portfolio_usd || s.limitless?.usdc_base || 0
     };
     fetch('/api/baseline/set', {
       method: 'POST',
