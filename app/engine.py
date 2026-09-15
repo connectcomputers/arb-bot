@@ -260,6 +260,10 @@ def _loop():
                     count, tickers, err = 0, [], None
                 if count > 0:
                     _log_loop(f"reaper: cancelled {count} stale orders: {tickers}")
+                elif err:
+                    _log_loop(f"reaper: {err}")
+                else:
+                    _log_loop("reaper: skip (no open orders)")
                     st.setdefault("trades", []).append({
                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         "mode": "cancel-auto",
