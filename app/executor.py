@@ -1766,7 +1766,21 @@ def reap_limitless_stale(max_age_min=None):
         from limitless_sdk.orders import OrderClient
         import time as _t
         
-        hmac_creds = HMACCredentials(api_key=api_key, api_secret=api_secret)
+        # Coba beberapa pola parameter HMACCredentials
+        hmac_creds = None
+        for pattern in [
+            {"token_id": api_key, "token_secret": api_secret},
+            {"tokenId": api_key, "tokenSecret": api_secret},
+            {"api_key_id": api_key, "api_secret": api_secret},
+            {"api_key": api_key, "api_secret": api_secret},
+        ]:
+            try:
+                hmac_creds = HMACCredentials(**pattern)
+                break
+            except Exception:
+                continue
+        if not hmac_creds:
+            return 0, [], "HMACCredentials: pola parameter tidak cocok"
         client = Client(hmac_credentials=hmac_creds)
         order_client = OrderClient(client)
         
