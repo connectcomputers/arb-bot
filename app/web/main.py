@@ -671,3 +671,23 @@ async def api_pnl():
         "active_count": len(active),
         "positions": positions[-20:],
     }
+
+
+@app.post("/api/admin/reset-history")
+async def api_reset_history():
+    """Bersihkan riwayat trades + spend untuk tampilan demo/serah terima."""
+    import json as _json
+    import time as _time
+    from pathlib import Path as _P2
+    sp = _P2("data/live_state.json")
+    try:
+        d = _json.loads(sp.read_text()) if sp.exists() else {}
+    except Exception:
+        d = {}
+    bak = _P2("data/live_state.json.bak-history")
+    bak.write_text(_json.dumps(d, indent=2))
+    d["trades"] = []
+    d["spend"] = {"today": _time.strftime("%Y-%m-%d"), "amount": 0.0}
+    sp.write_text(_json.dumps(d, indent=2))
+    return {"ok": True,
+            "message": "riwayat trades + spend dibersihkan (backup: live_state.json.bak-history)"}
