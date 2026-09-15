@@ -102,9 +102,9 @@ async function start(mode){
   const d = await r.json(); if(!d.ok) alert(d.message);
   poll();
 }
-async function stop(){ await fetch('/api/engine/stop',{method:'POST'}); poll(); }
+async function stop(){ await fetch('/api/engine/stop',{method:'POST'}); poll(); setTimeout(()=>{location.href='/setup';},800); }
 async function kill(){ if(confirm('Kill switch: hentikan & kunci eksekusi?')){
-  await fetch('/api/engine/kill',{method:'POST'}); poll(); } }
+  await fetch('/api/engine/kill',{method:'POST'}); poll(); setTimeout(()=>{location.href='/setup';},800); } }
 function tab(a){ document.getElementById('audit').style.display = a?'block':'none'; }
 const it = s => `<div class="item">${s}</div>`;
 

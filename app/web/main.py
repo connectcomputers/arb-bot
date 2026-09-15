@@ -451,8 +451,19 @@ async def venue_feed():
 
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
-    mode = (await request.json()).get("mode", "paper")
-    ok, msg = engine.start(mode)
+    """Start engine; bila sudah jalan dengan mode berbeda, switch otomatis."""
+    import time as _t
+    from app import engine as _eng
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    mode = body.get("mode", "paper")
+    st = _eng.status()
+    if st.get("running") and st.get("mode") != mode:
+        _eng.stop()
+        _t.sleep(0.6)
+    ok, msg = _eng.start(mode)
     return {"ok": ok, "message": msg}
 
 @app.post("/api/engine/stop")
