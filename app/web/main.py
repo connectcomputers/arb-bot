@@ -573,11 +573,12 @@ async def api_reconciliation():
     """Data rekonsiliasi: saldo baseline vs sekarang + trades."""
     from app.baseline import load_baseline
     import json
+    from pathlib import Path as _P2
     
     baseline = load_baseline()
     
     try:
-        state = json.loads(pathlib.Path("data/live_state.json").read_text())
+        state = json.loads(_P2("data/live_state.json").read_text())
         trades = state.get("trades", [])
         spend = state.get("spend", {})
     except Exception:
