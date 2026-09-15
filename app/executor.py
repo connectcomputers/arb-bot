@@ -1778,12 +1778,16 @@ async def _reap_limitless_stale_async(max_age_min):
         wallet = Account.from_key(wallet_pk)
         order_client = OrderClient(client, wallet)
         
-        # Fetch open orders (async)
+        # Fetch open orders (async) - SDK langsung return dict
         try:
             resp = await client.http.get("/portfolio/orders")
-            if resp.status_code != 200:
-                return 0, [], f"fetch orders gagal: {resp.status_code}"
-            orders_data = resp.json()
+            # resp sudah dict (parsed JSON), langsung pakai
+            if not isinstance(resp, dict):
+                return 0, [], f"unexpected resp type: {type(resp).__name__}"
+            # Cek error dari API
+            if "error" in resp or resp.get("status") == "error":
+                return 0, [], f"API error: {resp.get('error') or resp.get('message', 'unknown')}"
+            orders_data = resp
         except Exception as fetch_err:
             return 0, [], f"fetch orders exception: {type(fetch_err).__name__}: {fetch_err}"
         
