@@ -222,7 +222,7 @@ async function poll_alerts(){
   }).catch(()=>{});
 }
 
-function poll(){
+async function poll(){
   const [f, s] = await Promise.all([
     fetch('/api/venue-feed').then(r=>r.json()),
     fetch('/api/engine/status').then(r=>r.json())]);
