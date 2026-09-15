@@ -374,4 +374,91 @@ setInterval(()=>{
 
 setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
 </script>
+<div id="reconciliation" style="margin-top:24px;padding:16px;background:#0b1220;border:1px solid #1e293b;border-radius:8px">
+  <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
+  <div id="recon-content" style="color:#94a3b8">Loading...</div>
+</div>
+<script>
+function loadRecon(){
+  fetch('/api/reconciliation').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('recon-content');
+    const baseline = d.baseline.saldo || {};
+    const ts = d.baseline.ts ? new Date(d.baseline.ts).toLocaleString('id-ID') : 'belum diset';
+    
+    let html = '<div style="font-size:13px;margin-bottom:12px">';
+    html += '<strong>Baseline diset:</strong> ' + ts + '<br>';
+    html += '<strong>Saldo baseline:</strong> ';
+    if (baseline.polymarket || baseline.kalshi || baseline.limitless) {
+      html += 'Poly $' + (baseline.polymarket||0).toFixed(2) + 
+              ' · Kalshi $' + (baseline.kalshi||0).toFixed(2) + 
+              ' · Limitless $' + (baseline.limitless||0).toFixed(2);
+    } else {
+      html += '<em>belum ada (klik tombol di bawah)</em>';
+    }
+    html += '</div>';
+    
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Order Real</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + d.trades_real + '</div>';
+    html += '</div>';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Order Paper</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + d.trades_paper + '</div>';
+    html += '</div>';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Spend Hari Ini</div>';
+    html += '<div style="font-size:18px;font-weight:600">$' + d.spend_today.toFixed(2) + '</div>';
+    html += '</div></div>';
+    
+    if (Object.keys(d.by_venue).length > 0) {
+      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue:</strong><br>';
+      for (const [v, data] of Object.entries(d.by_venue)) {
+        html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
+                ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
+      }
+      html += '</div>';
+    }
+    
+    if (d.recent_trades.length > 0) {
+      html += '<div><strong>10 Trade Terakhir:</strong><br>';
+      d.recent_trades.slice().reverse().forEach(t => {
+        html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + 
+                t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + 
+                ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
+      });
+      html += '</div>';
+    }
+    
+    el.innerHTML = html;
+  }).catch(e => {
+    document.getElementById('recon-content').innerHTML = 'Error: ' + e.message;
+  });
+}
+
+function setBaseline(){
+  if(!confirm('Simpan saldo sekarang sebagai baseline rekonsiliasi?')) return;
+  fetch('/api/saldo').then(r=>r.json()).then(s=>{
+    const baseline = {
+      polymarket: s.polymarket?.total_usd || 0,
+      kalshi: s.kalshi?.total_usd || 0,
+      limitless: s.limitless?.total_usd || 0
+    };
+    fetch('/api/baseline/set', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(baseline)
+    }).then(r=>r.json()).then(d=>{
+      alert(d.ok ? '✅ Baseline tersimpan' : '❌ ' + d.message);
+      loadRecon();
+    });
+  });
+}
+
+loadRecon();
+setInterval(loadRecon, 60000);  // refresh tiap menit
+</script>
+<button onclick="setBaseline()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer">
+  Set Baseline Sekarang
+</button>
 </body></html>
