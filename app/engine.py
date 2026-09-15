@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 from app.config_store import load_config, load_creds, MIN_ORDER_USD
+from app.alert import dispatch_alert
 from app.venue_markets import FETCH, _poly_events, _kalshi_events
 from app.executor import EXEC
 
@@ -37,6 +38,8 @@ MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
 
 REAPER_EVERY_SEC = 300
 _last_reaper_ts = 0.0
+ALERT_CHECK_SEC = 60
+_last_alert_ts = 0.0
 
 # === Helper Sesi ===
 def _start_session(mode):
@@ -264,6 +267,19 @@ def _loop():
                     _log_loop(f"reaper: {err}")
                 else:
                     _log_loop("reaper: skip (no open orders)")
+            
+            # Alert check: pantau kondisi kritis tiap 60 detik
+            if time.time() - _last_alert_ts >= ALERT_CHECK_SEC:
+                _last_alert_ts = time.time()
+                # Cek auto_stop
+                if st.get("auto_stop"):
+                    dispatch_alert("critical", f"Engine auto-stop: {st['auto_stop']}", "auto_stop")
+                # Cek last_error tidak kosong > 5 menit
+                if st.get("last_error"):
+                    dispatch_alert("warning", f"Loop error: {st['last_error']}", "last_error")
+                # Cek thread mati (watchdog gagal respawn)
+                if _run and _thr is not None and not _thr.is_alive():
+                    dispatch_alert("critical", "Loop thread mati, watchdog gagal respawn", "thread_dead")
                     st.setdefault("trades", []).append({
                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         "mode": "cancel-auto",
