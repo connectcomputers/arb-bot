@@ -239,7 +239,7 @@ def _scan():
 # === Main Loop ===
 def _loop():
     """Loop eksekusi keputusan (paper/real)."""
-    global _run
+    global _run, _last_reaper_ts, _last_alert_ts
     errs = 0
     _log_loop("loop start")
     while _run:
