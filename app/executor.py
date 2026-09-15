@@ -1750,103 +1750,94 @@ def reap_limitless_stale(max_age_min=None):
     creds = load_creds().get("limitless", {})
     if not creds:
         return 0, [], "tidak ada creds limitless"
-    
-    # Hanya mode EOA yang perlu reaper (smartWallet dikelola server)
+
     mode = _limitless_wallet_mode(creds)
     if mode != "eoa":
         return 0, [], f"skip: mode {mode} (bukan EOA)"
-    
+
     api_key = str(creds.get("api_key") or "").strip()
     api_secret = str(creds.get("api_secret") or "").strip()
-    if not api_key or not api_secret:
-        return 0, [], "api_key/api_secret kosong"
-    
+    wallet_pk = str(creds.get("wallet_pk") or "").strip()
+    if not api_key or not api_secret or not wallet_pk:
+        return 0, [], "api_key/api_secret/wallet_pk kosong"
+
     try:
+        import time as _t
+        from datetime import datetime, timezone
         from limitless_sdk import Client, HMACCredentials
         from limitless_sdk.orders import OrderClient
-        import time as _t
-        
+        from eth_account import Account
+
         hmac_creds = HMACCredentials(tokenId=api_key, secret=api_secret)
         client = Client(hmac_credentials=hmac_creds)
-        order_client = OrderClient(client)
-        
-        # Coba ambil open orders (beberapa pola API)
+        acct = Account.from_key(wallet_pk)
+        order_client = OrderClient(client.http, acct)
+
+        # Ambil open orders via client API
         open_orders = []
-        for method_name in ("get_open_orders", "list_open_orders", "list_orders", "get_orders"):
-            method = getattr(order_client, method_name, None)
-            if not method:
-                continue
-            try:
-                result = method()
-                # result bisa list, dict, atau object dengan .orders
-                if isinstance(result, list):
-                    open_orders = result
-                elif isinstance(result, dict):
-                    open_orders = result.get("orders", result.get("data", []))
-                elif hasattr(result, "orders"):
-                    open_orders = result.orders
-                elif hasattr(result, "data"):
-                    open_orders = result.data
-                if open_orders:
-                    break
-            except Exception:
-                continue
-        
+        try:
+            resp = client.http.get("/orders", params={"status": "open"})
+            if isinstance(resp, list):
+                open_orders = resp
+            elif isinstance(resp, dict):
+                open_orders = resp.get("orders", resp.get("data", []))
+        except Exception:
+            pass
+
         if not open_orders:
-            return 0, [], None  # tidak ada order open, bukan error
-        
-        # Filter: order GTC yang umurnya > max_age_min
+            # Fallback: coba endpoint portfolio
+            try:
+                resp = client.http.get("/portfolio/orders", params={"status": "open"})
+                if isinstance(resp, list):
+                    open_orders = resp
+                elif isinstance(resp, dict):
+                    open_orders = resp.get("orders", resp.get("data", []))
+            except Exception:
+                pass
+
+        if not open_orders:
+            return 0, [], None  # bersih, bukan error
+
+        # Filter: order yang umurnya > max_age_min
         now = _t.time()
         stale = []
         for o in open_orders:
-            # Ambil timestamp (berbagai kemungkinan field name)
-            ts = (getattr(o, "created_at", None) or 
-                  getattr(o, "createdAt", None) or 
-                  getattr(o, "timestamp", None) or 0)
-            if isinstance(ts, str):
+            if isinstance(o, dict):
+                ts_val = o.get("created_at") or o.get("createdAt") or o.get("timestamp") or 0
+                oid = o.get("id") or o.get("order_id") or "?"
+                ticker = o.get("ticker") or o.get("market") or o.get("marketSlug") or oid
+            else:
+                ts_val = getattr(o, "created_at", None) or getattr(o, "createdAt", None) or 0
+                oid = getattr(o, "id", None) or getattr(o, "order_id", None) or "?"
+                ticker = getattr(o, "ticker", None) or getattr(o, "market", None) or str(oid)
+
+            if isinstance(ts_val, str):
                 try:
-                    from datetime import datetime
-                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                    ts_val = datetime.fromisoformat(ts_val.replace("Z", "+00:00")).timestamp()
                 except Exception:
-                    ts = 0
-            age_min = (now - ts) / 60 if ts else 0
+                    ts_val = 0
+            age_min = (now - ts_val) / 60 if ts_val else 999
             if age_min > max_age_min:
-                ticker = (getattr(o, "ticker", None) or 
-                          getattr(o, "market", None) or 
-                          getattr(o, "id", None) or "?")
-                order_id = getattr(o, "id", None) or getattr(o, "order_id", None)
-                stale.append({"obj": o, "ticker": ticker, "id": order_id, "age": age_min})
-        
+                stale.append({"id": oid, "ticker": ticker, "age": age_min})
+
         if not stale:
             return 0, [], None
-        
-        # Cancel order stale
+
+        # Cancel
         cancelled = []
         for s in stale:
-            o = s["obj"]
             try:
-                # Coba beberapa pola cancel
-                for cancel_method in ("cancel_order", "cancel", "delete_order"):
-                    method = getattr(order_client, cancel_method, None)
-                    if not method:
-                        continue
-                    # Coba panggil dengan order object atau order_id
-                    try:
-                        method(o)
-                        cancelled.append(s["ticker"])
-                        break
-                    except TypeError:
-                        try:
-                            method(s["id"])
-                            cancelled.append(s["ticker"])
-                            break
-                        except Exception:
-                            continue
+                client.http.delete(f"/orders/{s['id']}")
+                cancelled.append(s["ticker"])
             except Exception:
-                continue
-        
+                try:
+                    client.http.post(f"/orders/{s['id']}/cancel")
+                    cancelled.append(s["ticker"])
+                except Exception:
+                    pass
+
         return len(cancelled), cancelled, None
-    
+
     except Exception as e:
         return 0, [], f"error: {type(e).__name__}: {str(e)[:100]}"
     
