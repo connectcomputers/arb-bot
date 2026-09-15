@@ -35,6 +35,8 @@ MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
           "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
           "august": 8, "september": 9, "october": 10}
 
+REAPER_EVERY_SEC = 300
+_last_reaper_ts = 0.0
 
 # === Helper Sesi ===
 def _start_session(mode):
@@ -246,6 +248,26 @@ def _loop():
             if (time.time() - _last_scan_ts >= SCAN_EVERY_SEC) or not st.get("matches"):
                 st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
                 st["interval"] = INTERVAL
+
+            # Reaper: auto-cancel order Limitless GTC yang nyangkut
+            if time.time() - _last_reaper_ts >= REAPER_EVERY_SEC:
+                _last_reaper_ts = time.time()
+                from app.executor import reap_limitless_stale
+                count, tickers, err = reap_limitless_stale()
+                if count > 0:
+                    _log_loop(f"reaper: cancelled {count} stale orders: {tickers}")
+                    st.setdefault("trades", []).append({
+                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        "mode": "cancel-auto",
+                        "venues": ["limitless"],
+                        "pi": 0.0,
+                        "size": 0.0,
+                        "note": f"cancelled {count} stale GTC orders: {', '.join(tickers[:3])}"
+                    })
+                    st["trades"] = st["trades"][-50:]
+                elif err:
+                    _log_loop(f"reaper: {err}")
+                                    
             lim = cfg.get("limits", {})
             minp = float(lim.get("min_profit", 0.5)) / 100
             per_op = float(lim.get("modal_per_op", 2))

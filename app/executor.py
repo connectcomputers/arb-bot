@@ -1738,6 +1738,118 @@ def _kalshi_transfer_to_shard(creds, target_shard, amount_cents):
         r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
     return r.status_code, r.text
 
+# === REAPER: Auto-cancel order GTC Limitless yang nyangkut > 10 menit ===
+REAPER_MAX_AGE_MIN = 10
+
+def reap_limitless_stale(max_age_min=None):
+    """Batalkan order GTC Limitless mode EOA yang sudah terbuka > max_age_min.
+    Return: (count_cancelled, list_of_cancelled_tickers, error_message_or_None)."""
+    if max_age_min is None:
+        max_age_min = REAPER_MAX_AGE_MIN
+    from app.config_store import load_creds
+    creds = load_creds().get("limitless", {})
+    if not creds:
+        return 0, [], "tidak ada creds limitless"
+    
+    # Hanya mode EOA yang perlu reaper (smartWallet dikelola server)
+    mode = _limitless_wallet_mode(creds)
+    if mode != "eoa":
+        return 0, [], f"skip: mode {mode} (bukan EOA)"
+    
+    api_key = str(creds.get("api_key") or "").strip()
+    api_secret = str(creds.get("api_secret") or "").strip()
+    if not api_key or not api_secret:
+        return 0, [], "api_key/api_secret kosong"
+    
+    try:
+        from limitless_sdk import Client, HMACCredentials
+        from limitless_sdk.orders import OrderClient
+        import time as _t
+        
+        hmac_creds = HMACCredentials(api_key=api_key, api_secret=api_secret)
+        client = Client(hmac_credentials=hmac_creds)
+        order_client = OrderClient(client)
+        
+        # Coba ambil open orders (beberapa pola API)
+        open_orders = []
+        for method_name in ("get_open_orders", "list_open_orders", "list_orders", "get_orders"):
+            method = getattr(order_client, method_name, None)
+            if not method:
+                continue
+            try:
+                result = method()
+                # result bisa list, dict, atau object dengan .orders
+                if isinstance(result, list):
+                    open_orders = result
+                elif isinstance(result, dict):
+                    open_orders = result.get("orders", result.get("data", []))
+                elif hasattr(result, "orders"):
+                    open_orders = result.orders
+                elif hasattr(result, "data"):
+                    open_orders = result.data
+                if open_orders:
+                    break
+            except Exception:
+                continue
+        
+        if not open_orders:
+            return 0, [], None  # tidak ada order open, bukan error
+        
+        # Filter: order GTC yang umurnya > max_age_min
+        now = _t.time()
+        stale = []
+        for o in open_orders:
+            # Ambil timestamp (berbagai kemungkinan field name)
+            ts = (getattr(o, "created_at", None) or 
+                  getattr(o, "createdAt", None) or 
+                  getattr(o, "timestamp", None) or 0)
+            if isinstance(ts, str):
+                try:
+                    from datetime import datetime
+                    ts = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    ts = 0
+            age_min = (now - ts) / 60 if ts else 0
+            if age_min > max_age_min:
+                ticker = (getattr(o, "ticker", None) or 
+                          getattr(o, "market", None) or 
+                          getattr(o, "id", None) or "?")
+                order_id = getattr(o, "id", None) or getattr(o, "order_id", None)
+                stale.append({"obj": o, "ticker": ticker, "id": order_id, "age": age_min})
+        
+        if not stale:
+            return 0, [], None
+        
+        # Cancel order stale
+        cancelled = []
+        for s in stale:
+            o = s["obj"]
+            try:
+                # Coba beberapa pola cancel
+                for cancel_method in ("cancel_order", "cancel", "delete_order"):
+                    method = getattr(order_client, cancel_method, None)
+                    if not method:
+                        continue
+                    # Coba panggil dengan order object atau order_id
+                    try:
+                        method(o)
+                        cancelled.append(s["ticker"])
+                        break
+                    except TypeError:
+                        try:
+                            method(s["id"])
+                            cancelled.append(s["ticker"])
+                            break
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+        
+        return len(cancelled), cancelled, None
+    
+    except Exception as e:
+        return 0, [], f"error: {type(e).__name__}: {str(e)[:100]}"
+    
 EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
         "limitless": exec_limitless}
 
