@@ -618,35 +618,45 @@ async def api_baseline_set(request: Request):
 
 @app.get("/api/pnl")
 async def api_pnl():
-    """Hitung P/L sederhana dari trades."""
-    from pathlib import Path as _P2
-    import json
-    
+    """P/L resolve-based: per venue + harian/mingguan/bulanan."""
+    from datetime import datetime, timedelta
     try:
-        state = json.loads(_P2("data/live_state.json").read_text())
-        trades = state.get("trades", [])
+        from app.position_manager import load_positions
     except Exception:
-        trades = []
-    
-    # P/L sederhana: asumsi semua order real menang (optimistic)
-    # Atau: P/L = 0 sampai posisi resolve
-    real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
-    
-    # Hitung per venue
+        return {"by_venue": {}, "by_period": {}, "total_pnl": 0,
+                "resolved_count": 0, "active_count": 0,
+                "note": "position_manager belum tersedia"}
+    positions = load_positions()
+    resolved = [x for x in positions if x.get("resolved")]
+    active = [x for x in positions if not x.get("resolved")]
+
     pnl_by_venue = {}
-    for t in real_trades:
-        for v in t.get("venues", []):
-            pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl": 0})
-            pnl_by_venue[v]["count"] += 1
-            pnl_by_venue[v]["invested"] += t.get("size", 0)
-            # P/L = 0 sampai resolve (atau bisa ditambah logic cek resolve)
-    
-    total_invested = sum(v["invested"] for v in pnl_by_venue.values())
-    total_pnl = sum(v["pnl"] for v in pnl_by_venue.values())
-    
+    for x in positions:
+        v = x.get("venue", "?")
+        d = pnl_by_venue.setdefault(v, {"count": 0, "invested": 0,
+                                        "pnl_realized": 0, "active": 0})
+        d["count"] += 1
+        d["invested"] += x.get("size", 0)
+        if x.get("resolved"):
+            d["pnl_realized"] += x.get("pnl", 0)
+        else:
+            d["active"] += 1
+
+    now = datetime.now()
+    dk = lambda ts: (ts or "")[:10]
+    today = now.strftime("%Y-%m-%d")
+    week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today)
+    pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
+    pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
+
     return {
         "by_venue": pnl_by_venue,
-        "total_invested": total_invested,
-        "total_pnl": total_pnl,
-        "note": "P/L = 0 sampai posisi resolve (market selesai)"
+        "by_period": {"today": round(pt, 2), "week": round(pw, 2),
+                      "month": round(pm, 2)},
+        "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
+        "resolved_count": len(resolved),
+        "active_count": len(active),
+        "positions": positions[-20:],
     }

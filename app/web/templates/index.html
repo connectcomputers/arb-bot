@@ -377,6 +377,7 @@ setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
 <div id="reconciliation" style="margin-top:24px;padding:16px;background:#0b1220;border:1px solid #1e293b;border-radius:8px">
   <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
+  <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
 </div>
 <script>
 function loadRecon(){
@@ -461,4 +462,30 @@ setInterval(loadRecon, 60000);  // refresh tiap menit
 <button onclick="setBaseline()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer">
   Set Baseline Sekarang
 </button>
+
+<script>
+function loadPnl(){
+  fetch('/api/pnl').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('pnl-content');
+    if(!el) return;
+    let h = '<strong>💹 P/L Resolve-Based:</strong> ';
+    h += 'Harian: $' + (d.by_period.today||0).toFixed(2) +
+         ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) +
+         ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) +
+         ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
+    h += '<br><span style="font-size:12px">Posisi resolve: ' + d.resolved_count +
+         ' · Posisi aktif: ' + d.active_count + '</span>';
+    if (d.by_venue && Object.keys(d.by_venue).length){
+      h += '<br><span style="font-size:12px">';
+      for (const [v, x] of Object.entries(d.by_venue)){
+        h += v.toUpperCase() + ': P/L $' + (x.pnl_realized||0).toFixed(2) +
+             ' (invest $' + (x.invested||0).toFixed(2) + ', aktif ' + (x.active||0) + ') · ';
+      }
+      h += '</span>';
+    }
+    el.innerHTML = h;
+  }).catch(()=>{});
+}
+loadPnl(); setInterval(loadPnl, 60000);
+</script>
 </body></html>
