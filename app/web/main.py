@@ -542,8 +542,13 @@ async def api_config():
 @app.get("/api/alerts")
 async def api_alerts():
     """Kembalikan daftar alert aktif untuk banner dashboard."""
-    from app.alert import get_active_alerts
-    return {"alerts": get_active_alerts()}@app.post("/api/kill-switch")
+    try:
+        from app.alert import get_active_alerts
+        alerts = get_active_alerts()
+        return {"alerts": alerts if isinstance(alerts, list) else []}
+    except Exception as e:
+        # Return kosong bila error, jangan 500
+        return {"alerts": [], "error": str(e)[:100]}@app.post("/api/kill-switch")
 async def kill_switch():
     """KILL SWITCH: Stop service + alert Telegram."""
     try:
