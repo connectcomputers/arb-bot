@@ -18,7 +18,7 @@ KILL = Path("data") / "kill.json"
 LOOP_LOG = Path("data") / "engine_loop.log"
 
 FEES = {"polymarket": 0.0, "kalshi": 0.04, "limitless": 0.004}
-INTERVAL = 60
+INTERVAL = 30
 SCAN_EVERY_SEC = 120
 
 _thr = None
