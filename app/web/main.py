@@ -196,7 +196,7 @@ def _tail_log(path: Path, lines: int = 50) -> list:
         return [json.loads(line) for line in all_lines[-lines:]]
 
 @app.post("/api/engine/reset-spend")
-async def engine_reset_spend():
+def engine_reset_spend():
     """Reset counter belanja harian (cap) — untuk tes/demo."""
     import time as _t
     st = engine._read()
@@ -206,13 +206,13 @@ async def engine_reset_spend():
     return {"ok": True, "message": "cap harian direset (spend=$0.00)"}
 
 @app.get("/api/saldo")
-async def api_saldo():
+def api_saldo():
     """Endpoint saldo real-time semua venue."""
     from app.saldo_service import get_all_saldo
     return get_all_saldo()
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     if not config_complete(load_config()):
         return RedirectResponse("/setup")
     st = engine.status()
@@ -226,7 +226,7 @@ async def exec_micro(request: Request):
     return engine.micro_exec(data.get("venue"), dry=bool(data.get("dry")))
 
 @app.post("/api/engine/refresh")
-async def engine_refresh():
+def engine_refresh():
     return engine.refresh()          # engine.refresh() sendiri menolak saat kill/berhenti
 
 @app.post("/api/pairs")
@@ -238,7 +238,7 @@ async def api_pairs(request: Request):
     return {"saved": True}
 
 @app.get("/limits", response_class=HTMLResponse)
-async def limits(request: Request):
+def limits(request: Request):
     cfg = load_config()
     return templates.TemplateResponse(request, "limits.html", {
         "limits": cfg.get("limits", {}),
@@ -255,7 +255,7 @@ async def api_limits(request: Request):
     return {"saved": True}
 
 @app.get("/api/markets")
-async def api_markets(venue: str):
+def api_markets(venue: str):
     creds = load_creds().get(venue, {})
     return {"venue": venue, "categories": venue_categories(venue, creds)}
 
@@ -377,7 +377,7 @@ def _fmt_ts(ts):
         return "-"
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     if not config_complete(load_config()):
         return RedirectResponse("/setup")
     return templates.TemplateResponse(request, "index.html", {})
@@ -439,7 +439,7 @@ async def index(request: Request):
     })
 
 @app.get("/api/venue-feed")
-async def venue_feed():
+def venue_feed():
     cfg = load_config()          # ← TAMBAHKAN BARIS INI
     creds = load_creds()
     return {"venues": [{
@@ -467,21 +467,21 @@ async def engine_start(request: Request):
     return {"ok": ok, "message": msg}
 
 @app.post("/api/engine/stop")
-async def engine_stop():
+def engine_stop():
     engine.stop()                    # stop real → need_rearm (logika di engine)
     return {"ok": True}
 
 @app.post("/api/engine/kill")
-async def engine_kill():
+def engine_kill():
     engine.kill()                    # kill → kunci + need_rearm
     return {"ok": True}
 
 @app.get("/api/engine/status")
-async def engine_status():
+def engine_status():
     return engine.status()
 
 @app.get("/api/pairing")
-async def api_pairing():
+def api_pairing():
     """Layar 2: Pairing — daftar market locked."""
     logs = _tail_log(LOOP_LOG, 100)
     locked_pairs = []
@@ -495,7 +495,7 @@ async def api_pairing():
 
 
 @app.get("/api/opportunities")
-async def api_opportunities():
+def api_opportunities():
     """Layar 3: Peluang — signal decisions."""
     logs = _tail_log(LOOP_LOG, 100)
     opportunities = []
@@ -513,28 +513,28 @@ async def api_opportunities():
 
 
 @app.get("/api/positions")
-async def api_positions():
+def api_positions():
     """Layar 4: Posisi — paper trades aktif."""
     trades = _read_json(PAPER_TRADES)
     return {"positions": trades[-20:]}  # 20 terakhir
 
 
 @app.get("/api/settlement")
-async def api_settlement():
+def api_settlement():
     """Layar 5: Settlement — hasil rekonsiliasi."""
     settlements = _read_json(LEDGER)
     return {"settlements": settlements[-50:]}  # 50 terakhir
 
 
 @app.get("/api/log")
-async def api_log():
+def api_log():
     """Layar 6: Log — tail log scanner."""
     logs = _tail_log(LOOP_LOG, 100)
     return {"logs": logs}
 
 
 @app.get("/api/config")
-async def api_config():
+def api_config():
     """Layar 7: Config — parameter sistem."""
     return {
         "config": {
@@ -551,7 +551,7 @@ async def api_config():
     return load_config()
 
 @app.get("/api/alerts")
-async def api_alerts():
+def api_alerts():
     """Kembalikan daftar alert aktif untuk banner dashboard."""
     try:
         from app.alert import get_active_alerts
@@ -560,7 +560,7 @@ async def api_alerts():
     except Exception as e:
         # Return kosong bila error, jangan 500
         return {"alerts": [], "error": str(e)[:100]}@app.post("/api/kill-switch")
-async def kill_switch():
+def kill_switch():
     """KILL SWITCH: Stop service + alert Telegram."""
     try:
         subprocess.run(
@@ -580,7 +580,7 @@ async def kill_switch():
 
 
 @app.get("/api/reconciliation")
-async def api_reconciliation():
+def api_reconciliation():
     """Data rekonsiliasi: saldo baseline vs sekarang + trades."""
     from app.baseline import load_baseline
     import json
@@ -628,7 +628,7 @@ async def api_baseline_set(request: Request):
 
 
 @app.get("/api/pnl")
-async def api_pnl():
+def api_pnl():
     """P/L resolve-based: per venue + harian/mingguan/bulanan."""
     from datetime import datetime, timedelta
     try:
@@ -674,7 +674,7 @@ async def api_pnl():
 
 
 @app.post("/api/admin/reset-history")
-async def api_reset_history():
+def api_reset_history():
     """Bersihkan riwayat trades + spend untuk tampilan demo/serah terima."""
     import json as _json
     import time as _time
