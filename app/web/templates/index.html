@@ -557,4 +557,38 @@ loadPnl(); setInterval(loadPnl, 60000);
 <style>@keyframes hbspin{to{transform:rotate(360deg)}}</style>
 
 
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  setInterval(function(){
+    var opDivs = document.querySelectorAll('[id^="op-"]');
+    opDivs.forEach(function(div){
+      if(div.querySelector('.close-btn')) return;
+      var venue = div.id.replace('op-','');
+      var items = div.querySelectorAll('li, div');
+      items.forEach(function(item){
+        if(item.textContent.includes('$') && !item.querySelector('.close-btn')){
+          var btn = document.createElement('button');
+          btn.className = 'close-btn';
+          btn.textContent = '❌';
+          btn.style.cssText = 'margin-left:8px;background:#dc2626;color:white;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px';
+          btn.onclick = function(){
+            if(!confirm('Close posisi ini?')) return;
+            var title = item.textContent.split('·')[0].trim();
+            fetch('/api/close-position',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({venue:venue, position_id:title, size:1})
+            }).then(r=>r.json()).then(d=>{
+              alert(d.ok ? '✅ Posisi ditutup' : '❌ '+d.message);
+              setTimeout(function(){ location.reload(); }, 1000);
+            });
+          };
+          item.appendChild(btn);
+        }
+      });
+    });
+  }, 2000);
+});
+</script>
 </body></html>

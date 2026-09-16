@@ -691,3 +691,42 @@ def api_reset_history():
     sp.write_text(_json.dumps(d, indent=2))
     return {"ok": True,
             "message": "riwayat trades + spend dibersihkan (backup: live_state.json.bak-history)"}
+
+
+@app.post("/api/close-position")
+async def api_close_position(request: Request):
+    """Close posisi manual."""
+    from app.executor import sell_kalshi, sell_polymarket, sell_limitless
+    from app.config_store import load_creds
+    from app.position_manager import load_positions, save_positions
+    
+    try:
+        body = await request.json()
+        venue = body.get("venue")
+        position_id = body.get("position_id")
+        size = float(body.get("size", 1))
+        
+        creds = load_creds().get(venue, {})
+        positions = load_positions()
+        pos = next((p for p in positions if p.get("market_id") == position_id and not p.get("resolved")), None)
+        
+        if not pos:
+            return {"ok": False, "message": "posisi tidak ditemukan"}
+        
+        ok, msg = False, "venue not supported"
+        if venue == "kalshi":
+            ok, msg = sell_kalshi(creds, position_id, "yes", size)
+        elif venue == "polymarket":
+            ok, msg = sell_polymarket(creds, position_id, "YES", size)
+        elif venue == "limitless":
+            ok, msg = sell_limitless(creds, position_id, size)
+        
+        if ok:
+            pos["resolved"] = True
+            pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            pos["manual_close"] = True
+            save_positions(positions)
+        
+        return {"ok": ok, "message": msg}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
