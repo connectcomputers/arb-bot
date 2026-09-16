@@ -857,14 +857,14 @@ async def api_cancel_order(request: Request):
             base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
             key = serialization.load_pem_private_key(pem.encode(), password=None)
             last = ""
-            for path in (f"/trade-api/v2/portfolio/events/orders/{oid}",
-                         f"/trade-api/v2/portfolio/orders/{oid}",
-                         f"/trade-api/v2/orders/{oid}"):
+            for base_try in ("https://external-api.kalshi.com", base):
+              for path in (f"/trade-api/v2/portfolio/events/orders/{oid}",
+                           f"/trade-api/v2/portfolio/orders/{oid}"):
                 ts = str(int(_t.time() * 1000))
                 msg = f"{ts}DELETE{path}".encode()
                 sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
                                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                r = httpx.delete(base + path, headers={
+                r = httpx.delete(base_try + path, headers={
                     "KALSHI-ACCESS-KEY": key_id,
                     "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
                     "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
@@ -888,6 +888,21 @@ async def api_cancel_order(request: Request):
                 last += f" | bulk {rb.status_code}: {rb.text[:200]}"
             except Exception as e:
                 last += f" | bulk err: {e}"
+            for base_try in ("https://external-api.kalshi.com", base):
+                try:
+                    ts = str(int(_t.time() * 1000)); pathall = "/trade-api/v2/portfolio/orders"
+                    msga = f"{ts}DELETE{pathall}".encode()
+                    siga = key.sign(msga, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                    salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+                    ra = httpx.delete(base_try + pathall, headers={
+                        "KALSHI-ACCESS-KEY": key_id,
+                        "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(siga).decode(),
+                        "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+                    if ra.status_code in (200, 204):
+                        return {"ok": True, "message": "semua order Kalshi dibatalkan (cancel-all)"}
+                    last += f" | all@{base_try.split('//')[1][:12]} {ra.status_code}: {ra.text[:120]}"
+                except Exception as e:
+                    last += f" | all err: {e}"
             return {"ok": False, "message": f"Kalshi cancel {last}"}
         except Exception as e:
             return {"ok": False, "message": str(e)[:100]}
