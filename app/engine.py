@@ -273,6 +273,62 @@ def _scan():
 
 
 # === Main Loop ===
+
+
+def _auto_take_profit():
+    """Auto-sell posisi bila untung >= tp%."""
+    from app.venue_positions import get_positions_detailed
+    from app.executor import sell_kalshi
+    from app.position_manager import load_positions, save_positions
+    
+    cfg = load_config()
+    tp_pct = float(cfg.get("limits", {}).get("tp", 10)) / 100
+    positions = load_positions()
+    active = [p for p in positions if not p.get("resolved")]
+    
+    if not active:
+        return 0
+    
+    creds = load_creds()
+    closed_count = 0
+    
+    for pos in active:
+        venue = pos.get("venue")
+        buy_price = pos.get("buy_price", 0)
+        size = pos.get("size", 0)
+        buy_value = buy_price * size
+        target = buy_value * (1 + tp_pct)
+        
+        try:
+            current_positions = get_positions_detailed(venue, creds.get(venue, {}))
+            current = next((p for p in current_positions 
+                          if p.get("title") == pos.get("market_id")), None)
+            if not current:
+                continue
+            
+            current_value = current.get("value", 0)
+            if current_value >= target and current_value > buy_value:
+                # Auto-sell
+                ok, msg = False, "venue not supported"
+                if venue == "kalshi":
+                    ticker = current.get("ticker") or pos.get("market_id")
+                    side = current.get("side", "yes")
+                    ok, msg = sell_kalshi(creds.get(venue, {}), ticker, side, size)
+                
+                if ok:
+                    pos["resolved"] = True
+                    pos["pnl"] = round(current_value - buy_value, 2)
+                    pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    pos["auto_tp"] = True
+                    closed_count += 1
+                    _log_loop(f"auto-tp: {venue} {pos.get('market_id')} P/L=${pos['pnl']:.2f}")
+        except Exception as e:
+            _log_loop(f"auto-tp error: {venue} {e}")
+    
+    if closed_count > 0:
+        save_positions(positions)
+    
+    return closed_count
 def _loop():
     """Loop eksekusi keputusan (paper/real)."""
     global _run, _last_reaper_ts, _last_alert_ts
@@ -288,6 +344,15 @@ def _loop():
                 st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
                 st["interval"] = INTERVAL
 
+            # === AUTO-TP: cek posisi untung tiap 2 menit ===
+            if time.time() - _last_alert_ts >= 120:
+                try:
+                    tp_closed = _auto_take_profit()
+                    if tp_closed > 0:
+                        _log_loop(f"auto-tp closed {tp_closed} positions")
+                except Exception as e:
+                    _log_loop(f"auto-tp exception: {e}")
+            
             # === REAPER: auto-cancel order Limitless GTC ===
             if time.time() - _last_reaper_ts >= REAPER_EVERY_SEC:
                 _last_reaper_ts = time.time()
