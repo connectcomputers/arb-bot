@@ -28,7 +28,7 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 document.addEventListener('DOMContentLoaded', function(){
   var st=document.createElement('style'); st.textContent='@keyframes lspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
   var bar=document.createElement('div'); bar.id='live-indicator';
-  bar.style.cssText='position:fixed;left:12px;bottom:12px;z-index:999;background:#052e16;border:1px solid #16a34a;color:#86efac;border-radius:8px;padding:8px 12px;font:12px monospace;display:flex;gap:8px;align-items:center';
+  bar.style.cssText='position:fixed;right:12px;bottom:12px;z-index:999;background:#052e16;border:1px solid #16a34a;color:#86efac;border-radius:8px;padding:8px 12px;font:12px monospace;display:flex;gap:8px;align-items:center';
   bar.innerHTML='<span id="li-spin" style="width:12px;height:12px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:lspin 1s linear infinite"></span><span id="li-text">SCANNER MENYALA…</span>';
   document.body.appendChild(bar);
   var SCAN=30, epoch=0, cycles=0;
@@ -515,7 +515,7 @@ function setBaseline(){
 loadRecon();
 setInterval(loadRecon, 60000);  // refresh tiap menit
 </script>
-<button onclick="resetHistory()" style="margin-left:8px;background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">🧹 Reset Riwayat Demo</button>
+<button onclick="resetHistory()" style="margin-left:8px;background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">🧹 Reset Riwayat</button>
 <button onclick="setBaseline()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer">
   Set Baseline Sekarang
 </button>
@@ -544,7 +544,7 @@ function loadPnl(){
   }).catch(()=>{});
 }
 function resetHistory(){
-  if(!confirm('Hapus riwayat trades & spend untuk tampilan demo bersih? Backup otomatis dibuat di server.')) return;
+  if(!confirm('Hapus riwayat trades & spend? Backup otomatis dibuat di server.')) return;
   fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{
     alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal'));
     if (window.loadRecon) loadRecon();
