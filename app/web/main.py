@@ -658,6 +658,14 @@ def api_pnl():
     today = now.strftime("%Y-%m-%d")
     week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
     month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    per = {}
+    for x in resolved:
+        v = x.get("venue", "?"); d = dk(x.get("resolved_ts"))
+        row = per.setdefault(v, {"today": 0.0, "week": 0.0, "month": 0.0, "total": 0.0})
+        row["total"] = round(row["total"] + x.get("pnl", 0), 2)
+        if d == today: row["today"] = round(row["today"] + x.get("pnl", 0), 2)
+        if d >= week0: row["week"] = round(row["week"] + x.get("pnl", 0), 2)
+        if d >= month0: row["month"] = round(row["month"] + x.get("pnl", 0), 2)
     pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today)
     pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
     pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
@@ -670,6 +678,7 @@ def api_pnl():
         "resolved_count": len(resolved),
         "active_count": len(active),
         "positions": positions[-20:],
+        "by_venue_period": per,
     }
 
 
@@ -719,7 +728,13 @@ async def api_close_position(request: Request):
             if venue == "polymarket":
                 from app.venue_positions import get_positions_detailed
                 rows = get_positions_detailed("polymarket", creds)
-                hit = next((r for r in rows if r.get("title") == position_id), None)
+                _norm = lambda s: (s or "").strip().lower()
+                hit = next((r for r in rows
+                            if _norm(r.get("title")) == _norm(position_id)), None)
+                if hit is None and rows:
+                    return {"ok": False,
+                            "message": "judul tidak cocok; tersedia di exchange: " +
+                                       " | ".join((r.get("title") or "?") for r in rows)[:220]}
                 if hit and hit.get("token_id"):
                     px = round(max((hit.get("cur_price") or 0.5) - 0.03, 0.01), 2)
                     ok2, msg2 = sell_polymarket(creds, hit["token_id"],
@@ -763,6 +778,20 @@ def api_unrealized():
                        "pnl_pct": r.get("pnl_pct", 0)} for r in rows]
         except Exception:
             out[v] = []
+    try:
+        ko = api_open_orders()
+        for o in (ko.get("kalshi") or []):
+            out.setdefault("kalshi", []).append({
+                "title": o.get("ticker") or "?", "size": o.get("count") or 0,
+                "value": 0.0, "pnl": 0.0, "pnl_pct": 0.0,
+                "note": "open order menunggu fill"})
+        for o in (ko.get("limitless") or []):
+            out.setdefault("limitless", []).append({
+                "title": o.get("ticker") or o.get("msg") or "?", "size": o.get("size") or 0,
+                "value": 0.0, "pnl": 0.0, "pnl_pct": 0.0,
+                "note": "open order menunggu fill"})
+    except Exception:
+        pass
     return out
 
 
@@ -828,8 +857,8 @@ async def api_cancel_order(request: Request):
             base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
             key = serialization.load_pem_private_key(pem.encode(), password=None)
             last = ""
-            for path in (f"/trade-api/v2/orders/{oid}",
-                         f"/trade-api/v2/portfolio/orders/{oid}"):
+            for path in (f"/trade-api/v2/portfolio/orders/{oid}",
+                         f"/trade-api/v2/orders/{oid}"):
                 ts = str(int(_t.time() * 1000))
                 msg = f"{ts}DELETE{path}".encode()
                 sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
@@ -840,9 +869,21 @@ async def api_cancel_order(request: Request):
                     "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
                 if r.status_code in (200, 204):
                     return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
-                last = f"{r.status_code}: {r.text[:80]}"
-                if r.status_code != 410:
+                last = f"{r.status_code}: {r.text[:300]}"
+                if r.status_code not in (404, 410):
                     break
+            ts = str(int(_t.time() * 1000)); pathb = "/trade-api/v2/portfolio/orders"
+            msgb = f"{ts}DELETE{pathb}".encode()
+            sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                            salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+            rb = httpx.delete(base + pathb, headers={
+                "KALSHI-ACCESS-KEY": key_id,
+                "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
+                "KALSHI-ACCESS-TIMESTAMP": ts},
+                json={"order_ids": [oid]}, timeout=15)
+            if rb.status_code in (200, 204):
+                return {"ok": True, "message": f"order Kalshi {oid} dibatalkan (bulk)"}
+            last += f" | bulk {rb.status_code}: {rb.text[:200]}"
             return {"ok": False, "message": f"Kalshi cancel {last}"}
         except Exception as e:
             return {"ok": False, "message": str(e)[:100]}
