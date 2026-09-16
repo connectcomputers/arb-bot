@@ -617,4 +617,55 @@ function loadUnrealized(){
 }
 loadUnrealized(); setInterval(loadUnrealized, 30000);
 </script>
+
+<script>
+var BTN_STYLE = "margin-left:6px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px";
+document.addEventListener('click', function(e){
+  var b = e.target.closest ? e.target.closest('.close-btn') : null;
+  if(!b) return;
+  e.preventDefault();
+  if(!confirm('Tutup posisi ini sekarang?')) return;
+  fetch('/api/close-position',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:b.getAttribute('data-venue'), position_id:b.getAttribute('data-title'), size:1})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok ? '✅ Posisi ditutup' : '❌ '+(d.message||'gagal'));
+    setTimeout(function(){ location.reload(); }, 800);
+  });
+});
+document.addEventListener('click', function(e){
+  var b = e.target.closest ? e.target.closest('.cancel-order-btn') : null;
+  if(!b) return;
+  e.preventDefault();
+  if(!confirm('Batalkan open order ini?')) return;
+  fetch('/api/cancel-order',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:b.getAttribute('data-venue'), order_id:b.getAttribute('data-order-id')})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok ? '✅ Order dibatalkan' : '❌ '+(d.message||'gagal'));
+    setTimeout(function(){ location.reload(); }, 800);
+  });
+});
+function loadOpenOrders(){
+  fetch('/api/open-orders').then(function(r){return r.json();}).then(function(d){
+    var h4s = Array.prototype.slice.call(document.querySelectorAll('h4')).filter(function(h){
+      return h.textContent.trim().indexOf('Open Positions (OP)') === 0; });
+    var venues = ['polymarket','kalshi','limitless'];
+    h4s.forEach(function(h4, idx){
+      var v = venues[idx];
+      var parent = h4.parentElement;
+      var box = parent.querySelector('.open-orders-box');
+      if(!box){ box = document.createElement('div'); box.className='open-orders-box';
+                box.style.cssText='font-size:11px;color:#94a3b8;margin-top:4px'; parent.appendChild(box); }
+      var rows = [];
+      if(v === 'kalshi'){ (d.kalshi||[]).forEach(function(o){
+        rows.push('⏳ OPEN ORDER: '+(o.ticker||'?')+' '+(o.side||'')+' x'+(o.count||'')+' @'+(o.price||'')+
+          ' <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
+      if(v === 'limitless'){ (d.limitless||[]).forEach(function(o){
+        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||'')+
+          ' <button class="cancel-order-btn" data-venue="limitless" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
+      box.innerHTML = rows.join('<br>');
+    });
+  }).catch(function(){});
+}
+loadOpenOrders(); setInterval(loadOpenOrders, 30000);
+</script>
 </body></html>

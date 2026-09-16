@@ -626,6 +626,20 @@ def micro_exec(venue, dry=False):
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-micro",
                 "venues": [venue], "pi": 0.0, "size": per_op, "note": msg[:60]})
             cur["trades"] = cur["trades"][-50:]
+            try:
+                mo_f = Path("data/manual_orders.json")
+                mo = json.loads(mo_f.read_text()) if mo_f.exists() else []
+                oid = None
+                moid = re.search(r"order_id=([0-9a-fA-F-]+)", msg or "")
+                if moid:
+                    oid = moid.group(1)
+                tick = (msg or "").split("::")[-1].strip() if "::" in (msg or "") else None
+                mo.append({"venue": venue, "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                           "order_id": oid, "ticker": tick, "size": per_op,
+                           "msg": (msg or "")[:80], "cancelled": False})
+                mo_f.write_text(json.dumps(mo, indent=2))
+            except Exception:
+                pass
             STATE.write_text(json.dumps(cur, indent=2, default=str))
     return {"ok": ok, "message": msg}
 

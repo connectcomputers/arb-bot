@@ -754,3 +754,95 @@ def api_unrealized():
         except Exception:
             out[v] = []
     return out
+
+
+@app.get("/api/open-orders")
+def api_open_orders():
+    """Open orders (menunggu fill) per venue."""
+    import json as _j
+    import base64 as _b64
+    import time as _t
+    from pathlib import Path as _P
+    from app.config_store import load_creds
+    out = {"kalshi": [], "limitless": []}
+    creds = load_creds()
+    try:
+        import httpx
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        c = creds.get("kalshi", {})
+        key_id = c.get("api_key_id", ""); pem = (c.get("private_key_pem") or "").strip()
+        if key_id and "-----BEGIN" in pem:
+            base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+            ts = str(int(_t.time() * 1000)); path = "/trade-api/v2/portfolio/orders"
+            msg = f"{ts}GET{path}".encode()
+            key = serialization.load_pem_private_key(pem.encode(), password=None)
+            sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                           salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+            r = httpx.get(base + path, headers={
+                "KALSHI-ACCESS-KEY": key_id,
+                "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
+                "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+            orders = r.json().get("orders", [])
+            out["kalshi"] = [{"order_id": o.get("order_id"), "ticker": o.get("ticker"),
+                              "side": o.get("side"), "count": o.get("count"),
+                              "price": o.get("price")} for o in orders
+                             if (o.get("status") or "resting") in ("resting", "open", "unmatched")]
+    except Exception as e:
+        out["kalshi_error"] = str(e)[:80]
+    try:
+        f = _P("data/manual_orders.json")
+        mo = _j.loads(f.read_text()) if f.exists() else []
+        out["limitless"] = [m for m in mo if m.get("venue") == "limitless" and not m.get("cancelled")]
+    except Exception:
+        pass
+    return out
+
+
+@app.post("/api/cancel-order")
+async def api_cancel_order(request: Request):
+    """Cancel open order."""
+    import base64 as _b64
+    import time as _t
+    from app.config_store import load_creds
+    body = await request.json()
+    venue = body.get("venue"); oid = body.get("order_id")
+    creds = load_creds()
+    if venue == "kalshi":
+        try:
+            import httpx
+            from cryptography.hazmat.primitives import hashes, serialization
+            from cryptography.hazmat.primitives.asymmetric import padding
+            c = creds.get("kalshi", {})
+            key_id = c.get("api_key_id", ""); pem = (c.get("private_key_pem") or "").strip()
+            base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+            ts = str(int(_t.time() * 1000)); path = f"/trade-api/v2/portfolio/orders/{oid}"
+            msg = f"{ts}DELETE{path}".encode()
+            key = serialization.load_pem_private_key(pem.encode(), password=None)
+            sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                           salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+            r = httpx.delete(base + path, headers={
+                "KALSHI-ACCESS-KEY": key_id,
+                "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
+                "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+            if r.status_code in (200, 204):
+                return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
+            return {"ok": False, "message": f"Kalshi cancel {r.status_code}: {r.text[:80]}"}
+        except Exception as e:
+            return {"ok": False, "message": str(e)[:100]}
+    elif venue == "limitless":
+        try:
+            import json as _j
+            from pathlib import Path as _P
+            from app.executor import reap_limitless_stale
+            f = _P("data/manual_orders.json")
+            mo = _j.loads(f.read_text()) if f.exists() else []
+            for m in mo:
+                if m.get("order_id") == oid:
+                    m["cancelled"] = True
+            f.write_text(_j.dumps(mo, indent=2))
+            count, tickers, err = reap_limitless_stale()
+            return {"ok": True, "message": f"order Limitless ditandai batal; reaper cancel {count}"}
+        except Exception as e:
+            return {"ok": False, "message": str(e)[:100]}
+    return {"ok": False, "message": "venue tidak didukung"}
