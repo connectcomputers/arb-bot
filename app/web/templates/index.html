@@ -45,6 +45,19 @@ padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 })();
 </script>
 <body>
+<script>
+(function(){
+  function alive(){
+    if(!document.body) return;
+    var now=new Date(), stamp=now.toLocaleTimeString('id-ID'), sec=now.getSeconds();
+    var w=document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    var n, targets=[];
+    while((n=w.nextNode())){ if(/memindai ulang|hasil menyusul/.test(n.nodeValue||'')) targets.push(n); }
+    for(var i=0;i<targets.length;i++){ targets[i].nodeValue = '⏳ screening aktif · detik ke-'+sec+' · '+stamp; }
+  }
+  setInterval(alive,1000); setTimeout(alive,300);
+})();
+</script>
 <div id="alert-banner" style="display:none;background:#dc2626;color:white;padding:12px;margin:8px;border-radius:6px;font-size:14px">
   <strong>⚠️ Alert Aktif:</strong> <span id="alert-message"></span>
 </div><div class="wrap">
