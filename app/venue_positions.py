@@ -107,7 +107,7 @@ def _poly_detailed(creds):
                       if float(p.get(k) or 0) > 0),
                       float(p.get("size") or 0) * float(p.get("curPrice") or p.get("price") or 0)), 2),
              "condition_id": p.get("conditionId") or p.get("condition_id"),
-             "token_id": p.get("tokenId") or p.get("token_id"),
+             "token_id": p.get("tokenId") or p.get("token_id") or p.get("asset"),
              "outcome": (p.get("outcome") or "YES").upper(), "cur_price": float(p.get("curPrice") or p.get("price") or 0), "pnl": round(float(p.get("cashPnl") or 0), 2), "pnl_pct": round(float(p.get("percentPnl") or 0), 2)}
             for p in r.json() if float(p.get("size") or 0) > 0]
 

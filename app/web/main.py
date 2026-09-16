@@ -872,18 +872,23 @@ async def api_cancel_order(request: Request):
                 last = f"{r.status_code}: {r.text[:300]}"
                 if r.status_code not in (404, 410):
                     break
-            ts = str(int(_t.time() * 1000)); pathb = "/trade-api/v2/portfolio/orders"
-            msgb = f"{ts}DELETE{pathb}".encode()
-            sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                            salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-            rb = httpx.delete(base + pathb, headers={
-                "KALSHI-ACCESS-KEY": key_id,
-                "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
-                "KALSHI-ACCESS-TIMESTAMP": ts},
-                json={"order_ids": [oid]}, timeout=15)
-            if rb.status_code in (200, 204):
-                return {"ok": True, "message": f"order Kalshi {oid} dibatalkan (bulk)"}
-            last += f" | bulk {rb.status_code}: {rb.text[:200]}"
+            try:
+                import json as _j
+                ts = str(int(_t.time() * 1000)); pathb = "/trade-api/v2/portfolio/orders"
+                msgb = f"{ts}DELETE{pathb}".encode()
+                sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+                rb = httpx.delete(base + pathb, headers={
+                    "KALSHI-ACCESS-KEY": key_id,
+                    "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
+                    "KALSHI-ACCESS-TIMESTAMP": ts,
+                    "Content-Type": "application/json"},
+                    content=_j.dumps({"order_ids": [oid]}), timeout=15)
+                if rb.status_code in (200, 204):
+                    return {"ok": True, "message": f"order Kalshi {oid} dibatalkan (bulk)"}
+                last += f" | bulk {rb.status_code}: {rb.text[:200]}"
+            except Exception as e:
+                last += f" | bulk err: {e}"
             return {"ok": False, "message": f"Kalshi cancel {last}"}
         except Exception as e:
             return {"ok": False, "message": str(e)[:100]}
