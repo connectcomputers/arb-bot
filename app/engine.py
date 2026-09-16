@@ -437,8 +437,9 @@ def refresh():
     if KILL.exists() or not _run:
         return status()
     st = _read()
-    if time.time() - _last_scan_ts >= 45:
-        st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
+    # Scan HANYA dari loop engine (thread terpisah).
+    # refresh() tidak boleh memperebutkan _scan_lock, agar event-loop server
+    # tidak terkunci dan request dashboard tetap lancar saat scan berjalan.
     st["interval"] = INTERVAL
     _write(st)
     return st
