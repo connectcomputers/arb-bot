@@ -977,10 +977,18 @@ async def _lim_eoa_async(
             
             slug = m["slug"]
             
-        market = (
-            await market_fetcher
-            .get_market(slug)
-        )
+        market = None
+        _last_err = None
+        _cands = [m] + [x for x in markets_list if x is not m]
+        for _c in _cands[:8]:
+            try:
+                market = await market_fetcher.get_market(_c["slug"])
+                break
+            except Exception as _e:
+                _last_err = _e
+        if market is None:
+            return (False, f"Limitless EOA: market tidak valid (pythAddress?): {_last_err}")
+        slug = getattr(market, "slug", None) or m["slug"]
 
 
         token_id = str(
@@ -1572,7 +1580,7 @@ def _kalshi_ensure_shard_balance(creds, target_shard, need_cents, dry=False):
 #                 return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
 
 #     # Lanjut order biasa
-#     price = min(round(m["yes"] + 0.01, 2), 0.99)
+#     price = min(round(m["yes"] + 0.03, 2), 0.99)
 #     size = max(1, int(usd // price))
 #     if dry:
 #         return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
@@ -1659,12 +1667,12 @@ def exec_kalshi(creds, usd=0.25, dry=False, ticker=None):
             if not ok:
                 return False, f"Kalshi pre-flight gagal: {msg}"
             
-        # price = min(round(m["yes"] + 0.01, 2), 0.99)
+        # price = min(round(m["yes"] + 0.03, 2), 0.99)
         # size = max(1, int(usd // price))
         # if dry:
         #     return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
 
-        price = min(round(m["yes"] + 0.01, 2), 0.99)
+        price = min(round(m["yes"] + 0.03, 2), 0.99)
         size = max(1, int(usd // price))
         
         # Pre-check: cost actual tidak melebihi saldo shard
@@ -3518,7 +3526,7 @@ EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
 # #     m = _k_market(creds, ticker=ticker)     # ← ganti baris lama
 # #     if not m:
 # #         return False, "tidak ada market kalshi likuid"
-# #     price = min(round(m["yes"] + 0.01, 2), 0.99)
+# #     price = min(round(m["yes"] + 0.03, 2), 0.99)
 # #     size = max(1, int(usd // price))
 # #     if dry:
 # #         return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
@@ -3633,7 +3641,7 @@ EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
 #                 return False, f"Kalshi: transfer shard 0→{shard} gagal {st}: {resp[:150]}"
 
 #     # Lanjut order biasa
-#     price = min(round(m["yes"] + 0.01, 2), 0.99)
+#     price = min(round(m["yes"] + 0.03, 2), 0.99)
 #     size = max(1, int(usd // price))
 #     if dry:
 #         return True, f"[DRY] kalshi BUY YES {size} x {price} :: {m['ticker']}"
