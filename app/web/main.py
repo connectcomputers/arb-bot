@@ -849,85 +849,56 @@ async def api_cancel_order(request: Request):
     creds = load_creds()
     if venue == "kalshi":
         try:
+            import json as _j
             import httpx
             from cryptography.hazmat.primitives import hashes, serialization
             from cryptography.hazmat.primitives.asymmetric import padding
             c = creds.get("kalshi", {})
             key_id = c.get("api_key_id", ""); pem = (c.get("private_key_pem") or "").strip()
-            base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+            if not key_id or "-----BEGIN" not in pem:
+                return {"ok": False, "message": "kredensial Kalshi tidak lengkap"}
             key = serialization.load_pem_private_key(pem.encode(), password=None)
+            ticker = (body.get("ticker") or "").strip()
             last = ""
-            for base_try in ("https://external-api.kalshi.com", base):
-              for path in (f"/trade-api/v2/portfolio/events/orders/{oid}",
-                           f"/trade-api/v2/orders/{oid}",
-                           f"/trade-api/v2/portfolio/orders/{oid}"):
+            for host in ("https://external-api.kalshi.com",
+                         "https://api.elections.kalshi.com"):
+                pathq = f"/trade-api/v2/portfolio/events/orders/{oid}"
+                if ticker:
+                    pathq += f"?market_ticker={ticker}"
                 ts = str(int(_t.time() * 1000))
-                msg = f"{ts}DELETE{path}".encode()
-                sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                               salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                r = httpx.delete(base_try + path, headers={
+                sig = key.sign(f"{ts}DELETE{pathq}".encode(),
+                               padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                           salt_length=padding.PSS.DIGEST_LENGTH),
+                               hashes.SHA256())
+                r = httpx.delete(host + pathq, headers={
                     "KALSHI-ACCESS-KEY": key_id,
                     "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
                     "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
                 if r.status_code in (200, 204):
                     return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
-                last += f" | {r.status_code}: {r.text[:150]}"
-            try:
-                import json as _j
-                ts = str(int(_t.time() * 1000)); pathb = "/trade-api/v2/portfolio/orders"
-                msgb = f"{ts}DELETE{pathb}".encode()
-                sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                                salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                rb = httpx.request("DELETE", base + pathb, headers={
+                last += f" | single {r.status_code}: {r.text[:120]}"
+                pb = "/trade-api/v2/portfolio/events/orders/batched"
+                ts = str(int(_t.time() * 1000))
+                sigb = key.sign(f"{ts}DELETE{pb}".encode(),
+                                padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                            salt_length=padding.PSS.DIGEST_LENGTH),
+                                hashes.SHA256())
+                item = {"order_id": oid}
+                if ticker:
+                    item["market_ticker"] = ticker
+                rb = httpx.request("DELETE", host + pb, headers={
                     "KALSHI-ACCESS-KEY": key_id,
                     "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
                     "KALSHI-ACCESS-TIMESTAMP": ts,
                     "Content-Type": "application/json"},
-                    content=_j.dumps({"order_ids": [oid]}), timeout=15)
+                    content=_j.dumps({"orders": [item]}), timeout=15)
                 if rb.status_code in (200, 204):
-                    return {"ok": True, "message": f"order Kalshi {oid} dibatalkan (bulk)"}
-                last += f" | bulk {rb.status_code}: {rb.text[:200]}"
-            except Exception as e:
-                last += f" | bulk err: {e}"
-            for base_try in ("https://external-api.kalshi.com", base):
-                for bpath in ("/trade-api/v2/orders/batch-cancel",
-                              "/trade-api/v2/portfolio/orders/batch-cancel"):
-                    try:
-                        import json as _jb
-                        ts = str(int(_t.time() * 1000))
-                        msgb = f"{ts}DELETE{bpath}".encode()
-                        sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                                        salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                        rb = httpx.request("DELETE", base_try + bpath, headers={
-                            "KALSHI-ACCESS-KEY": key_id,
-                            "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
-                            "KALSHI-ACCESS-TIMESTAMP": ts,
-                            "Content-Type": "application/json"},
-                            content=_jb.dumps({"order_ids": [oid]}), timeout=15)
-                        if rb.status_code in (200, 204):
-                            return {"ok": True,
-                                    "message": f"order Kalshi {oid} dibatalkan (batch V2)"}
-                        last += f" | batch {rb.status_code}: {rb.text[:100]}"
-                    except Exception as e:
-                        last += f" | batch err: {e}"
-            for base_try in ("https://external-api.kalshi.com", base):
-                try:
-                    ts = str(int(_t.time() * 1000)); pathall = "/trade-api/v2/portfolio/orders"
-                    msga = f"{ts}DELETE{pathall}".encode()
-                    siga = key.sign(msga, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                                    salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                    ra = httpx.delete(base_try + pathall, headers={
-                        "KALSHI-ACCESS-KEY": key_id,
-                        "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(siga).decode(),
-                        "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
-                    if ra.status_code in (200, 204):
-                        return {"ok": True, "message": "semua order Kalshi dibatalkan (cancel-all)"}
-                    last += f" | all@{base_try.split('//')[1][:12]} {ra.status_code}: {ra.text[:120]}"
-                except Exception as e:
-                    last += f" | all err: {e}"
+                    return {"ok": True,
+                            "message": f"order Kalshi {oid} dibatalkan (batched V2)"}
+                last += f" | batched {rb.status_code}: {rb.text[:120]}"
             return {"ok": False, "message": f"Kalshi cancel {last}"}
-        except Exception as e:
-            return {"ok": False, "message": str(e)[:100]}
+        except Exception as ex:
+            return {"ok": False, "message": f"Kalshi cancel err: {ex}"}
     elif venue == "limitless":
         try:
             import json as _j

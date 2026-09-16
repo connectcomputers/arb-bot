@@ -3799,7 +3799,7 @@ def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
                     if mode == "market":
                         order = c.create_order(MarketOrderArgs(
                             token_id=token_id, amount=float(size) * float(price),
-                            side=Side.SELL))
+                            side=Side.SELL, price=price))
                         resp = c.post_order(order, OrderType.FOK)
                     else:
                         order = c.create_order(OrderArgs(
@@ -3810,7 +3810,7 @@ def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
                                   f"(maker={(fd or 'EOA')[:10]},type={stype}) :: {str(resp)[:60]}")
                 except Exception as e:
                     errs.append(f"{mode}/t{stype}: {str(e)[:90]}")
-        return False, "Poly SELL gagal semua konfigurasi :: " + " | ".join(errs)[:400]
+        return False, ("Posisi berada di deposit-wallet (type 3): SDK Python py-clob-client-v2 punya bug terbuka (L1 auth terikat EOA) sehingga order ditolak. Tutup via tombol JUAL di web Polymarket. Detail :: " + " | ".join(errs)[:300])
     finally:
         for k, v in _old_proxy_env.items():
             if v is None:
