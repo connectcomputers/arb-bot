@@ -640,7 +640,7 @@ document.addEventListener('click', function(e){
   e.preventDefault();
   if(!confirm('Batalkan open order ini?')) return;
   fetch('/api/cancel-order',{method:'POST',headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({venue:b.getAttribute('data-venue'), order_id:b.getAttribute('data-order-id')})
+    body: JSON.stringify({venue:b.getAttribute('data-venue'), order_id:b.getAttribute('data-order-id'), ticker:b.getAttribute('data-ticker')||''})
   }).then(function(r){return r.json();}).then(function(d){
     alert(d.ok ? '✅ Order dibatalkan' : '❌ '+(d.message||'gagal'));
     setTimeout(function(){ location.reload(); }, 800);
@@ -661,7 +661,7 @@ function loadOpenOrders(){
       var rows = [];
       if(v === 'kalshi'){ (d.kalshi||[]).forEach(function(o){
         rows.push('⏳ OPEN ORDER: '+(o.ticker||'?')+' '+(o.side||'')+' x'+(o.count||'')+' @'+(o.price||'')+
-          ' <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
+          ' <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" data-ticker="'+(o.ticker||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
       if(v === 'limitless'){ (d.limitless||[]).forEach(function(o){
         rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||'')+
           ' <button class="cancel-order-btn" data-venue="limitless" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }

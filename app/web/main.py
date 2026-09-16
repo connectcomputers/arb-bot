@@ -892,10 +892,26 @@ async def api_cancel_order(request: Request):
                     "KALSHI-ACCESS-TIMESTAMP": ts,
                     "Content-Type": "application/json"},
                     content=_j.dumps({"orders": [item]}), timeout=15)
-                if rb.status_code in (200, 204):
-                    return {"ok": True,
-                            "message": f"order Kalshi {oid} dibatalkan (batched V2)"}
                 last += f" | batched {rb.status_code}: {rb.text[:120]}"
+            # VERIFIKASI: order harus benar-benar hilang dari daftar resting
+            try:
+                ts = str(int(_t.time() * 1000)); pl = "/trade-api/v2/portfolio/orders"
+                sigl = key.sign(f"{ts}GET{pl}".encode(),
+                                padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                            salt_length=padding.PSS.DIGEST_LENGTH),
+                                hashes.SHA256())
+                rl = httpx.get("https://api.elections.kalshi.com" + pl, headers={
+                    "KALSHI-ACCESS-KEY": key_id,
+                    "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigl).decode(),
+                    "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+                still = [o for o in (rl.json().get("orders") or [])
+                         if o.get("order_id") == oid]
+                if not still:
+                    return {"ok": True,
+                            "message": f"order Kalshi {oid} dibatalkan (terverifikasi)"}
+                last += " | verifikasi: order masih ada"
+            except Exception as ex:
+                last += f" | verifikasi err: {ex}"
             return {"ok": False, "message": f"Kalshi cancel {last}"}
         except Exception as ex:
             return {"ok": False, "message": f"Kalshi cancel err: {ex}"}
