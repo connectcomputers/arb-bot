@@ -787,7 +787,7 @@ def api_open_orders():
             out["kalshi"] = [{"order_id": o.get("order_id"), "ticker": o.get("ticker"),
                               "side": o.get("side"), "count": o.get("count"),
                               "price": o.get("price")} for o in orders
-                             if (o.get("status") or "resting") in ("resting", "open", "unmatched")]
+                             if (o.get("status") or "resting") not in ("closed", "cancelled", "matched", "filled")]
     except Exception as e:
         out["kalshi_error"] = str(e)[:80]
     try:
