@@ -857,7 +857,8 @@ async def api_cancel_order(request: Request):
             base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
             key = serialization.load_pem_private_key(pem.encode(), password=None)
             last = ""
-            for path in (f"/trade-api/v2/portfolio/orders/{oid}",
+            for path in (f"/trade-api/v2/portfolio/events/orders/{oid}",
+                         f"/trade-api/v2/portfolio/orders/{oid}",
                          f"/trade-api/v2/orders/{oid}"):
                 ts = str(int(_t.time() * 1000))
                 msg = f"{ts}DELETE{path}".encode()
@@ -869,16 +870,14 @@ async def api_cancel_order(request: Request):
                     "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
                 if r.status_code in (200, 204):
                     return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
-                last = f"{r.status_code}: {r.text[:300]}"
-                if r.status_code not in (404, 410):
-                    break
+                last += f" | {r.status_code}: {r.text[:150]}"
             try:
                 import json as _j
                 ts = str(int(_t.time() * 1000)); pathb = "/trade-api/v2/portfolio/orders"
                 msgb = f"{ts}DELETE{pathb}".encode()
                 sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
                                 salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-                rb = httpx.delete(base + pathb, headers={
+                rb = httpx.request("DELETE", base + pathb, headers={
                     "KALSHI-ACCESS-KEY": key_id,
                     "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
                     "KALSHI-ACCESS-TIMESTAMP": ts,

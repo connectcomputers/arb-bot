@@ -3761,7 +3761,7 @@ def sell_kalshi(creds, ticker, side="yes", size=1, dry=False):
         return False, f"Kalshi SELL error: {e}"
 
 def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
-    """SELL token di Polymarket CLOB (meniru flow BUY: proxy/funder + py_clob_client_v2)."""
+    """SELL token di CLOB; coba otomatis konfigurasi maker hingga diterima."""
     if not token_id:
         return False, "token_id kosong"
     if dry:
@@ -3775,31 +3775,42 @@ def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
     try:
         from py_clob_client_v2 import ClobClient, OrderArgs, OrderType, Side
         from app.config_store import get_poly_funder
-        client_args = {"host": "https://clob.polymarket.com", "chain_id": 137,
-                       "key": creds.get("private_key", "")}
-        funder = get_poly_funder()
+        funder = get_poly_funder() or str(creds.get("proxy_address") or "").strip()
+        cands = []
         if funder:
-            client_args["funder"] = funder
-            client_args["signature_type"] = 1
-        c = ClobClient(**client_args)
-        try:
-            api = c.create_or_derive_api_key()
-        except Exception:
-            api = c.derive_api_key()
-        if api is not None and hasattr(c, "set_api_creds"):
-            c.set_api_creds(api)
-        order = c.create_order(OrderArgs(token_id=token_id, price=price,
-                                         size=float(size), side=Side.SELL))
-        resp = c.post_order(order, OrderType.FAK)
-        return True, f"SELL {size} x {price} :: resp {str(resp)[:60]}"
-    except Exception as e:
-        return False, f"Poly SELL error: {e}"
+            cands += [(funder, 1), (funder, 2)]
+        cands += [(None, 0)]
+        last_err = None
+        for fd, stype in cands:
+            try:
+                client_args = {"host": "https://clob.polymarket.com", "chain_id": 137,
+                               "key": creds.get("private_key", "")}
+                if fd:
+                    client_args["funder"] = fd
+                    client_args["signature_type"] = stype
+                c = ClobClient(**client_args)
+                try:
+                    api = c.create_or_derive_api_key()
+                except Exception:
+                    api = c.derive_api_key()
+                if api is not None and hasattr(c, "set_api_creds"):
+                    c.set_api_creds(api)
+                order = c.create_order(OrderArgs(token_id=token_id, price=price,
+                                                 size=float(size), side=Side.SELL))
+                resp = c.post_order(order, OrderType.FAK)
+                return True, (f"SELL {size} x {price} "
+                              f"(maker={(fd or 'EOA')[:10]},type={stype}) :: {str(resp)[:60]}")
+            except Exception as e:
+                last_err = e
+                continue
+        return False, f"Poly SELL error: {last_err}"
     finally:
         for k, v in _old_proxy_env.items():
             if v is None:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
+
 
 def sell_limitless(creds, market_slug, size, dry=False):
     """Limitless SELL - manual close required."""
