@@ -24,6 +24,26 @@ font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;
 .matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
 padding:6px;max-height:220px;overflow:auto;margin:6px 0}
 </style></head>
+<script>
+(function(){
+  function alive(){
+    var now = new Date();
+    var stamp = now.toLocaleTimeString('id-ID');
+    var sec = now.getSeconds();
+    var nodes = document.querySelectorAll('div,span,small');
+    for (var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      if (el.children.length) continue;
+      var tx = el.textContent || '';
+      if (/memindai ulang|hasil menyusul|memindai… detik|screening aktif/.test(tx)){
+        el.textContent = '⏳ screening aktif · detik ke-' + sec + ' · ' + stamp;
+      }
+    }
+  }
+  setInterval(alive, 1000);
+  setTimeout(alive, 400);
+})();
+</script>
 <body>
 <div id="alert-banner" style="display:none;background:#dc2626;color:white;padding:12px;margin:8px;border-radius:6px;font-size:14px">
   <strong>⚠️ Alert Aktif:</strong> <span id="alert-message"></span>
