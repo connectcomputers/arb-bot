@@ -859,6 +859,7 @@ async def api_cancel_order(request: Request):
             last = ""
             for base_try in ("https://external-api.kalshi.com", base):
               for path in (f"/trade-api/v2/portfolio/events/orders/{oid}",
+                           f"/trade-api/v2/orders/{oid}",
                            f"/trade-api/v2/portfolio/orders/{oid}"):
                 ts = str(int(_t.time() * 1000))
                 msg = f"{ts}DELETE{path}".encode()
@@ -888,6 +889,27 @@ async def api_cancel_order(request: Request):
                 last += f" | bulk {rb.status_code}: {rb.text[:200]}"
             except Exception as e:
                 last += f" | bulk err: {e}"
+            for base_try in ("https://external-api.kalshi.com", base):
+                for bpath in ("/trade-api/v2/orders/batch-cancel",
+                              "/trade-api/v2/portfolio/orders/batch-cancel"):
+                    try:
+                        import json as _jb
+                        ts = str(int(_t.time() * 1000))
+                        msgb = f"{ts}DELETE{bpath}".encode()
+                        sigb = key.sign(msgb, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                                        salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+                        rb = httpx.request("DELETE", base_try + bpath, headers={
+                            "KALSHI-ACCESS-KEY": key_id,
+                            "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sigb).decode(),
+                            "KALSHI-ACCESS-TIMESTAMP": ts,
+                            "Content-Type": "application/json"},
+                            content=_jb.dumps({"order_ids": [oid]}), timeout=15)
+                        if rb.status_code in (200, 204):
+                            return {"ok": True,
+                                    "message": f"order Kalshi {oid} dibatalkan (batch V2)"}
+                        last += f" | batch {rb.status_code}: {rb.text[:100]}"
+                    except Exception as e:
+                        last += f" | batch err: {e}"
             for base_try in ("https://external-api.kalshi.com", base):
                 try:
                     ts = str(int(_t.time() * 1000)); pathall = "/trade-api/v2/portfolio/orders"

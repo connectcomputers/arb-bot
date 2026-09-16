@@ -3798,7 +3798,8 @@ def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
                         c.set_api_creds(api)
                     if mode == "market":
                         order = c.create_order(MarketOrderArgs(
-                            token_id=token_id, amount=float(size) * float(price)))
+                            token_id=token_id, amount=float(size) * float(price),
+                            side=Side.SELL))
                         resp = c.post_order(order, OrderType.FOK)
                     else:
                         order = c.create_order(OrderArgs(
