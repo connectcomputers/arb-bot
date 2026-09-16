@@ -23,13 +23,11 @@ a{color:#38bdf8}
 font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;margin:6px 0}
 .matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
 padding:6px;max-height:220px;overflow:auto;margin:6px 0}
-</style><script>
+</style>
+<script>
 document.addEventListener('DOMContentLoaded', function(){
-  var st=document.createElement('style');
-  st.textContent='@keyframes lspin{to{transform:rotate(360deg)}}';
-  document.head.appendChild(st);
-  var bar=document.createElement('div');
-  bar.id='live-indicator';
+  var st=document.createElement('style'); st.textContent='@keyframes lspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
+  var bar=document.createElement('div'); bar.id='live-indicator';
   bar.style.cssText='position:fixed;left:12px;bottom:12px;z-index:999;background:#052e16;border:1px solid #16a34a;color:#86efac;border-radius:8px;padding:8px 12px;font:12px monospace;display:flex;gap:8px;align-items:center';
   bar.innerHTML='<span id="li-spin" style="width:12px;height:12px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:lspin 1s linear infinite"></span><span id="li-text">SCANNER MENYALA…</span>';
   document.body.appendChild(bar);
@@ -37,17 +35,26 @@ document.addEventListener('DOMContentLoaded', function(){
   function findEpoch(o){ if(!o||typeof o!=='object')return null; if(typeof o.epoch==='number')return o.epoch; for(var k in o){var v=findEpoch(o[k]); if(v)return v;} return null; }
   function pull(){ fetch('/api/engine/status').then(function(r){return r.json();}).then(function(d){ var e=findEpoch(d); if(e&&e!==epoch){epoch=e;cycles++;} else if(e){epoch=e;} }).catch(function(){}); }
   setInterval(pull,5000); pull();
-  setInterval(function(){
-    var tx=document.getElementById('li-text'), sp=document.getElementById('li-spin');
-    if(!tx) return;
+  function msg(){
     var clock=new Date().toLocaleTimeString('id-ID');
-    if(!epoch){ tx.textContent='SCANNER MENYALA… '+clock; return; }
+    if(!epoch) return '🟢 SCANNER MENYALA · '+clock;
     var age=Math.floor(Date.now()/1000)-epoch;
-    if(age>SCAN+45){ bar.style.borderColor='#dc2626'; bar.style.color='#fca5a5'; sp.style.borderColor='#ef4444'; sp.style.borderTopColor='transparent'; tx.textContent='⚠ SCAN LAMBAT '+age+'s · '+clock; return; }
-    bar.style.borderColor='#16a34a'; bar.style.color='#86efac'; sp.style.borderColor='#22c55e'; sp.style.borderTopColor='transparent';
-    if(age>SCAN) tx.textContent='SCAN BERJALANG… siklus #'+cycles+' · '+clock;
-    else tx.textContent='scan berikut '+(SCAN-age)+'s · siklus #'+cycles+' · '+clock;
-  },1000);
+    if(age>SCAN+45) return '⚠ SCAN LAMBAT '+age+'s · '+clock;
+    if(age>SCAN) return '🟢 SCAN BERJALAN · siklus #'+cycles+' · '+clock;
+    return '🟢 SCAN #'+cycles+' · berikut '+(SCAN-age)+'s · '+clock;
+  }
+  function broadcast(){
+    var m=msg();
+    var tx=document.getElementById('li-text'); if(tx) tx.textContent=m;
+    var sp=document.getElementById('li-spin');
+    if(sp){ var slow=(m.indexOf('⚠')===0); sp.style.borderColor= slow?'#ef4444':'#22c55e'; sp.style.borderTopColor='transparent'; }
+    if(!document.body) return;
+    var w=document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    var n, tg=[];
+    while((n=w.nextNode())){ var v=n.nodeValue||''; if(/dtk lalu|SCAN BERJALAN|SCAN #|hasil menyusul|SCANNER MENYALA/.test(v)) tg.push(n); }
+    for(var i=0;i<tg.length;i++){ tg[i].nodeValue=m; }
+  }
+  setInterval(broadcast,250); broadcast();
 });
 </script>
 </head>
@@ -548,48 +555,6 @@ loadPnl(); setInterval(loadPnl, 60000);
 </script>
 
 <style>@keyframes hbspin{to{transform:rotate(360deg)}}</style>
-<div id="scan-heartbeat" style="position:fixed;right:12px;bottom:12px;z-index:99;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px 12px;font-size:12px;color:#94a3b8;box-shadow:0 4px 12px rgba(0,0,0,.4)">
-  <span id="hb-spin" style="display:inline-block;width:10px;height:10px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:hbspin 1s linear infinite;vertical-align:middle"></span>
-  <span id="hb-text" style="margin-left:6px">scanner: menyala…</span>
-</div>
-<script>
-(function(){
-  var SCAN_EVERY = 30, lastEpoch = 0, cycles = 0;
-  function findEpoch(o){
-    if(!o || typeof o!=='object') return null;
-    if (typeof o.epoch==='number') return o.epoch;
-    for (var k in o){ var v=findEpoch(o[k]); if(v) return v; }
-    return null;
-  }
-  function tick(){
-    var el = document.getElementById('hb-text');
-    var sp = document.getElementById('hb-spin');
-    if(!el) return;
-    var now = Math.floor(Date.now()/1000);
-    var clock = new Date().toLocaleTimeString('id-ID');
-    if(!lastEpoch){ el.textContent = 'scanner: menyala… ' + clock; return; }
-    var age = now - lastEpoch;
-    if (age > SCAN_EVERY + 45){
-      el.textContent = '⚠ scanner lambat (' + age + ' dtk) · ' + clock;
-      sp.style.borderColor = '#ef4444'; sp.style.borderTopColor = 'transparent';
-      return;
-    }
-    sp.style.borderColor = '#22c55e'; sp.style.borderTopColor = 'transparent';
-    if (age > SCAN_EVERY){
-      el.textContent = 'memindai sekarang… siklus #' + cycles + ' · ' + clock;
-    } else {
-      el.textContent = 'scan berikutnya dalam ' + (SCAN_EVERY - age) + ' dtk · siklus #' + cycles + ' · ' + clock;
-    }
-  }
-  setInterval(tick, 1000);
-  setInterval(function(){
-    fetch('/api/venue-feed').then(function(r){return r.json();}).then(function(d){
-      var e = findEpoch(d);
-      if (e && e !== lastEpoch){ lastEpoch = e; cycles++; }
-      else if (e){ lastEpoch = e; }
-    }).catch(function(){});
-  }, 5000);
-  tick();
-})();
-</script>
+
+
 </body></html>
