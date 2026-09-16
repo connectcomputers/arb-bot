@@ -108,7 +108,7 @@ def _poly_detailed(creds):
                       float(p.get("size") or 0) * float(p.get("curPrice") or p.get("price") or 0)), 2),
              "condition_id": p.get("conditionId") or p.get("condition_id"),
              "token_id": p.get("tokenId") or p.get("token_id"),
-             "outcome": (p.get("outcome") or "YES").upper()}
+             "outcome": (p.get("outcome") or "YES").upper(), "pnl": round(float(p.get("cashPnl") or 0), 2), "pnl_pct": round(float(p.get("percentPnl") or 0), 2)}
             for p in r.json() if float(p.get("size") or 0) > 0]
 
 def _kalshi_detailed(creds):

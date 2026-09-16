@@ -736,3 +736,21 @@ async def api_close_position(request: Request):
         return {"ok": ok, "message": msg}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+
+@app.get("/api/unrealized")
+def api_unrealized():
+    """Posisi aktif + unrealized P/L langsung dari exchange."""
+    from app.venue_positions import get_positions_detailed
+    from app.config_store import load_creds
+    creds = load_creds()
+    out = {}
+    for v in ("polymarket", "kalshi", "limitless"):
+        try:
+            rows = get_positions_detailed(v, creds.get(v, {}))
+            out[v] = [{"title": r.get("title"), "size": r.get("size"),
+                       "value": r.get("value"), "pnl": r.get("pnl", 0),
+                       "pnl_pct": r.get("pnl_pct", 0)} for r in rows]
+        except Exception:
+            out[v] = []
+    return out

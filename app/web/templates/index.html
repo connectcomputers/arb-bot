@@ -301,8 +301,8 @@ async function poll(){
       <button class="blue" onclick="micro('${v.venue}')">🎯</button>
     </h2>
     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
-    <h4>Open Positions (OP)</h4>
-    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
+    <h4>Open Positions (OP)</h4><div style="font-size:10px;color:#64748b;margin-bottom:4px">posisi terisi; order GTC menunggu fill tercatat di Rekonsiliasi</div>
+    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value} <button class="close-btn" data-venue="${v.venue}" data-title="${p.title}" style="margin-left:6px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px">❌</button>`)).join('')
                          : '<div class="muted">tidak ada</div>'}
 
     <h4>🔄 Screening Realtime</h4>
@@ -434,6 +434,7 @@ setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
   <div style="font-size:11px;color:#64748b;margin-bottom:8px">Catatan: "Order Real" = riwayat transaksi (audit trail), bukan posisi aktif saat ini.</div>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
+  <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
 </div>
 <script>
 function loadRecon(){
@@ -590,5 +591,30 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }, 2000);
 });
+</script>
+
+<script>
+function loadUnrealized(){
+  fetch('/api/unrealized').then(function(r){return r.json();}).then(function(d){
+    var el = document.getElementById('unrealized-content');
+    if(!el) return;
+    var h = '<strong>💼 Posisi Aktif (Unrealized P/L):</strong>';
+    var any = false;
+    for (var v in d){
+      (d[v]||[]).forEach(function(x){
+        any = true;
+        var pnl = x.pnl||0;
+        var col = pnl>0 ? '#4ade80' : (pnl<0 ? '#f87171' : '#94a3b8');
+        h += '<br><span style="font-size:12px">' + v.toUpperCase() + ': ' + x.title +
+             ' · nilai $' + (x.value||0).toFixed(2) +
+             ' · <span style="color:'+col+'">P/L ' + (pnl>=0?'+':'') + pnl.toFixed(2) +
+             ' (' + (x.pnl_pct||0).toFixed(2) + '%)</span></span>';
+      });
+    }
+    if(!any) h += ' <span style="font-size:12px">tidak ada posisi aktif</span>';
+    el.innerHTML = h;
+  }).catch(function(){});
+}
+loadUnrealized(); setInterval(loadUnrealized, 30000);
 </script>
 </body></html>
