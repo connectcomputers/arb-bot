@@ -711,7 +711,13 @@ async def api_close_position(request: Request):
         pos = next((p for p in positions if p.get("market_id") == position_id and not p.get("resolved")), None)
         
         if not pos:
-            return {"ok": False, "message": "posisi tidak ditemukan"}
+            # fallback: order manual tidak tercatat di buku posisi;
+            # untuk Kalshi title == ticker, jadi bisa sell langsung
+            if venue == "kalshi":
+                ok2, msg2 = sell_kalshi(creds, position_id, "yes", size)
+                return {"ok": ok2, "message": msg2}
+            return {"ok": False,
+                    "message": "posisi tidak ada di buku posisi; untuk venue ini tutup via web exchange"}
         
         ok, msg = False, "venue not supported"
         if venue == "kalshi":
