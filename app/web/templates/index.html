@@ -498,4 +498,50 @@ function resetHistory(){
 }
 loadPnl(); setInterval(loadPnl, 60000);
 </script>
+
+<style>@keyframes hbspin{to{transform:rotate(360deg)}}</style>
+<div id="scan-heartbeat" style="position:fixed;right:12px;bottom:12px;z-index:99;background:#0b1220;border:1px solid #1e293b;border-radius:8px;padding:8px 12px;font-size:12px;color:#94a3b8;box-shadow:0 4px 12px rgba(0,0,0,.4)">
+  <span id="hb-spin" style="display:inline-block;width:10px;height:10px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:hbspin 1s linear infinite;vertical-align:middle"></span>
+  <span id="hb-text" style="margin-left:6px">scanner: menyala…</span>
+</div>
+<script>
+(function(){
+  var SCAN_EVERY = 30, lastEpoch = 0, cycles = 0;
+  function findEpoch(o){
+    if(!o || typeof o!=='object') return null;
+    if (typeof o.epoch==='number') return o.epoch;
+    for (var k in o){ var v=findEpoch(o[k]); if(v) return v; }
+    return null;
+  }
+  function tick(){
+    var el = document.getElementById('hb-text');
+    var sp = document.getElementById('hb-spin');
+    if(!el) return;
+    var now = Math.floor(Date.now()/1000);
+    var clock = new Date().toLocaleTimeString('id-ID');
+    if(!lastEpoch){ el.textContent = 'scanner: menyala… ' + clock; return; }
+    var age = now - lastEpoch;
+    if (age > SCAN_EVERY + 45){
+      el.textContent = '⚠ scanner lambat (' + age + ' dtk) · ' + clock;
+      sp.style.borderColor = '#ef4444'; sp.style.borderTopColor = 'transparent';
+      return;
+    }
+    sp.style.borderColor = '#22c55e'; sp.style.borderTopColor = 'transparent';
+    if (age > SCAN_EVERY){
+      el.textContent = 'memindai sekarang… siklus #' + cycles + ' · ' + clock;
+    } else {
+      el.textContent = 'scan berikutnya dalam ' + (SCAN_EVERY - age) + ' dtk · siklus #' + cycles + ' · ' + clock;
+    }
+  }
+  setInterval(tick, 1000);
+  setInterval(function(){
+    fetch('/api/venue-feed').then(function(r){return r.json();}).then(function(d){
+      var e = findEpoch(d);
+      if (e && e !== lastEpoch){ lastEpoch = e; cycles++; }
+      else if (e){ lastEpoch = e; }
+    }).catch(function(){});
+  }, 5000);
+  tick();
+})();
+</script>
 </body></html>
