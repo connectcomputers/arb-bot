@@ -3715,3 +3715,59 @@ EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
 
 # EXEC = {"polymarket": exec_polymarket, "kalshi": exec_kalshi,
 #         "limitless": exec_limitless}
+
+# ============================================================================
+# SELL EXECUTORS
+# ============================================================================
+
+def sell_kalshi(creds, ticker, side="yes", size=1, dry=False):
+    """SELL order di Kalshi."""
+    if not ticker:
+        return False, "ticker kosong"
+    if dry:
+        return True, f"[DRY] SELL {side.upper()} {size} @ {ticker}"
+    
+    path = "/portfolio/events/orders"
+    body = json.dumps({
+        "ticker": ticker,
+        "action": "sell",
+        "side": side.lower(),
+        "count": str(int(size)),
+        "type": "market",
+    }, separators=(",", ":"))
+    
+    ts = str(int(time.time() * 1000))
+    key = serialization.load_pem_private_key(
+        creds.get("private_key_pem", "").encode(), password=None)
+    sig = base64.b64encode(key.sign(f"{ts}POST{path}".encode(),
+        padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                    salt_length=padding.PSS.DIGEST_LENGTH),
+        hashes.SHA256())).decode()
+    
+    hdrs = {
+        "KALSHI-ACCESS-KEY": creds.get("api_key_id", ""),
+        "KALSHI-ACCESS-SIGNATURE": sig,
+        "KALSHI-ACCESS-TIMESTAMP": ts,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        with httpx.Client(timeout=15) as client:
+            r = client.post(KALSHI_HOST + path, headers=hdrs, content=body)
+        if r.status_code == 201:
+            return True, f"SELL {ticker} sukses"
+        return False, f"Kalshi SELL gagal {r.status_code}: {r.text[:100]}"
+    except Exception as e:
+        return False, f"Kalshi SELL error: {e}"
+
+def sell_polymarket(creds, condition_id, outcome, size, dry=False):
+    """Polymarket SELL - manual close required (CLOB API complex)."""
+    if dry:
+        return True, f"[DRY] SELL Polymarket {condition_id} {outcome}"
+    return False, "Polymarket SELL: manual close via web.polymarket.com required"
+
+def sell_limitless(creds, market_slug, size, dry=False):
+    """Limitless SELL - manual close required."""
+    if dry:
+        return True, f"[DRY] SELL Limitless {market_slug}"
+    return False, "Limitless SELL: manual close via web.limitless.exchange required"
