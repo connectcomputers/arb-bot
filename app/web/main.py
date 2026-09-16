@@ -716,6 +716,16 @@ async def api_close_position(request: Request):
             if venue == "kalshi":
                 ok2, msg2 = sell_kalshi(creds, position_id, "yes", size)
                 return {"ok": ok2, "message": msg2}
+            if venue == "polymarket":
+                from app.venue_positions import get_positions_detailed
+                rows = get_positions_detailed("polymarket", creds)
+                hit = next((r for r in rows if r.get("title") == position_id), None)
+                if hit and hit.get("token_id"):
+                    px = round(max((hit.get("cur_price") or 0.5) - 0.03, 0.01), 2)
+                    ok2, msg2 = sell_polymarket(creds, hit["token_id"],
+                                                hit.get("size") or size, px)
+                    return {"ok": ok2, "message": msg2}
+                return {"ok": False, "message": "posisi polymarket tidak ditemukan di exchange"}
             return {"ok": False,
                     "message": "posisi tidak ada di buku posisi; untuk venue ini tutup via web exchange"}
         
@@ -816,18 +826,24 @@ async def api_cancel_order(request: Request):
             c = creds.get("kalshi", {})
             key_id = c.get("api_key_id", ""); pem = (c.get("private_key_pem") or "").strip()
             base = (c.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
-            ts = str(int(_t.time() * 1000)); path = f"/trade-api/v2/portfolio/orders/{oid}"
-            msg = f"{ts}DELETE{path}".encode()
             key = serialization.load_pem_private_key(pem.encode(), password=None)
-            sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                           salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-            r = httpx.delete(base + path, headers={
-                "KALSHI-ACCESS-KEY": key_id,
-                "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
-                "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
-            if r.status_code in (200, 204):
-                return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
-            return {"ok": False, "message": f"Kalshi cancel {r.status_code}: {r.text[:80]}"}
+            last = ""
+            for path in (f"/trade-api/v2/orders/{oid}",
+                         f"/trade-api/v2/portfolio/orders/{oid}"):
+                ts = str(int(_t.time() * 1000))
+                msg = f"{ts}DELETE{path}".encode()
+                sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                               salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+                r = httpx.delete(base + path, headers={
+                    "KALSHI-ACCESS-KEY": key_id,
+                    "KALSHI-ACCESS-SIGNATURE": _b64.b64encode(sig).decode(),
+                    "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+                if r.status_code in (200, 204):
+                    return {"ok": True, "message": f"order Kalshi {oid} dibatalkan"}
+                last = f"{r.status_code}: {r.text[:80]}"
+                if r.status_code != 410:
+                    break
+            return {"ok": False, "message": f"Kalshi cancel {last}"}
         except Exception as e:
             return {"ok": False, "message": str(e)[:100]}
     elif venue == "limitless":

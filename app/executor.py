@@ -3760,11 +3760,46 @@ def sell_kalshi(creds, ticker, side="yes", size=1, dry=False):
     except Exception as e:
         return False, f"Kalshi SELL error: {e}"
 
-def sell_polymarket(creds, condition_id, outcome, size, dry=False):
-    """Polymarket SELL - manual close required (CLOB API complex)."""
+def sell_polymarket(creds, token_id, size, price=0.01, dry=False):
+    """SELL token di Polymarket CLOB (meniru flow BUY: proxy/funder + py_clob_client_v2)."""
+    if not token_id:
+        return False, "token_id kosong"
     if dry:
-        return True, f"[DRY] SELL Polymarket {condition_id} {outcome}"
-    return False, "Polymarket SELL: manual close via web.polymarket.com required"
+        return True, f"[DRY] SELL {size} x {price} :: token {str(token_id)[:10]}"
+    _old_proxy_env = {k: os.environ.get(k)
+                      for k in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")}
+    proxy_url = str(creds.get("proxy_url") or "").strip()
+    if proxy_url:
+        os.environ["HTTPS_PROXY"] = proxy_url
+        os.environ["HTTP_PROXY"] = proxy_url
+    try:
+        from py_clob_client_v2 import ClobClient, OrderArgs, OrderType, Side
+        from app.config_store import get_poly_funder
+        client_args = {"host": "https://clob.polymarket.com", "chain_id": 137,
+                       "key": creds.get("private_key", "")}
+        funder = get_poly_funder()
+        if funder:
+            client_args["funder"] = funder
+            client_args["signature_type"] = 1
+        c = ClobClient(**client_args)
+        try:
+            api = c.create_or_derive_api_key()
+        except Exception:
+            api = c.derive_api_key()
+        if api is not None and hasattr(c, "set_api_creds"):
+            c.set_api_creds(api)
+        order = c.create_order(OrderArgs(token_id=token_id, price=price,
+                                         size=float(size), side=Side.SELL))
+        resp = c.post_order(order, OrderType.FAK)
+        return True, f"SELL {size} x {price} :: resp {str(resp)[:60]}"
+    except Exception as e:
+        return False, f"Poly SELL error: {e}"
+    finally:
+        for k, v in _old_proxy_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 def sell_limitless(creds, market_slug, size, dry=False):
     """Limitless SELL - manual close required."""
