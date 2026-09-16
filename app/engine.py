@@ -549,13 +549,19 @@ def micro_exec(venue, dry=False):
     ok, msg = fn(load_creds().get(venue, {}), usd=_usd, dry=dry)
 
     if ok and not dry:
-        sp["amount"] = round(sp["amount"] + per_op, 2)
-        st["spend"] = sp
-        st.setdefault("trades", []).append({
-            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-micro",
-            "venues": [venue], "pi": 0.0, "size": per_op, "note": msg[:60]})
-        st["trades"] = st["trades"][-50:]
-        _write(st)
+        # ATOMIK: baca-ulang + tulis dalam satu lock agar tidak tertimpa loop engine
+        with _state_lock:
+            cur = json.loads(STATE.read_text()) if STATE.exists() else {}
+            sp2 = cur.get("spend", {})
+            if sp2.get("today") != today:
+                sp2 = {"today": today, "amount": 0.0}
+            sp2["amount"] = round(sp2["amount"] + per_op, 2)
+            cur["spend"] = sp2
+            cur.setdefault("trades", []).append({
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-micro",
+                "venues": [venue], "pi": 0.0, "size": per_op, "note": msg[:60]})
+            cur["trades"] = cur["trades"][-50:]
+            STATE.write_text(json.dumps(cur, indent=2, default=str))
     return {"ok": ok, "message": msg}
 
 
