@@ -46,23 +46,47 @@ def _kalshi(creds):
     if not key_id or "-----BEGIN" not in pem:
         return []
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
-    ts = str(int(time.time() * 1000))
-    path = "/trade-api/v2/portfolio/positions"
-    msg = f"{ts}GET{path}".encode()
-    key = serialization.load_pem_private_key(pem.encode(), password=None)
-    sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                   salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-    r = httpx.get(base + path, headers={
-        "KALSHI-ACCESS-KEY": key_id,
-        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
-        "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
-    return [{"title": (p.get("market_ticker") or p.get("ticker") or "?")[:60],
-             "size": float(p.get("quantity") or p.get("position") or 0),
-             "value": round(float(p.get("market_value") or 0), 2)}
-            # for p in r.json().get("positions", [])]
-
-            for p in (r.json().get("positions") or r.json().get("market_positions") or [])
-            if float(p.get("quantity") or p.get("position") or 0) != 0]
+    rows = []
+    for path in ("/trade-api/v2/portfolio/positions",
+                 "/trade-api/v2/positions",
+                 "/trade-api/v2/portfolio/positions?exchange_index=0",
+                 "/trade-api/v2/portfolio/positions?exchange_index=1"):
+        try:
+            ts = str(int(time.time() * 1000))
+            signpath = path.split("?")[0]
+            msg = f"{ts}GET{signpath}".encode()
+            key = serialization.load_pem_private_key(pem.encode(), password=None)
+            sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                           salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+            r = httpx.get(base + path, headers={
+                "KALSHI-ACCESS-KEY": key_id,
+                "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
+                "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+            if r.status_code != 200:
+                continue
+            d = r.json()
+            cand = (d.get("positions") or d.get("market_positions") or
+                    (d.get("data") or {}).get("positions") or [])
+            if cand:
+                rows = cand
+                break
+        except Exception:
+            continue
+    out = []
+    for p in rows:
+        qty = float(p.get("quantity") or p.get("position") or 0)
+        if qty == 0:
+            continue
+        cost = round(float(p.get("total_cost") or 0), 2)
+        pnl = round(float(p.get("unrealized_pnl") or p.get("total_pnl") or 0), 2)
+        out.append({"title": (p.get("market_ticker") or p.get("ticker") or
+                    p.get("event_ticker") or "?")[:60],
+                    "size": qty,
+                    "value": round(float(p.get("market_value") or 0), 2),
+                    "cost": cost,
+                    "pnl": pnl,
+                    "pnl_pct": round(pnl / cost * 100, 2) if cost else 0.0})
+    return out
 
 
 def _limitless(creds):
@@ -112,31 +136,12 @@ def _poly_detailed(creds):
             for p in r.json() if float(p.get("size") or 0) > 0]
 
 def _kalshi_detailed(creds):
-    """Kalshi positions dengan ticker eksplisit."""
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-    key_id = creds.get("api_key_id", "")
-    pem = (creds.get("private_key_pem") or "").strip()
-    if not key_id or "-----BEGIN" not in pem:
-        return []
-    base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
-    ts = str(int(time.time() * 1000))
-    path = "/trade-api/v2/portfolio/positions"
-    msg = f"{ts}GET{path}".encode()
-    key = serialization.load_pem_private_key(pem.encode(), password=None)
-    sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                   salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-    r = httpx.get(base + path, headers={
-        "KALSHI-ACCESS-KEY": key_id,
-        "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
-        "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
-    return [{"title": (p.get("market_ticker") or p.get("ticker") or "?")[:60],
-             "ticker": p.get("market_ticker") or p.get("ticker"),
-             "size": float(p.get("quantity") or p.get("position") or 0),
-             "value": round(float(p.get("market_value") or 0), 2),
-             "side": (p.get("side") or "yes").lower()}
-            for p in (r.json().get("positions") or r.json().get("market_positions") or [])
-            if float(p.get("quantity") or p.get("position") or 0) != 0]
+    rows = _kalshi(creds)
+    for r in rows:
+        r.setdefault("ticker", r.get("title"))
+        r.setdefault("side", "yes")
+    return rows
+
 
 def _limitless_detailed(creds):
     """Limitless positions dengan market identifier."""
