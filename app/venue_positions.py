@@ -45,46 +45,47 @@ def _kalshi(creds):
     pem = (creds.get("private_key_pem") or "").strip()
     if not key_id or "-----BEGIN" not in pem:
         return []
-    base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
+    bases = ("https://external-api.kalshi.com",
+             (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com")
     rows = []
-    for path in ("/trade-api/v2/portfolio/positions",
-                 "/trade-api/v2/positions",
-                 "/trade-api/v2/portfolio/positions?exchange_index=0",
-                 "/trade-api/v2/portfolio/positions?exchange_index=1"):
-        try:
-            ts = str(int(time.time() * 1000))
-            signpath = path.split("?")[0]
-            msg = f"{ts}GET{signpath}".encode()
-            key = serialization.load_pem_private_key(pem.encode(), password=None)
-            sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
-                           salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
-            r = httpx.get(base + path, headers={
-                "KALSHI-ACCESS-KEY": key_id,
-                "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
-                "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
-            if r.status_code != 200:
+    for base in bases:
+        for path in ("/trade-api/v2/portfolio/positions", "/trade-api/v2/positions"):
+            try:
+                ts = str(int(time.time() * 1000))
+                msg = f"{ts}GET{path}".encode()
+                key = serialization.load_pem_private_key(pem.encode(), password=None)
+                sig = key.sign(msg, padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
+                               salt_length=padding.PSS.DIGEST_LENGTH), hashes.SHA256())
+                r = httpx.get(base + path, headers={
+                    "KALSHI-ACCESS-KEY": key_id,
+                    "KALSHI-ACCESS-SIGNATURE": base64.b64encode(sig).decode(),
+                    "KALSHI-ACCESS-TIMESTAMP": ts}, timeout=15)
+                if r.status_code != 200:
+                    continue
+                d = r.json()
+                cand = (d.get("positions") or d.get("market_positions") or
+                        (d.get("data") or {}).get("positions") or [])
+                if cand:
+                    rows = cand
+                    break
+            except Exception:
                 continue
-            d = r.json()
-            cand = (d.get("positions") or d.get("market_positions") or
-                    (d.get("data") or {}).get("positions") or [])
-            if cand:
-                rows = cand
-                break
-        except Exception:
-            continue
+        if rows:
+            break
     out = []
     for p in rows:
-        qty = float(p.get("quantity") or p.get("position") or 0)
-        if qty == 0:
+        qty = None
+        for k in ("quantity", "position", "count", "contracts", "size"):
+            if p.get(k) is not None:
+                qty = float(p[k]); break
+        val = round(float(p.get("market_value") or p.get("value") or 0), 2)
+        if (qty in (None, 0)) and val <= 0:
             continue
-        cost = round(float(p.get("total_cost") or 0), 2)
+        cost = round(float(p.get("total_cost") or p.get("cost") or 0), 2)
         pnl = round(float(p.get("unrealized_pnl") or p.get("total_pnl") or 0), 2)
         out.append({"title": (p.get("market_ticker") or p.get("ticker") or
-                    p.get("event_ticker") or "?")[:60],
-                    "size": qty,
-                    "value": round(float(p.get("market_value") or 0), 2),
-                    "cost": cost,
-                    "pnl": pnl,
+                    p.get("event_ticker") or p.get("title") or "?")[:60],
+                    "size": qty or 0, "value": val, "cost": cost, "pnl": pnl,
                     "pnl_pct": round(pnl / cost * 100, 2) if cost else 0.0})
     return out
 
