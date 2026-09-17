@@ -827,15 +827,16 @@ def api_open_orders():
                               "side": o.get("side"), "count": o.get("count"),
                               "price": o.get("price"),
                               "status": o.get("status")} for o in orders
-                             if (o.get("status") or "resting") not in ("closed", "cancelled", "matched", "filled")]
+                             if (o.get("status") or "") == "resting"]
     except Exception as e:
         out["kalshi_error"] = str(e)[:80]
     try:
         f = _P("data/manual_orders.json")
         mo = _j.loads(f.read_text()) if f.exists() else []
         out["limitless"] = [m for m in mo if m.get("venue") == "limitless" and not m.get("cancelled")]
+        out["manual"] = [m for m in mo if not m.get("cancelled")][-10:]
     except Exception:
-        pass
+        out["manual"] = []
     return out
 
 

@@ -302,7 +302,7 @@ async function poll(){
     </h2>
     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
     <h4>Open Positions (OP)</h4><div style="font-size:10px;color:#64748b;margin-bottom:4px">posisi terisi; order GTC menunggu fill tercatat di Rekonsiliasi</div>
-    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value} <button class="close-btn" data-venue="${v.venue}" data-title="${p.title}" style="margin-left:6px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px">❌</button>`)).join('')
+    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
                          : '<div class="muted">tidak ada</div>'}
 
     <h4>🔄 Screening Realtime</h4>
@@ -660,11 +660,16 @@ function loadOpenOrders(){
                 h4.insertAdjacentElement('afterend', box); }
       var rows = [];
       if(v === 'kalshi'){ (d.kalshi||[]).forEach(function(o){
-        rows.push('⏳ OPEN ORDER: '+(o.ticker||'?')+' '+(o.side||'')+' ['+(o.status||'?')+'] <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" data-ticker="'+(o.ticker||'')+'" style="'+BTN_STYLE+'">❌</button>');
+        rows.push('⏳ OPEN ORDER (resting): '+(o.ticker||'?')+' '+(o.side||''));
       }); }
       if(v === 'limitless'){ (d.limitless||[]).forEach(function(o){
-        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||'')+' ['+(o.status||'?')+'] <button class="cancel-order-btn" data-venue="limitless" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>');
+        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||''));
       }); }
+      ((d.manual)||[]).forEach(function(m){
+        if(m.venue === v){
+          rows.push('📌 ORDER MANUAL TERCATAT: '+(m.ticker||m.msg||'?')+' $'+(m.size||'')+' · '+(m.ts||''));
+        }
+      });
       box.innerHTML = rows.join('<br>');
     });
   }).catch(function(){});
