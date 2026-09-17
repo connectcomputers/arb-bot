@@ -785,11 +785,14 @@ def api_unrealized():
                 "title": o.get("ticker") or "?", "size": o.get("count") or 0,
                 "value": 0.0, "pnl": 0.0, "pnl_pct": 0.0,
                 "note": "open order menunggu fill"})
-        for o in (ko.get("limitless") or []):
-            out.setdefault("limitless", []).append({
-                "title": o.get("ticker") or o.get("msg") or "?", "size": o.get("size") or 0,
-                "value": 0.0, "pnl": 0.0, "pnl_pct": 0.0,
-                "note": "open order menunggu fill"})
+        for m in (ko.get("manual") or []):
+            v = m.get("venue")
+            if v in ("kalshi", "limitless"):
+                out.setdefault(v, []).append({
+                    "title": m.get("ticker") or m.get("msg") or "?",
+                    "size": m.get("size") or 0, "value": 0.0, "pnl": 0.0,
+                    "pnl_pct": 0.0,
+                    "note": "jejak manual; posisi exchange lihat web venue"})
     except Exception:
         pass
     return out
@@ -833,7 +836,7 @@ def api_open_orders():
     try:
         f = _P("data/manual_orders.json")
         mo = _j.loads(f.read_text()) if f.exists() else []
-        out["limitless"] = [m for m in mo if m.get("venue") == "limitless" and not m.get("cancelled")]
+        out["limitless"] = []
         out["manual"] = [m for m in mo if not m.get("cancelled")][-10:]
     except Exception:
         out["manual"] = []
