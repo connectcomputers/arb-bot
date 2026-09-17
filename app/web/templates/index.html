@@ -660,11 +660,11 @@ function loadOpenOrders(){
                 h4.insertAdjacentElement('afterend', box); }
       var rows = [];
       if(v === 'kalshi'){ (d.kalshi||[]).forEach(function(o){
-        rows.push('⏳ OPEN ORDER: '+(o.ticker||'?')+' '+(o.side||'')+' x'+(o.count||'')+' @'+(o.price||'')+' ['+(o.status||'?')+']+
-          ' <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" data-ticker="'+(o.ticker||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
+        rows.push('⏳ OPEN ORDER: '+(o.ticker||'?')+' '+(o.side||'')+' ['+(o.status||'?')+'] <button class="cancel-order-btn" data-venue="kalshi" data-order-id="'+(o.order_id||'')+'" data-ticker="'+(o.ticker||'')+'" style="'+BTN_STYLE+'">❌</button>');
+      }); }
       if(v === 'limitless'){ (d.limitless||[]).forEach(function(o){
-        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||'')+
-          ' <button class="cancel-order-btn" data-venue="limitless" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>'); }); }
+        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||'')+' ['+(o.status||'?')+'] <button class="cancel-order-btn" data-venue="limitless" data-order-id="'+(o.order_id||'')+'" style="'+BTN_STYLE+'">❌</button>');
+      }); }
       box.innerHTML = rows.join('<br>');
     });
   }).catch(function(){});
