@@ -825,7 +825,8 @@ def api_open_orders():
             orders = r.json().get("orders", [])
             out["kalshi"] = [{"order_id": o.get("order_id"), "ticker": o.get("ticker"),
                               "side": o.get("side"), "count": o.get("count"),
-                              "price": o.get("price")} for o in orders
+                              "price": o.get("price"),
+                              "status": o.get("status")} for o in orders
                              if (o.get("status") or "resting") not in ("closed", "cancelled", "matched", "filled")]
     except Exception as e:
         out["kalshi_error"] = str(e)[:80]
@@ -863,10 +864,11 @@ async def api_cancel_order(request: Request):
             for host in ("https://external-api.kalshi.com",
                          "https://api.elections.kalshi.com"):
                 pathq = f"/trade-api/v2/portfolio/events/orders/{oid}"
+                signpath = pathq
                 if ticker:
                     pathq += f"?market_ticker={ticker}"
                 ts = str(int(_t.time() * 1000))
-                sig = key.sign(f"{ts}DELETE{pathq}".encode(),
+                sig = key.sign(f"{ts}DELETE{signpath}".encode(),
                                padding.PSS(mgf=padding.MGF1(hashes.SHA256()),
                                            salt_length=padding.PSS.DIGEST_LENGTH),
                                hashes.SHA256())
