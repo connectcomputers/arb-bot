@@ -1385,8 +1385,16 @@ def exec_polymarket(creds, usd=1.0, dry=False, ticker=None, side="YES"):
         }
         # proxy = str(creds.get("proxy_address") or "").strip()
 
-        from app.config_store import get_poly_funder
-        proxy = get_poly_funder()
+        from app.config_store import get_poly_funder, load_config as _lc
+        # Closed-loop Polymarket: pakai EOA (type 0) bila EOA ber-USDC,
+        # agar BUY dan SELL keduanya otomatis (menghindari bug SDK deposit-wallet).
+        try:
+            from eth_account import Account as _Acc
+            _eoa = _Acc.from_key(creds.get("private_key", "")).address
+            _bal = float(_poly_usdc_onchain(_eoa) or 0)
+        except Exception:
+            _bal = 0.0
+        proxy = None if (_bal > 0 and _lc().get("poly_use_eoa", True)) else get_poly_funder()
         
         if proxy:
             client_args["funder"] = proxy
