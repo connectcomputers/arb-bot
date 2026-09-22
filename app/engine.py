@@ -202,7 +202,7 @@ def _scan():
                     if ma["cat"] == "crypto":
                         same = bool(ka and kb and ka == kb)
                     else:
-                        same = s >= 0.75
+                        same = s >= 0.65
 
                     if not same:
                         if s >= 0.25:
