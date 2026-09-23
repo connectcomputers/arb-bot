@@ -190,9 +190,9 @@ def _scan():
         for j in range(i + 1, len(vs)):
             a, b = vs[i], vs[j]
             n_pair = 0
-            for ma in rows[a][:60]:
+            for ma in rows[a][:150]:
                 ka = crypto_key(ma["title"]) if ma["cat"] == "crypto" else None
-                for mb in rows[b][:60]:
+                for mb in rows[b][:150]:
                     if ma["cat"] != mb["cat"]:
                         continue
                     comparisons += 1
@@ -864,9 +864,9 @@ def status():
 #         for j in range(i + 1, len(vs)):
 #             a, b = vs[i], vs[j]
 #             n_pair = 0
-#             for ma in rows[a][:60]:
+#             for ma in rows[a][:150]:
 #                 ka = crypto_key(ma["title"]) if ma["cat"] == "crypto" else None
-#                 for mb in rows[b][:60]:
+#                 for mb in rows[b][:150]:
 #                     if ma["cat"] != mb["cat"]:
 #                         continue
 #                     comparisons += 1
