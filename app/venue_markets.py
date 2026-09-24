@@ -383,6 +383,17 @@ def _poly_events(creds):
     _CACHE["poly_events"] = (rows, _tc.time())
     return rows
 
+def _yes_val(m):
+    v = float(m.get("last_price_dollars") or 0)
+    if v:
+        return v
+    yb = float(m.get("yes_bid_dollars") or 0)
+    ya = float(m.get("yes_ask_dollars") or 0)
+    if yb or ya:
+        return (yb + ya) / 2
+    return float(m.get("yes_ask") or m.get("last_price") or 0) / 100.0
+
+
 def _kalshi_events(creds):
     """Ambil event Kalshi (judul lebih deskriptif dari market) + series 15m/1h crypto."""
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
@@ -442,7 +453,7 @@ def _kalshi_events(creds):
                         "cat": "crypto",
                         "vol": float(m.get("volume") or 0),
                         "liq": float(m.get("open_interest") or 0),
-                        "yes": float(m.get("yes_ask") or m.get("last_price") or 0) / 100.0,
+                        "yes": _yes_val(m),
                         "kind": "market",
                     })
         except Exception:

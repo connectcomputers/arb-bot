@@ -171,6 +171,15 @@ def _close_ts(title, now=None):
     return int(now // step) * step + step
 
 
+_CKSYN = {"btc": "bitcoin", "eth": "ethereum", "sol": "solana", "doge": "dogecoin",
+          "xrp": "ripple", "bnb": "binance", "bch": "bitcoin-cash", "ltc": "litecoin"}
+
+
+def _ckey(title):
+    k = crypto_key(title)
+    return _CKSYN.get(k, k) if k else None
+
+
 def _row_end(row):
     return row.get("end_ts") or _close_ts(row.get("title"))
 
@@ -223,13 +232,13 @@ def _scan():
             a, b = vs[i], vs[j]
             n_pair = 0
             for ma in rows[a][:150]:
-                ka = crypto_key(ma["title"]) if ma["cat"] == "crypto" else None
+                ka = _ckey(ma["title"]) if ma["cat"] == "crypto" else None
                 for mb in rows[b][:150]:
                     if ma["cat"] != mb["cat"]:
                         continue
                     comparisons += 1
                     n_pair += 1
-                    kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
+                    kb = _ckey(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
                         same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb))
@@ -897,13 +906,13 @@ def status():
 #             a, b = vs[i], vs[j]
 #             n_pair = 0
 #             for ma in rows[a][:150]:
-#                 ka = crypto_key(ma["title"]) if ma["cat"] == "crypto" else None
+#                 ka = _ckey(ma["title"]) if ma["cat"] == "crypto" else None
 #                 for mb in rows[b][:150]:
 #                     if ma["cat"] != mb["cat"]:
 #                         continue
 #                     comparisons += 1
 #                     n_pair += 1
-#                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
+#                     kb = _ckey(mb["title"]) if mb["cat"] == "crypto" else None
 #                     # s = sim(ma["title"], mb["title"])
 #                     # same = (ka and ka == kb) or s >= 0.5
 
