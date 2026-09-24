@@ -261,6 +261,10 @@ def _poly_events(creds):
     """Ambil event Polymarket (level lebih tinggi, judul lebih bersih) + up/down short-window."""
     rows = []
     seen_keys = set()
+    import time as _tc
+    _cv = _CACHE.get("poly_events")
+    if _cv and _tc.time() - _cv[1] < 90:
+        return _cv[0]
 
     # Query 1: volume24hr desc (original, untuk market besar)
     for page in range(1, 6):
@@ -308,8 +312,12 @@ def _poly_events(creds):
     # Query 2: endDate ascending (untuk market up/down 5m/15m/hourly)
     for page in range(1, 4):
         try:
+            from datetime import datetime as _dtq, timezone as _tzq, timedelta as _tdq
+            _n0 = _dtq.now(_tzq.utc)
             r = httpx.get("https://gamma-api.polymarket.com/events", params={
                 "closed": "false", "limit": 50, "page": page,
+                "end_date_min": _n0.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end_date_max": (_n0 + _tdq(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "order": "endDate", "ascending": "true"}, timeout=10)
             data = r.json()
             if not data:
@@ -372,6 +380,7 @@ def _poly_events(creds):
                     "kind": "event",
                 })
                 rows[-1]["end_ts"] = end_ts
+    _CACHE["poly_events"] = (rows, _tc.time())
     return rows
 
 def _kalshi_events(creds):
@@ -380,31 +389,36 @@ def _kalshi_events(creds):
     rows = []
     seen_keys = set()
 
-    # Query 1: events (original)
-    try:
-        r = httpx.get(base + "/trade-api/v2/events",
-                      params={"limit": 200, "status": "open"}, timeout=18)
-        for ev in r.json().get("events", []):
-            title = ev.get("title") or "?"
-            tick = ev.get("ticker") or ""
-            if tick.startswith("KXMVE"):
-                continue
-            cat = classify_kalshi(title, tick)
-            if not cat or cat == "lainnya":
-                continue
-            if tick and tick not in seen_keys:
-                seen_keys.add(tick)
-                rows.append({
-                    "key": tick,
-                    "title": title[:80],
-                    "cat": cat,
-                    "vol": float(ev.get("volume") or 0),
-                    "liq": float(ev.get("liquidity") or 0),
-                    "yes": 0.0,
-                    "kind": "event",
-                })
-    except Exception:
-        pass
+    # Query 1: events dengan retry + backoff (anti rate-limit)
+    for _att in (1, 2, 3):
+        try:
+            r = httpx.get(base + "/trade-api/v2/events",
+                          params={"limit": 200, "status": "open"}, timeout=20)
+            _evs = r.json().get("events", [])
+            if _evs:
+                for ev in _evs:
+                    title = ev.get("title") or "?"
+                    tick = ev.get("ticker") or ""
+                    if tick.startswith("KXMVE"):
+                        continue
+                    cat = classify_kalshi(title, tick)
+                    if not cat or cat == "lainnya":
+                        continue
+                    if tick and tick not in seen_keys:
+                        seen_keys.add(tick)
+                        rows.append({
+                            "key": tick,
+                            "title": title[:80],
+                            "cat": cat,
+                            "vol": float(ev.get("volume") or 0),
+                            "liq": float(ev.get("liquidity") or 0),
+                            "yes": 0.0,
+                            "kind": "event",
+                        })
+                break
+        except Exception:
+            pass
+        import time as _tk; _tk.sleep(1.5 * _att)
 
     # Query 2: series crypto short-window (KXBTC15M, KXETH15M, KXBTC1H, KXETH1H, KXSOL15M)
     series_list = ["KXBTC15M", "KXETH15M", "KXBTC1H", "KXETH1H", "KXSOL15M", "KXSOL1H"]
@@ -430,7 +444,10 @@ def _kalshi_events(creds):
                     })
         except Exception:
             continue
+    _CACHE["kalshi_events"] = (rows, _tc2.time())
     return rows
+
+_CACHE = {}
 
 FETCH = {"polymarket": _poly, "kalshi": _kalshi, "limitless": _limitless}
 
