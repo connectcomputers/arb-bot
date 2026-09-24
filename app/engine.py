@@ -138,6 +138,9 @@ def _log_loop(msg: str):
 
 
 # === Scan Shared (Mutex) ===
+_FBCACHE = {}
+
+
 def _scan_shared():
     global _last_scan_ts
     with _scan_lock:
@@ -199,7 +202,12 @@ def _scan():
             rows[v] = ev_rows
         else:
             try:
-                allr = FETCH[v](creds.get(v, {}))
+                _fb = _FBCACHE.get(v)
+                if _fb and time.time() - _fb[1] < 240:
+                    allr = _fb[0]
+                else:
+                    allr = FETCH[v](creds.get(v, {}))
+                    _FBCACHE[v] = (allr, time.time())
             except Exception:
                 allr = []
             rows[v] = sorted((r for r in allr if r["cat"] in pairs[v]), key=lambda r: -(r.get("vol") or 0))[:150]
