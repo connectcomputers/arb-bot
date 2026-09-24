@@ -389,6 +389,11 @@ def _kalshi_events(creds):
     rows = []
     seen_keys = set()
 
+    import time as _tc2
+    _cv2 = _CACHE.get("kalshi_events")
+    if _cv2 and _tc2.time() - _cv2[1] < 240:
+        return _cv2[0]
+
     # Query 1: events dengan retry + backoff (anti rate-limit)
     for _att in (1, 2, 3):
         try:
@@ -442,6 +447,7 @@ def _kalshi_events(creds):
                 })
     except Exception:
         pass
+    import time as _tc2
     _CACHE["kalshi_events"] = (rows, _tc2.time())
     return rows
 
