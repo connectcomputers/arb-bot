@@ -148,6 +148,26 @@ def _scan_shared():
         return out
 
 
+import datetime as _dtc
+def _close_ts(title, now=None):
+    """Perkiraan timestamp resolusi dari pola jendela waktu di judul (epoch-aligned)."""
+    s = (title or "").lower()
+    now = now or time.time()
+    if "5 min" in s or "5-min" in s:
+        step = 300
+    elif "15 min" in s or "15-min" in s:
+        step = 900
+    elif "hourly" in s or "1 hour" in s:
+        step = 3600
+    elif "daily" in s or "24 hour" in s:
+        step = 86400
+    elif "weekly" in s:
+        step = 7 * 86400
+    else:
+        return None
+    return int(now // step) * step + step
+
+
 def _scan():
     """Scan semua venue, cari match lintas venue dengan rumus YES+NO arbitrage."""
     cfg = load_config()
@@ -200,7 +220,7 @@ def _scan():
                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
-                        same = bool(ka and kb and ka == kb)
+                        same = bool(ka and kb and ka == kb and _close_ts(ma["title"]) == _close_ts(mb["title"]))
                     else:
                         same = s >= 0.65
 
@@ -877,7 +897,7 @@ def status():
 
 #                     s = sim(ma["title"], mb["title"])
 #                     if ma["cat"] == "crypto":
-#                         same = bool(ka and kb and ka == kb)   # crypto wajib kunci struktural sama
+#                         same = bool(ka and kb and ka == kb and _close_ts(ma["title"]) == _close_ts(mb["title"]))   # crypto wajib kunci struktural sama
 #                     else:
 #                         same = s >= 0.5
                         
