@@ -258,13 +258,15 @@ def _limitless(creds):
     } for m in seen.values()]
 
 def _poly_events(creds):
-    """Ambil event Polymarket (level lebih tinggi, judul lebih bersih)."""
+    """Ambil event Polymarket (level lebih tinggi, judul lebih bersih) + up/down short-window."""
     rows = []
+    seen_keys = set()
+
+    # Query 1: volume24hr desc (original, untuk market besar)
     for page in range(1, 6):
         try:
             r = httpx.get("https://gamma-api.polymarket.com/events", params={
                 "closed": "false", "limit": 50, "page": page,
-                # "order": "volume24hr", "ascending": "false"}, timeout=20)
                 "order": "volume24hr", "ascending": "false"}, timeout=10)
             data = r.json()
             if not data:
@@ -285,28 +287,80 @@ def _poly_events(creds):
                     op = m.get("outcomePrices")
                     if op:
                         try:
-                            vals = json.loads(op)          # '["1","0"]' → list
+                            vals = json.loads(op)
                             yes = float(vals[0])
                         except Exception:
                             yes = 0.0
-            rows.append({
-                "key": ev.get("slug") or ev.get("id"),
-                "title": title[:80],
-                "cat": cat,
-                "vol": vol_total,
-                "liq": 0.0,
-                "yes": yes,
-                "kind": "event",
-            })
+            key = ev.get("slug") or ev.get("id")
+            if key and key not in seen_keys:
+                seen_keys.add(key)
+                rows.append({
+                    "key": key,
+                    "title": title[:80],
+                    "cat": cat,
+                    "vol": vol_total,
+                    "liq": 0.0,
+                    "yes": yes,
+                    "kind": "event",
+                })
+
+    # Query 2: endDate ascending (untuk market up/down 5m/15m/hourly)
+    for page in range(1, 4):
+        try:
+            r = httpx.get("https://gamma-api.polymarket.com/events", params={
+                "closed": "false", "limit": 50, "page": page,
+                "order": "endDate", "ascending": "true"}, timeout=10)
+            data = r.json()
+            if not data:
+                break
+        except Exception:
+            break
+        for ev in data:
+            title = ev.get("title") or "?"
+            # Filter: hanya market up/down atau short-window
+            if not ("up or down" in title.lower() or "5 min" in title.lower()
+                    or "15 min" in title.lower() or "hourly" in title.lower()
+                    or "1 hour" in title.lower()):
+                continue
+            cat = norm(ev.get("category")) or classify(title)
+            if not cat or cat == "lainnya":
+                continue
+            markets = ev.get("markets") or []
+            vol_total = 0.0
+            yes = 0.0
+            for m in markets:
+                vol_total += float(m.get("volume24hr") or m.get("volumeNum") or 0)
+                if not yes:
+                    op = m.get("outcomePrices")
+                    if op:
+                        try:
+                            vals = json.loads(op)
+                            yes = float(vals[0])
+                        except Exception:
+                            yes = 0.0
+            key = ev.get("slug") or ev.get("id")
+            if key and key not in seen_keys:
+                seen_keys.add(key)
+                rows.append({
+                    "key": key,
+                    "title": title[:80],
+                    "cat": cat,
+                    "vol": vol_total,
+                    "liq": 0.0,
+                    "yes": yes,
+                    "kind": "event",
+                })
     return rows
 
 def _kalshi_events(creds):
-    """Ambil event Kalshi (judul lebih deskriptif dari market)."""
+    """Ambil event Kalshi (judul lebih deskriptif dari market) + series 15m/1h crypto."""
     base = (creds.get("base_url") or "").strip() or "https://api.elections.kalshi.com"
     rows = []
+    seen_keys = set()
+
+    # Query 1: events (original)
     try:
         r = httpx.get(base + "/trade-api/v2/events",
-                    #   params={"limit": 200, "status": "open"}, timeout=25)
                       params={"limit": 200, "status": "open"}, timeout=12)
         for ev in r.json().get("events", []):
             title = ev.get("title") or "?"
@@ -316,17 +370,44 @@ def _kalshi_events(creds):
             cat = classify_kalshi(title, tick)
             if not cat or cat == "lainnya":
                 continue
-            rows.append({
-                "key": tick,
-                "title": title[:80],
-                "cat": cat,
-                "vol": float(ev.get("volume") or 0),
-                "liq": float(ev.get("liquidity") or 0),
-                "yes": 0.0,            # event tidak punya YES tunggal
-                "kind": "event",
-            })
+            if tick and tick not in seen_keys:
+                seen_keys.add(tick)
+                rows.append({
+                    "key": tick,
+                    "title": title[:80],
+                    "cat": cat,
+                    "vol": float(ev.get("volume") or 0),
+                    "liq": float(ev.get("liquidity") or 0),
+                    "yes": 0.0,
+                    "kind": "event",
+                })
     except Exception:
         pass
+
+    # Query 2: series crypto short-window (KXBTC15M, KXETH15M, KXBTC1H, KXETH1H, KXSOL15M)
+    series_list = ["KXBTC15M", "KXETH15M", "KXBTC1H", "KXETH1H", "KXSOL15M", "KXSOL1H"]
+    for series in series_list:
+        try:
+            r = httpx.get(base + "/trade-api/v2/markets",
+                          params={"series_ticker": series, "status": "open", "limit": 20},
+                          timeout=10)
+            markets = r.json().get("markets") or []
+            for m in markets:
+                tick = m.get("ticker") or ""
+                title = m.get("title") or m.get("yes_sub_title") or "?"
+                if tick and tick not in seen_keys:
+                    seen_keys.add(tick)
+                    rows.append({
+                        "key": tick,
+                        "title": title[:80],
+                        "cat": "crypto",
+                        "vol": float(m.get("volume") or 0),
+                        "liq": float(m.get("open_interest") or 0),
+                        "yes": float(m.get("yes_ask") or m.get("last_price") or 0) / 100.0,
+                        "kind": "market",
+                    })
+        except Exception:
+            continue
     return rows
 
 FETCH = {"polymarket": _poly, "kalshi": _kalshi, "limitless": _limitless}
