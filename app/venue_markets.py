@@ -263,7 +263,7 @@ def _poly_events(creds):
     seen_keys = set()
     import time as _tc
     _cv = _CACHE.get("poly_events")
-    if _cv and _tc.time() - _cv[1] < 90:
+    if _cv and _tc.time() - _cv[1] < 120:
         return _cv[0]
 
     # Query 1: volume24hr desc (original, untuk market besar)
@@ -420,30 +420,28 @@ def _kalshi_events(creds):
             pass
         import time as _tk; _tk.sleep(1.5 * _att)
 
-    # Query 2: series crypto short-window (KXBTC15M, KXETH15M, KXBTC1H, KXETH1H, KXSOL15M)
-    series_list = ["KXBTC15M", "KXETH15M", "KXBTC1H", "KXETH1H", "KXSOL15M", "KXSOL1H"]
-    for series in series_list:
-        try:
-            r = httpx.get(base + "/trade-api/v2/markets",
-                          params={"series_ticker": series, "status": "open", "limit": 20},
-                          timeout=10)
-            markets = r.json().get("markets") or []
-            for m in markets:
-                tick = m.get("ticker") or ""
-                title = m.get("title") or m.get("yes_sub_title") or "?"
-                if tick and tick not in seen_keys:
-                    seen_keys.add(tick)
-                    rows.append({
-                        "key": tick,
-                        "title": title[:80],
-                        "cat": "crypto",
-                        "vol": float(m.get("volume") or 0),
-                        "liq": float(m.get("open_interest") or 0),
-                        "yes": float(m.get("yes_ask") or m.get("last_price") or 0) / 100.0,
-                        "kind": "market",
-                    })
-        except Exception:
-            continue
+    # Query 2: SATU panggilan markets + filter prefix series short-window (hemat rate-limit)
+    try:
+        r = httpx.get(base + "/trade-api/v2/markets",
+                      params={"status": "open", "limit": 500}, timeout=20)
+        for m in (r.json().get("markets") or []):
+            tick = m.get("ticker") or ""
+            if tick[:8] not in ("KXBTC15M", "KXETH15M", "KXSOL15M") and tick[:7] not in ("KXBTC1H", "KXETH1H", "KXSOL1H"):
+                continue
+            title = m.get("title") or m.get("yes_sub_title") or "?"
+            if tick and tick not in seen_keys:
+                seen_keys.add(tick)
+                rows.append({
+                    "key": tick,
+                    "title": title[:80],
+                    "cat": "crypto",
+                    "vol": float(m.get("volume") or 0),
+                    "liq": float(m.get("open_interest") or 0),
+                    "yes": float(m.get("yes_ask") or m.get("last_price") or 0) / 100.0,
+                    "kind": "market",
+                })
+    except Exception:
+        pass
     _CACHE["kalshi_events"] = (rows, _tc2.time())
     return rows
 

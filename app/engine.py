@@ -202,7 +202,7 @@ def _scan():
                 allr = FETCH[v](creds.get(v, {}))
             except Exception:
                 allr = []
-            rows[v] = [r for r in allr if r["cat"] in pairs[v]]
+            rows[v] = sorted((r for r in allr if r["cat"] in pairs[v]), key=lambda r: -(r.get("vol") or 0))[:150]
         L(f"fetch {v} → {len(rows[v])} event")
 
     t0 = time.time()
@@ -876,7 +876,7 @@ def status():
 #                 allr = FETCH[v](creds.get(v, {}))
 #             except Exception:
 #                 allr = []
-#             rows[v] = [r for r in allr if r["cat"] in pairs[v]]
+#             rows[v] = sorted((r for r in allr if r["cat"] in pairs[v]), key=lambda r: -(r.get("vol") or 0))[:150]
 #         L(f"fetch {v} → {len(rows[v])} event")
 
 #     t0 = time.time()
