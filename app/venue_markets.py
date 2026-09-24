@@ -271,6 +271,7 @@ def _poly_events(creds):
             data = r.json()
             if not data:
                 break
+            import time as _tw; _tw.sleep(0.4)
         except Exception:
             break
         for ev in data:
@@ -313,6 +314,7 @@ def _poly_events(creds):
             data = r.json()
             if not data:
                 break
+            import time as _tw; _tw.sleep(0.4)
         except Exception:
             break
         for ev in data:
@@ -321,6 +323,25 @@ def _poly_events(creds):
             if not ("up or down" in title.lower() or "5 min" in title.lower()
                     or "15 min" in title.lower() or "hourly" in title.lower()
                     or "1 hour" in title.lower()):
+                continue
+            import re as _re_w
+            from datetime import datetime as _dtw
+            end_ts = None
+            _mw = _re_w.search(r"([A-Z][a-z]+ \d{1,2}), (\d{1,2}:\d{2}[AP]M)-(\d{1,2}:\d{2}[AP]M) ET", title)
+            if _mw:
+                try:
+                    try:
+                        from zoneinfo import ZoneInfo as _ZI
+                        _tz = _ZI("America/New_York")
+                    except Exception:
+                        _tz = None
+                    _dt_end = _dtw.strptime(f"{_mw.group(1)} {_mw.group(3)}", "%B %d %I:%M%p")
+                    _dt_end = _dt_end.replace(year=_dtw.now().year, tzinfo=_tz)
+                    end_ts = int(_dt_end.timestamp())
+                except Exception:
+                    end_ts = None
+            import time as _tw2
+            if end_ts is not None and not (_tw2.time() < end_ts <= _tw2.time() + 7200):
                 continue
             cat = norm(ev.get("category")) or classify(title)
             if not cat or cat == "lainnya":
@@ -350,6 +371,7 @@ def _poly_events(creds):
                     "yes": yes,
                     "kind": "event",
                 })
+                rows[-1]["end_ts"] = end_ts
     return rows
 
 def _kalshi_events(creds):
@@ -361,7 +383,7 @@ def _kalshi_events(creds):
     # Query 1: events (original)
     try:
         r = httpx.get(base + "/trade-api/v2/events",
-                      params={"limit": 200, "status": "open"}, timeout=12)
+                      params={"limit": 200, "status": "open"}, timeout=18)
         for ev in r.json().get("events", []):
             title = ev.get("title") or "?"
             tick = ev.get("ticker") or ""

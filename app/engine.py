@@ -168,6 +168,10 @@ def _close_ts(title, now=None):
     return int(now // step) * step + step
 
 
+def _row_end(row):
+    return row.get("end_ts") or _close_ts(row.get("title"))
+
+
 def _scan():
     """Scan semua venue, cari match lintas venue dengan rumus YES+NO arbitrage."""
     cfg = load_config()
@@ -191,7 +195,7 @@ def _scan():
         except Exception:
             ev_rows = []
         ev_rows = [r for r in ev_rows if r["cat"] in pairs[v]]
-        if len(ev_rows) >= 5:
+        if len(ev_rows) >= 1:
             rows[v] = ev_rows
         else:
             try:
@@ -220,7 +224,7 @@ def _scan():
                     kb = crypto_key(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
-                        same = bool(ka and kb and ka == kb and _close_ts(ma["title"]) == _close_ts(mb["title"]))
+                        same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb))
                     else:
                         same = s >= 0.65
 
@@ -865,7 +869,7 @@ def status():
 #         except Exception:
 #             ev_rows = []
 #         ev_rows = [r for r in ev_rows if r["cat"] in pairs[v]]
-#         if len(ev_rows) >= 5:
+#         if len(ev_rows) >= 1:
 #             rows[v] = ev_rows
 #         else:
 #             try:
@@ -897,7 +901,7 @@ def status():
 
 #                     s = sim(ma["title"], mb["title"])
 #                     if ma["cat"] == "crypto":
-#                         same = bool(ka and kb and ka == kb and _close_ts(ma["title"]) == _close_ts(mb["title"]))   # crypto wajib kunci struktural sama
+#                         same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb))   # crypto wajib kunci struktural sama
 #                     else:
 #                         same = s >= 0.5
                         
