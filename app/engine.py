@@ -490,6 +490,9 @@ def _loop():
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
                 if m["pi"] <= 0 or m["pi"] > 0.10:
                     continue
+                # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
+                if m.get("direction") not in ("YES_NO", "NO_YES"):
+                    continue
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
                     leg_a_side = m.get("leg_a_side", "YES")
