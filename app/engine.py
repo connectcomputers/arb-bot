@@ -192,6 +192,21 @@ def _ckey(title):
     return None
 
 
+def _wstep(title):
+    s = (title or "").lower()
+    if "5 min" in s or "5-min" in s:
+        return 300
+    if "15 min" in s or "15-min" in s:
+        return 900
+    if "hourly" in s or "1 hour" in s:
+        return 3600
+    if "daily" in s or "24 hour" in s:
+        return 86400
+    if "weekly" in s:
+        return 7 * 86400
+    return None
+
+
 def _row_end(row):
     return row.get("end_ts") or _close_ts(row.get("title"))
 
@@ -253,7 +268,7 @@ def _scan():
                     kb = _ckey(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
-                        same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb))
+                        same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
                     else:
                         same = s >= 0.65
 
@@ -303,7 +318,7 @@ def _scan():
                         gross = round(spread, 4)
 
                     # Pagar anti false-match (Π > 20% = pasti salah pasang)
-                    if pi > 0.20:
+                    if pi > 0.10:
                         L(f"SKIP Π terlalu tinggi {pi*100:.1f}¢: "
                           f"{ma['title'][:28]} ↔ {mb['title'][:28]}")
                         continue
@@ -473,7 +488,7 @@ def _loop():
             added = 0
             for m in st["matches"]:
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
-                if m["pi"] <= 0 or m["pi"] > 0.20:
+                if m["pi"] <= 0 or m["pi"] > 0.10:
                     continue
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
@@ -931,7 +946,7 @@ def status():
 
 #                     s = sim(ma["title"], mb["title"])
 #                     if ma["cat"] == "crypto":
-#                         same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb))   # crypto wajib kunci struktural sama
+#                         same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))   # crypto wajib kunci struktural sama
 #                     else:
 #                         same = s >= 0.5
                         
