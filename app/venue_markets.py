@@ -231,6 +231,10 @@ def _kalshi(creds):
 #     } for m in seen.values()]
 
 def _limitless(creds):
+    import time as _tl
+    _cvl = _CACHE.get("limitless")
+    if _cvl and _tl.time() - _cvl[1] < 180:
+        return _cvl[0]
     seen = {}
     for sort in (None, "newest", "ending_soon"):
         for page in (1, 2, 3, 4):
