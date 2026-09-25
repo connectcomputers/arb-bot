@@ -175,9 +175,21 @@ _CKSYN = {"btc": "bitcoin", "eth": "ethereum", "sol": "solana", "doge": "dogecoi
           "xrp": "ripple", "bnb": "binance", "bch": "bitcoin-cash", "ltc": "litecoin"}
 
 
+_CKPAT = (("bitcoin", "bitcoin"), ("btc", "bitcoin"), ("ethereum", "ethereum"), ("eth", "ethereum"),
+          ("solana", "solana"), ("sol", "solana"), ("dogecoin", "dogecoin"), ("doge", "dogecoin"),
+          ("xrp", "ripple"), ("bnb", "binance"), ("litecoin", "litecoin"), ("ltc", "litecoin"))
+
+
 def _ckey(title):
     k = crypto_key(title)
-    return _CKSYN.get(k, k) if k else None
+    if k:
+        return _CKSYN.get(k, k)
+    import re as _rek
+    s = (title or "").lower()
+    for pat, canon in _CKPAT:
+        if _rek.search(r"\b" + pat + r"\b", s):
+            return canon
+    return None
 
 
 def _row_end(row):
