@@ -472,7 +472,8 @@ def _loop():
 
             added = 0
             for m in st["matches"]:
-                if m["pi"] < minp:
+                # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
+                if m["pi"] <= 0 or m["pi"] > 0.20:
                     continue
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
