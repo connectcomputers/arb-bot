@@ -441,7 +441,7 @@ setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
   </label>
   <label style="font-size:11px">Dari: <input type="date" id="rekFrom" style="font-size:11px"></label>
   <label style="font-size:11px">Sampai: <input type="date" id="rekTo" style="font-size:11px"></label>
-  <button id="rekDownload" style="font-size:11px;padding:2px 8px">⬇ Download CSV</button>
+  <button id="rekDownload" style="font-size:11px;padding:2px 8px">⬇ Download CSV</button> <button id="rekScopeBtn" style="font-size:11px;padding:2px 8px">🕘 Lihat Riwayat</button>
   <span id="rekCount" style="font-size:10px;color:#64748b"></span>
 </div>
 <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
@@ -538,7 +538,7 @@ setInterval(loadRecon, 60000);  // refresh tiap menit
 
 <script>
 function loadPnl(){
-  fetch('/api/pnl').then(r=>r.json()).then(d=>{
+  fetch('/api/pnl?scope=' + (window.__rekScope || 'today')).then(r=>r.json()).then(d=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
     let h = '<strong>💹 P/L Resolve-Based:</strong> ';
@@ -736,6 +736,24 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
       window.location.href = '/api/report.csv?from=' + from + '&to=' + to;
     });
   }
+})();
+</script>
+
+<script>
+(function(){
+  const map = {today:'today', week:'7d', month:'30d', all:'all'};
+  const sel = document.getElementById('rekFilter');
+  const btn = document.getElementById('rekScopeBtn');
+  if (sel) sel.addEventListener('change', () => {
+    window.__rekScope = map[sel.value] || 'today';
+    if (btn) btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini';
+    if (window.loadRecon) loadRecon();
+  });
+  if (btn) btn.addEventListener('click', () => {
+    window.__rekScope = (window.__rekScope === 'today') ? 'all' : 'today';
+    btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini';
+    if (window.loadRecon) loadRecon();
+  });
 })();
 </script>
 </body></html>

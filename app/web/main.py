@@ -684,8 +684,19 @@ def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str =
     else:
         _f2, _t2v = from_date, to_date
     trades = _filter_trades_by_date(trades, _f2 or None, _t2v or None)
+    from datetime import datetime as _dtN, timedelta as _tdN
+    _today = _dtN.now().strftime("%Y-%m-%d")
+    _cut = {"today": _today,
+            "7d": (_dtN.now() - _tdN(days=7)).strftime("%Y-%m-%d"),
+            "30d": (_dtN.now() - _tdN(days=30)).strftime("%Y-%m-%d"),
+            "all": "0000-00-00"}.get(scope, _today)
+    trades_all = trades
+    trades = [t for t in trades if (t.get("ts") or "")[:10] >= _cut]
+
     real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
     paper_trades = [t for t in trades if t.get("mode") == "paper"]
+    real_all = [t for t in trades_all if t.get("mode") in ("real-auto", "real-micro")]
+    paper_all = [t for t in trades_all if t.get("mode") == "paper"]
     
     by_venue = {}
     for t in real_trades:
@@ -701,7 +712,11 @@ def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str =
         "trades_paper": len(paper_trades),
         "spend_today": spend.get("amount", 0),
         "by_venue": by_venue,
-        "recent_trades": real_trades[-10:]
+        "recent_trades": real_trades[-10:],
+        "scope": scope,
+        "trades_real_all": len(real_all),
+        "trades_paper_all": len(paper_all),
+        "recent_trades_all": real_all[-10:]
     }
 
 
@@ -743,7 +758,7 @@ async def api_baseline_set(request: Request):
 
 
 @app.get("/api/pnl")
-def api_pnl():
+def api_pnl(scope: str = "today"):
     """P/L resolve-based: per venue + harian/mingguan/bulanan."""
     from datetime import datetime, timedelta
     try:
@@ -755,6 +770,13 @@ def api_pnl():
     positions = load_positions()
     resolved = [x for x in positions if x.get("resolved")]
     active = [x for x in positions if not x.get("resolved")]
+
+    from datetime import datetime as _dtP, timedelta as _tdP
+    _cutp = {"today": _dtP.now().strftime("%Y-%m-%d"),
+             "7d": (_dtP.now() - _tdP(days=7)).strftime("%Y-%m-%d"),
+             "30d": (_dtP.now() - _tdP(days=30)).strftime("%Y-%m-%d"),
+             "all": "0000-00-00"}.get(scope, _dtP.now().strftime("%Y-%m-%d"))
+    resolved_scoped = [x for x in resolved if (x.get("resolved_ts") or "")[:10] >= _cutp]
 
     pnl_by_venue = {}
     for x in positions:
