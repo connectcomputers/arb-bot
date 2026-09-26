@@ -513,6 +513,21 @@ def index(request: Request):
         "recent_settlements": recent_settlements,
     })
 
+def _is_expired_worthless(h, today):
+    val = None
+    for k in ("value_usd", "usd_value", "value", "current_value", "portfolio_usd"):
+        if h.get(k) is not None:
+            try: val = float(h.get(k) or 0)
+            except Exception: val = None
+            break
+    end = None
+    for k in ("end_date", "endDate", "end_ts", "expiry", "close_time"):
+        v = h.get(k)
+        if v:
+            end = str(v)[:10]; break
+    return bool(val == 0 and end and end < today)
+
+
 @app.get("/api/venue-feed")
 def venue_feed(scope: str = "all"):
     cfg = load_config()          # ← TAMBAHKAN BARIS INI
@@ -536,8 +551,11 @@ def venue_feed(scope: str = "all"):
     _out_venues = []
     for v, s in cfg["venues"].items():
         _holds = get_positions(v, creds.get(v, {})) if s.get("valid") else []
-        if scope == "today" and v not in _venues_with_today:
-            _holds = []
+        if scope == "today":
+            if v not in _venues_with_today:
+                _holds = []
+            else:
+                _holds = [h for h in _holds if not _is_expired_worthless(h, _tdy)]
         _out_venues.append({
         "venue": v,
         "valid": bool(s.get("valid")),

@@ -551,10 +551,10 @@ function loadPnl(){
          ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) +
          ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) +
          ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
-    h += '<br><span style="font-size:12px">Posisi resolve " + ((window.__rekScope||"today")==="today" ? "(hari ini): " : "(semua): ") + "' + d.resolved_count +
+    h += '<br><span style="font-size:12px">Posisi resolve ${(window.__rekScope||'today')==='today' ? '(hari ini): ' : '(semua): '}' + d.resolved_count +
          ' · Posisi aktif: ' + d.active_count + '</span>';
     if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">" + ((window.__rekScope||"today")==="today" ? "Rincian per venue (hari ini):" : "Rincian per venue (sejak baseline):") + "';
+      h += '<br><span style="font-size:12px">${(window.__rekScope||'today')==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):'}';
       for (const [v, r] of Object.entries(d.by_venue_period)){
         h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) +
              ' · mingguan $' + (r.week||0).toFixed(2) +
@@ -620,7 +620,7 @@ function loadUnrealized(){
   fetch('/api/unrealized').then(function(r){return r.json();}).then(function(d){
     var el = document.getElementById('unrealized-content');
     if(!el) return;
-    var h = '<strong>💼 " + ((window.__rekScope||"today")==="today" ? "Posisi Aktif (hari ini):" : "Posisi Aktif (unrealized, lintas hari):") + "</strong>';
+    var h = '<strong>💼 ${(window.__rekScope||'today')==='today' ? 'Posisi Aktif (hari ini):' : '💼 Posisi Aktif (unrealized, lintas hari):'}</strong>';
     var any = false;
     for (var v in d){
       (d[v]||[]).forEach(function(x){
