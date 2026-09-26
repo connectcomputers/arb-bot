@@ -205,6 +205,57 @@ def engine_reset_spend():
     engine._write(st)
     return {"ok": True, "message": "cap harian direset (spend=$0.00)"}
 
+@app.get("/api/report.csv")
+def api_report_csv(from_date: str = "", to_date: str = ""):
+    """Export CSV: trades + resolutions, filter by date range (YYYY-MM-DD)."""
+    from fastapi.responses import StreamingResponse
+    import io, csv, json, pathlib as _pl
+    from datetime import datetime as _dt
+    live = json.loads(_pl.Path("data/live_state.json").read_text()) if _pl.Path("data/live_state.json").exists() else {}
+    trades = live.get("trades") or []
+    positions = live.get("positions") or []
+    # Filter by date
+    def _in_range(ts_str):
+        if not from_date and not to_date:
+            return True
+        try:
+            d = _dt.fromisoformat(ts_str.replace("Z","")).date()
+        except Exception:
+            return False
+        if from_date:
+            try:
+                if d < _dt.fromisoformat(from_date).date():
+                    return False
+            except Exception:
+                pass
+        if to_date:
+            try:
+                if d > _dt.fromisoformat(to_date).date():
+                    return False
+            except Exception:
+                pass
+        return True
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["section","ts","mode","venue","side","price","size","pi","title","resolved","pnl"])
+    for t_ in trades:
+        ts = t_.get("ts","")
+        if not _in_range(ts): continue
+        w.writerow(["trade", ts, t_.get("mode",""), ",".join(t_.get("venues") or []),
+                    t_.get("side",""), t_.get("price"), t_.get("size"), t_.get("pi"),
+                    t_.get("title","")[:60], "", ""])
+    for p_ in positions:
+        ts = p_.get("resolved_ts") or p_.get("ts","")
+        if not _in_range(ts): continue
+        w.writerow(["resolution", ts, "", p_.get("venue",""), p_.get("direction",""),
+                    p_.get("buy_price"), p_.get("size"), "",
+                    (p_.get("market_id") or "")[:60], p_.get("resolved"), p_.get("pnl")])
+    buf.seek(0)
+    fname = f"arb_report_{from_date or 'all'}_to_{to_date or 'all'}.csv"
+    return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
 @app.get("/api/saldo")
 def api_saldo():
     """Endpoint saldo real-time semua venue."""
