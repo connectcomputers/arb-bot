@@ -514,15 +514,36 @@ def index(request: Request):
     })
 
 @app.get("/api/venue-feed")
-def venue_feed():
+def venue_feed(scope: str = "all"):
     cfg = load_config()          # ← TAMBAHKAN BARIS INI
     creds = load_creds()
-    return {"venues": [{
+    from datetime import datetime as _dtV
+    _tdy = _dtV.now().strftime("%Y-%m-%d")
+    _venues_with_today = set()
+    try:
+        import json as _jv
+        from pathlib import Path as _Pv
+        _st = _jv.loads(_Pv("data/live_state.json").read_text())
+        for _tr in (_st.get("trades") or []):
+            if (_tr.get("ts") or "")[:10] == _tdy:
+                _venues_with_today.update(_tr.get("venues") or [])
+        from app.position_manager import load_positions as _lp
+        for _pos in _lp():
+            if (_pos.get("ts") or "")[:10] == _tdy:
+                _venues_with_today.add(_pos.get("venue"))
+    except Exception:
+        pass
+    _out_venues = []
+    for v, s in cfg["venues"].items():
+        _holds = get_positions(v, creds.get(v, {})) if s.get("valid") else []
+        if scope == "today" and v not in _venues_with_today:
+            _holds = []
+        _out_venues.append({
         "venue": v,
         "valid": bool(s.get("valid")),
         "cats": (cfg.get("pairs") or {}).get(v, []),
-        "positions": get_positions(v, creds.get(v, {})) if s.get("valid") else [],
-    } for v, s in cfg["venues"].items()]}
+        "positions": _holds})
+    return {"venues": _out_venues}
 
 @app.post("/api/engine/start")
 async def engine_start(request: Request):
@@ -804,16 +825,33 @@ def api_pnl(scope: str = "today"):
         if d >= week0: row["week"] = round(row["week"] + x.get("pnl", 0), 2)
         if d >= month0: row["month"] = round(row["month"] + x.get("pnl", 0), 2)
     pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today)
+
+    # Scope harian: counts & rincian & periode-per-venue只显示 hari ini bila scope=today
+    resolved_today = [x for x in resolved if dk(x.get("resolved_ts")) == today]
+    active_today = [x for x in active if (x.get("ts") or "")[:10] == today]
+    if scope == "today":
+        resolved_count_out = len(resolved_today)
+        active_count_out = len(active_today)
+        by_venue_out = {v: {"count": d.get("count", 0), "invested": d.get("invested", 0),
+                            "pnl_realized": (per.get(v) or {}).get("today", 0.0),
+                            "active": d.get("active", 0)}
+                        for v, d in pnl_by_venue.items()}
+        per = {v: {"today": r.get("today", 0.0), "week": 0.0, "month": 0.0, "total": r.get("today", 0.0)}
+               for v, r in per.items()}
+    else:
+        resolved_count_out = len(resolved)
+        active_count_out = len(active)
+        by_venue_out = pnl_by_venue
     pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
     pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
 
     return {
-        "by_venue": pnl_by_venue,
+        "by_venue": by_venue_out,
         "by_period": {"today": round(pt, 2), "week": round(pw, 2),
                       "month": round(pm, 2)},
         "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
-        "resolved_count": len(resolved),
-        "active_count": len(active),
+        "resolved_count": resolved_count_out,
+        "active_count": active_count_out,
         "positions": positions[-20:],
         "by_venue_period": per,
     }
