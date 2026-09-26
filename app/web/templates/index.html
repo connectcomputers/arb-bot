@@ -430,7 +430,21 @@ setInterval(()=>{
 setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
 </script>
 <div id="reconciliation" style="margin-top:24px;padding:16px;background:#0b1220;border:1px solid #1e293b;border-radius:8px">
-  <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+  <label style="font-size:11px">Filter:
+    <select id="rekFilter" style="font-size:11px">
+      <option value="all">Semua</option>
+      <option value="today" selected>Hari ini</option>
+      <option value="week">7 hari</option>
+      <option value="month">30 hari</option>
+    </select>
+  </label>
+  <label style="font-size:11px">Dari: <input type="date" id="rekFrom" style="font-size:11px"></label>
+  <label style="font-size:11px">Sampai: <input type="date" id="rekTo" style="font-size:11px"></label>
+  <button id="rekDownload" style="font-size:11px;padding:2px 8px">⬇ Download CSV</button>
+  <span id="rekCount" style="font-size:10px;color:#64748b"></span>
+</div>
+<h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
   <div style="font-size:11px;color:#64748b;margin-bottom:8px">Catatan: "Order Real" = riwayat transaksi (audit trail), bukan posisi aktif saat ini.</div>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
@@ -675,5 +689,61 @@ function loadOpenOrders(){
   }).catch(function(){});
 }
 loadOpenOrders(); setInterval(loadOpenOrders, 30000);
+</script>
+
+<script>
+// Filter rekonsiliasi harian (default: hari ini)
+(function(){
+  const today = new Date().toISOString().slice(0,10);
+  const fromEl = document.getElementById('rekFrom');
+  const toEl = document.getElementById('rekTo');
+  const filterEl = document.getElementById('rekFilter');
+  const dlBtn = document.getElementById('rekDownload');
+  const cntEl = document.getElementById('rekCount');
+  if (fromEl) fromEl.value = today;
+  if (toEl) toEl.value = today;
+
+  function applyFilter(){
+    const mode = filterEl.value;
+    const now = new Date();
+    let from = fromEl.value, to = toEl.value;
+    if (mode === 'today'){ from = to = today; }
+    else if (mode === 'week'){
+      const d = new Date(now); d.setDate(d.getDate()-7);
+      from = d.toISOString().slice(0,10); to = today;
+    } else if (mode === 'month'){
+      const d = new Date(now); d.setDate(d.getDate()-30);
+      from = d.toISOString().slice(0,10); to = today;
+    }
+    if (fromEl) fromEl.value = from;
+    if (toEl) toEl.value = to;
+    // Filter baris EKSEKUSI berdasarkan tanggal (prefix YYYY-MM-DD)
+    const rows = document.querySelectorAll('#execTable tr, [data-exec-row]');
+    let shown = 0;
+    rows.forEach(r => {
+      const txt = r.innerText || '';
+      const m = txt.match(/(\d{4}-\d{2}-\d{2})/);
+      if (!m){ r.style.display = ''; return; }
+      const d = m[1];
+      if (from && d < from) r.style.display = 'none';
+      else if (to && d > to) r.style.display = 'none';
+      else { r.style.display = ''; shown++; }
+    });
+    if (cntEl) cntEl.textContent = shown + ' baris ditampilkan';
+  }
+  if (filterEl){
+    filterEl.addEventListener('change', applyFilter);
+    if (fromEl) fromEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); });
+    if (toEl) toEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); });
+    setTimeout(applyFilter, 500);
+  }
+  if (dlBtn){
+    dlBtn.addEventListener('click', ()=>{
+      const from = fromEl.value || '';
+      const to = toEl.value || '';
+      window.location.href = '/api/report.csv?from=' + from + '&to=' + to;
+    });
+  }
+})();
 </script>
 </body></html>
