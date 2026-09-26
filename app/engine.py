@@ -488,7 +488,7 @@ def _loop():
             added = 0
             for m in st["matches"]:
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
-                if m["pi"] <= 0 or m["pi"] > 0.10:
+                if m["pi"] <= float(lim.get("min_profit", 0)) / 100 or m["pi"] > 0.10:
                     continue
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
                 if m.get("direction") not in ("YES_NO", "NO_YES"):
