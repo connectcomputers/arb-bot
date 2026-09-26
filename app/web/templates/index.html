@@ -477,12 +477,12 @@ window.loadRecon = function(scope){
     
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
-    html += '<div style="font-size:11px;color:#64748b">Order Real (sejak baseline)</div>';
-    html += '<div style="font-size:18px;font-weight:600">' + d.trades_real + '</div>';
+    html += '<div style="font-size:11px;color:#64748b">Order Real ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + (scope==='today' ? (d.trades_real_today||d.trades_real) : d.trades_real) + (d.trades_real_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_real_all+'</div>' : '') + '</div>';
     html += '</div>';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
-    html += '<div style="font-size:11px;color:#64748b">Order Paper (sejak baseline)</div>';
-    html += '<div style="font-size:18px;font-weight:600">' + d.trades_paper + '</div>';
+    html += '<div style="font-size:11px;color:#64748b">Order Paper ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + (scope==='today' ? (d.trades_paper_today||d.trades_paper) : d.trades_paper) + (d.trades_paper_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_paper_all+'</div>' : '') + '</div>';
     html += '</div>';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
     html += '<div style="font-size:11px;color:#64748b">Spend Hari Ini (hari ini)</div>';
@@ -490,7 +490,7 @@ window.loadRecon = function(scope){
     html += '</div></div>';
     
     if (Object.keys(d.by_venue).length > 0) {
-      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue (sejak baseline):</strong><br>';
+      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + ':</strong><br>';
       for (const [v, data] of Object.entries(d.by_venue)) {
         html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
                 ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
@@ -499,13 +499,15 @@ window.loadRecon = function(scope){
     }
     
     if (d.recent_trades.length > 0) {
-      html += '<div><strong>10 Trade Terakhir (lintas hari, 10 terbaru):</strong><br>';
+      html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>';
       d.recent_trades.slice().reverse().forEach(t => {
         html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + 
                 t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + 
                 ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
       });
       html += '</div>';
+    } else if (scope==='today') {
+      html += '<div><em style="color:#64748b">belum ada trade real hari ini</em></div>';
     }
     
     el.innerHTML = html;
@@ -551,10 +553,10 @@ function loadPnl(){
          ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) +
          ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) +
          ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
-    h += '<br><span style="font-size:12px">Posisi resolve ${(window.__rekScope||'today')==='today' ? '(hari ini): ' : '(semua): '}' + d.resolved_count +
+    h += '<br><span style="font-size:12px">Posisi resolve ' + ((window.__rekScope||'today')==='today' ? '(hari ini): ' : '(semua): ') + d.resolved_count +
          ' · Posisi aktif: ' + d.active_count + '</span>';
     if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">${(window.__rekScope||'today')==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):'}';
+      h += '<br><span style="font-size:12px">' + ((window.__rekScope||'today')==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):');
       for (const [v, r] of Object.entries(d.by_venue_period)){
         h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) +
              ' · mingguan $' + (r.week||0).toFixed(2) +
