@@ -471,20 +471,20 @@ function loadRecon(){
     
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
-    html += '<div style="font-size:11px;color:#64748b">Order Real</div>';
+    html += '<div style="font-size:11px;color:#64748b">Order Real (sejak baseline)</div>';
     html += '<div style="font-size:18px;font-weight:600">' + d.trades_real + '</div>';
     html += '</div>';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
-    html += '<div style="font-size:11px;color:#64748b">Order Paper</div>';
+    html += '<div style="font-size:11px;color:#64748b">Order Paper (sejak baseline)</div>';
     html += '<div style="font-size:18px;font-weight:600">' + d.trades_paper + '</div>';
     html += '</div>';
     html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
-    html += '<div style="font-size:11px;color:#64748b">Spend Hari Ini</div>';
+    html += '<div style="font-size:11px;color:#64748b">Spend Hari Ini (hari ini)</div>';
     html += '<div style="font-size:18px;font-weight:600">$' + d.spend_today.toFixed(2) + '</div>';
     html += '</div></div>';
     
     if (Object.keys(d.by_venue).length > 0) {
-      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue:</strong><br>';
+      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue (sejak baseline):</strong><br>';
       for (const [v, data] of Object.entries(d.by_venue)) {
         html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
                 ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
@@ -493,7 +493,7 @@ function loadRecon(){
     }
     
     if (d.recent_trades.length > 0) {
-      html += '<div><strong>10 Trade Terakhir:</strong><br>';
+      html += '<div><strong>10 Trade Terakhir (lintas hari, 10 terbaru):</strong><br>';
       d.recent_trades.slice().reverse().forEach(t => {
         html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + 
                 t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + 
@@ -548,7 +548,7 @@ function loadPnl(){
     h += '<br><span style="font-size:12px">Posisi resolve: ' + d.resolved_count +
          ' · Posisi aktif: ' + d.active_count + '</span>';
     if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">Rincian per venue:';
+      h += '<br><span style="font-size:12px">Rincian per venue (sejak baseline):';
       for (const [v, r] of Object.entries(d.by_venue_period)){
         h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) +
              ' · mingguan $' + (r.week||0).toFixed(2) +
@@ -614,7 +614,7 @@ function loadUnrealized(){
   fetch('/api/unrealized').then(function(r){return r.json();}).then(function(d){
     var el = document.getElementById('unrealized-content');
     if(!el) return;
-    var h = '<strong>💼 Posisi Aktif (Unrealized P/L):</strong>';
+    var h = '<strong>💼 Posisi Aktif (unrealized, lintas hari):</strong>';
     var any = false;
     for (var v in d){
       (d[v]||[]).forEach(function(x){
