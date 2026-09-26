@@ -489,14 +489,16 @@ window.loadRecon = function(scope){
     html += '<div style="font-size:18px;font-weight:600">$' + d.spend_today.toFixed(2) + '</div>';
     html += '</div></div>';
     
+    html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + ':</strong><br>';
     if (Object.keys(d.by_venue).length > 0) {
-      html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + ':</strong><br>';
       for (const [v, data] of Object.entries(d.by_venue)) {
         html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
                 ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
       }
-      html += '</div>';
+    } else {
+      html += '<em style="color:#64748b">belum ada order ' + (scope==='today' ? 'hari ini' : 'sejak baseline') + '</em>';
     }
+    html += '</div>';
     
     if (d.recent_trades.length > 0) {
       html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>';
@@ -506,8 +508,9 @@ window.loadRecon = function(scope){
                 ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
       });
       html += '</div>';
-    } else if (scope==='today') {
-      html += '<div><em style="color:#64748b">belum ada trade real hari ini</em></div>';
+    } else {
+      html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>' +
+              '<em style="color:#64748b">belum ada trade ' + (scope==='today' ? 'real hari ini' : 'tercatat') + '</em></div>';
     }
     
     el.innerHTML = html;
@@ -761,6 +764,21 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
     btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini';
     if (window.loadRecon) loadRecon();
   });
+})();
+</script>
+
+<script>
+(function(){
+  function fillUnrealizedEmpty(){
+    var el = document.getElementById('unrealized-content');
+    if (!el) return;
+    if ((el.textContent || '').trim().length > 0) return;
+    var today = (window.__rekScope || 'today') === 'today';
+    el.innerHTML = '<strong>\u{1F4BC} Posisi Aktif ' + (today ? '(hari ini):' : '(unrealized, lintas hari):') + '</strong><br>' +
+                   '<em style="color:#64748b">tidak ada posisi aktif ' + (today ? 'hari ini' : 'saat ini') + '</em>';
+  }
+  setInterval(fillUnrealizedEmpty, 2500);
+  setTimeout(fillUnrealizedEmpty, 1200);
 })();
 </script>
 </body></html>
