@@ -162,6 +162,11 @@ async function kill(){ if(confirm('Kill switch: hentikan & kunci eksekusi?')){
   await fetch('/api/engine/kill',{method:'POST'}); poll(); setTimeout(()=>{location.href='/setup';},800); } }
 function tab(a){ document.getElementById('audit').style.display = a?'block':'none'; }
 const it = s => `<div class="item">${s}</div>`;
+function _todayVps(s){
+  var e = s.epoch || (s.info||{}).epoch;
+  return e ? new Date(e*1000).toISOString().slice(0,10)
+           : new Date().toISOString().slice(0,10);
+}
 
     // <h4>Match + Π</h4>
     // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
@@ -326,7 +331,7 @@ async function poll(){
 
     <h4>Eksekusi</h4>
     <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
-    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue))
+    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s))
       .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('')
       || '<div class="muted">belum ada</div>'}
     </div>
