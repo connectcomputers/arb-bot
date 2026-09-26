@@ -451,8 +451,9 @@ setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
   <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
 </div>
 <script>
-function loadRecon(){
-  fetch('/api/reconciliation').then(r=>r.json()).then(d=>{
+window.loadRecon = function(scope){
+    scope = scope || 'today';
+  fetch('/api/reconciliation?scope=' + scope).then(r=>r.json()).then(d=>{
     const el = document.getElementById('recon-content');
     const baseline = d.baseline.saldo || {};
     const ts = d.baseline.ts ? new Date(d.baseline.ts).toLocaleString('id-ID') : 'belum diset';
@@ -708,38 +709,19 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
     const now = new Date();
     let from = fromEl.value, to = toEl.value;
     if (mode === 'today'){ from = to = today; }
-    else if (mode === 'week'){
-      const d = new Date(now); d.setDate(d.getDate()-7);
-      from = d.toISOString().slice(0,10); to = today;
-    } else if (mode === 'month'){
-      const d = new Date(now); d.setDate(d.getDate()-30);
-      from = d.toISOString().slice(0,10); to = today;
-    }
+    else if (mode === 'week'){ const d=new Date(now); d.setDate(d.getDate()-7); from=d.toISOString().slice(0,10); to=today; }
+    else if (mode === 'month'){ const d=new Date(now); d.setDate(d.getDate()-30); from=d.toISOString().slice(0,10); to=today; }
     if (fromEl) fromEl.value = from;
     if (toEl) toEl.value = to;
-    
-    // Filter SEMUA elemen yang mungkin berisi trade/eksekusi
-    // Strategi: cari semua <div>, <tr>, <li> yang mengandung timestamp trade
-    const allElems = document.querySelectorAll('div, tr, li, span');
-    let shown = 0, hidden = 0;
-    allElems.forEach(el => {
-      const txt = el.innerText || el.textContent || '';
-      // Cari pola timestamp: YYYY-MM-DDTHH:MM:SS atau YYYY-MM-DD HH:MM:SS atau hanya HH:MM:SS
-      const mFull = txt.match(/(\d{4}-\d{2}-\d{2})/);
-      const mTime = txt.match(/(\d{2}:\d{2}:\d{2})/);
-      
-      if (mFull) {
-        const d = mFull[1];
-        if (from && d < from) { el.style.display = 'none'; hidden++; }
-        else if (to && d > to) { el.style.display = 'none'; hidden++; }
-        else { el.style.display = ''; shown++; }
-      } else if (mTime && mode === 'today') {
-        // Jika hanya ada waktu (tanpa tanggal), anggap hari ini -> tampilkan
-        el.style.display = '';
-        shown++;
-      }
+    // AMAN: hanya sembunyikan elemen DAUN ber-atribut data-ts; kontainer tidak pernah disentuh
+    let shown=0, hidden=0;
+    document.querySelectorAll('[data-ts]').forEach(el=>{
+      const d = (el.getAttribute('data-ts')||'').slice(0,10);
+      if ((from && d<from) || (to && d>to)) { el.style.display='none'; hidden++; }
+      else { el.style.display=''; shown++; }
     });
-    if (cntEl) cntEl.textContent = shown + ' ditampilkan, ' + hidden + ' disembunyikan';
+    if (cntEl) cntEl.textContent = shown+' baris sesuai rentang'+(hidden?(', '+hidden+' riwayat disembunyikan (Filter=Semua untuk lihat)'):'');
+    if (window.loadRecon) window.loadRecon(mode);
   }
   if (filterEl){
     filterEl.addEventListener('change', applyFilter);

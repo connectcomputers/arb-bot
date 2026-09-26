@@ -205,6 +205,30 @@ def engine_reset_spend():
     engine._write(st)
     return {"ok": True, "message": "cap harian direset (spend=$0.00)"}
 
+
+def _filter_trades_by_date(trades, from_date=None, to_date=None):
+    """Filter trades list by date range (YYYY-MM-DD)."""
+    from datetime import datetime as _dt
+    out = []
+    for tr in trades:
+        ts = tr.get("ts", "")
+        if not ts: continue
+        try:
+            d = _dt.fromisoformat(ts.replace("Z","")).date()
+        except Exception:
+            continue
+        if from_date:
+            try:
+                if d < _dt.fromisoformat(from_date).date(): continue
+            except Exception: pass
+        if to_date:
+            try:
+                if d > _dt.fromisoformat(to_date).date(): continue
+            except Exception: pass
+        out.append(tr)
+    return out
+
+
 @app.get("/api/report.csv")
 def api_report_csv(from_date: str = "", to_date: str = ""):
     """Export CSV: trades + resolutions, filter by date range (YYYY-MM-DD)."""
@@ -631,7 +655,7 @@ def kill_switch():
 
 
 @app.get("/api/reconciliation")
-def api_reconciliation():
+def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str = ""):
     """Data rekonsiliasi: saldo baseline vs sekarang + trades."""
     from app.baseline import load_baseline
     import json
@@ -647,6 +671,19 @@ def api_reconciliation():
         trades = []
         spend = {}
     
+    from datetime import datetime as _dt2, timedelta as _td2
+    _now2 = _dt2.now(); _today2 = _now2.strftime("%Y-%m-%d")
+    if scope == "today":
+        _f2, _t2v = _today2, _today2
+    elif scope == "week":
+        _f2, _t2v = (_now2 - _td2(days=7)).strftime("%Y-%m-%d"), _today2
+    elif scope == "month":
+        _f2, _t2v = (_now2 - _td2(days=30)).strftime("%Y-%m-%d"), _today2
+    elif scope == "all":
+        _f2, _t2v = "", ""
+    else:
+        _f2, _t2v = from_date, to_date
+    trades = _filter_trades_by_date(trades, _f2 or None, _t2v or None)
     real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
     paper_trades = [t for t in trades if t.get("mode") == "paper"]
     
@@ -659,12 +696,39 @@ def api_reconciliation():
     
     return {
         "baseline": baseline,
+        "scope": scope,
         "trades_real": len(real_trades),
         "trades_paper": len(paper_trades),
         "spend_today": spend.get("amount", 0),
         "by_venue": by_venue,
         "recent_trades": real_trades[-10:]
     }
+
+
+@app.get("/api/executions")
+def api_executions(scope: str = "today", from_date: str = "", to_date: str = ""):
+    """Daftar eksekusi per venue, default hari ini (untuk kolom EKSEKUSI)."""
+    import json as _j3
+    from pathlib import Path as _P3
+    from datetime import datetime as _dt3, timedelta as _td3
+    try:
+        trades = _j3.loads(_P3("data/live_state.json").read_text()).get("trades", [])
+    except Exception:
+        trades = []
+    _n3 = _dt3.now(); _tdy = _n3.strftime("%Y-%m-%d")
+    if scope == "today": _f3, _t3 = _tdy, _tdy
+    elif scope == "week": _f3, _t3 = (_n3 - _td3(days=7)).strftime("%Y-%m-%d"), _tdy
+    elif scope == "month": _f3, _t3 = (_n3 - _td3(days=30)).strftime("%Y-%m-%d"), _tdy
+    elif scope == "all": _f3, _t3 = "", ""
+    else: _f3, _t3 = from_date, to_date
+    trades = _filter_trades_by_date(trades, _f3 or None, _t3 or None)
+    per = {}
+    for tr in trades:
+        for v in (tr.get("venues") or []):
+            per.setdefault(v, []).append({
+                "ts": tr.get("ts"), "mode": tr.get("mode"), "pi": tr.get("pi"),
+                "size": tr.get("size"), "title": tr.get("title", "")})
+    return {"scope": scope, "venues": per}
 
 @app.post("/api/baseline/set")
 async def api_baseline_set(request: Request):
