@@ -717,19 +717,29 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
     }
     if (fromEl) fromEl.value = from;
     if (toEl) toEl.value = to;
-    // Filter baris EKSEKUSI berdasarkan tanggal (prefix YYYY-MM-DD)
-    const rows = document.querySelectorAll('#execTable tr, [data-exec-row]');
-    let shown = 0;
-    rows.forEach(r => {
-      const txt = r.innerText || '';
-      const m = txt.match(/(\d{4}-\d{2}-\d{2})/);
-      if (!m){ r.style.display = ''; return; }
-      const d = m[1];
-      if (from && d < from) r.style.display = 'none';
-      else if (to && d > to) r.style.display = 'none';
-      else { r.style.display = ''; shown++; }
+    
+    // Filter SEMUA elemen yang mungkin berisi trade/eksekusi
+    // Strategi: cari semua <div>, <tr>, <li> yang mengandung timestamp trade
+    const allElems = document.querySelectorAll('div, tr, li, span');
+    let shown = 0, hidden = 0;
+    allElems.forEach(el => {
+      const txt = el.innerText || el.textContent || '';
+      // Cari pola timestamp: YYYY-MM-DDTHH:MM:SS atau YYYY-MM-DD HH:MM:SS atau hanya HH:MM:SS
+      const mFull = txt.match(/(\d{4}-\d{2}-\d{2})/);
+      const mTime = txt.match(/(\d{2}:\d{2}:\d{2})/);
+      
+      if (mFull) {
+        const d = mFull[1];
+        if (from && d < from) { el.style.display = 'none'; hidden++; }
+        else if (to && d > to) { el.style.display = 'none'; hidden++; }
+        else { el.style.display = ''; shown++; }
+      } else if (mTime && mode === 'today') {
+        // Jika hanya ada waktu (tanpa tanggal), anggap hari ini -> tampilkan
+        el.style.display = '';
+        shown++;
+      }
     });
-    if (cntEl) cntEl.textContent = shown + ' baris ditampilkan';
+    if (cntEl) cntEl.textContent = shown + ' ditampilkan, ' + hidden + ' disembunyikan';
   }
   if (filterEl){
     filterEl.addEventListener('change', applyFilter);
