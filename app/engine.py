@@ -211,6 +211,9 @@ def _row_end(row):
     return row.get("end_ts") or _close_ts(row.get("title"))
 
 
+_PAIR_COUNT = {}
+
+
 def _scan():
     """Scan semua venue, cari match lintas venue dengan rumus YES+NO arbitrage."""
     cfg = load_config()
@@ -493,6 +496,13 @@ def _loop():
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
                 if m.get("direction") not in ("YES_NO", "NO_YES"):
                     continue
+                # X: batas max open-posisi per pasangan (anti overtrade, permintaan Robert)
+                _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
+                _maxop = int(float(lim.get("max_op_per_pair", 2)))
+                if _PAIR_COUNT.get(_pkey, 0) >= _maxop:
+                    _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
+                    continue
+                _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
                     leg_a_side = m.get("leg_a_side", "YES")
