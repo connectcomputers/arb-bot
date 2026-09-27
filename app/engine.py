@@ -272,6 +272,21 @@ def _scan():
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
                         same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
+                        if (not same) and (ma["cat"] != mb["cat"] or _wstep(ma["title"]) != _wstep(mb["title"])):
+                            _ea, _eb = _row_end(ma), _row_end(mb)
+                            if _ea and _ea == _eb:
+                                _ya, _yb = ma.get("yes") or 0.0, mb.get("yes") or 0.0
+                                if 0.01 < _ya < 0.99 and 0.01 < _yb < 0.99:
+                                    _f2 = FEES[a] + FEES[b]
+                                    _mc2 = min(_ya + (1 - _yb), (1 - _ya) + _yb)
+                                    _pi2 = round((1.0 - _mc2) - _f2, 4)
+                                    if -0.30 < _pi2 < 0.30 and sum(1 for _x in matches if _x.get("locked") is False) < 6:
+                                        matches.append({"a": a, "b": b, "cat": ma["cat"] + "+" + mb["cat"],
+                                                        "ta": ma["title"], "tb": mb["title"],
+                                                        "gross": round(1.0 - _mc2, 4), "fees": _f2,
+                                                        "pi": _pi2, "direction": "CROSS_CAT",
+                                                        "leg_a_side": "YES", "leg_b_side": "NO",
+                                                        "locked": False})
                     else:
                         same = s >= 0.65
 

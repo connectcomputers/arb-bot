@@ -236,8 +236,8 @@ def _limitless(creds):
     if _cvl and _tl.time() - _cvl[1] < 180:
         return _cvl[0]
     seen = {}
-    for sort in (None, "newest", "ending_soon"):
-        for page in (1, 2, 3, 4):
+    for sort in ("ending_soon",):
+        for page in (1, 2, 3):
             params = {"limit": 25, "page": page}
             if sort:
                 params["sortBy"] = sort
@@ -271,7 +271,7 @@ def _poly_events(creds):
         return _cv[0]
 
     # Query 1: volume24hr desc (original, untuk market besar)
-    for page in range(1, 6):
+    for page in range(1, 3):
         try:
             r = httpx.get("https://gamma-api.polymarket.com/events", params={
                 "closed": "false", "limit": 50, "page": page,
@@ -441,7 +441,7 @@ def _kalshi_events(creds):
         import time as _tk; _tk.sleep(1.5 * _att)
 
     # Query 2: per-series (dengan cache 240s ini hanya ~6 panggilan per 4 menit)
-    for series in ("KXBTC15M", "KXETH15M", "KXSOL15M", "KXBTC1H", "KXETH1H", "KXSOL1H"):
+    for series in ("KXBTC15M", "KXETH15M", "KXSOL15M"):
         try:
             r = httpx.get(base + "/trade-api/v2/markets",
                           params={"series_ticker": series, "status": "open", "limit": 20},
