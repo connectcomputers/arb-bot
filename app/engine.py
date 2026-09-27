@@ -271,7 +271,7 @@ def _scan():
                     kb = _ckey(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
-                        same = bool(ka and kb and ka == kb and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
+                        same = bool(ka and kb and ka == kb and _row_end(ma) is not None and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
                         if (not same) and (ma["cat"] != mb["cat"] or _wstep(ma["title"]) != _wstep(mb["title"])):
                             _ea, _eb = _row_end(ma), _row_end(mb)
                             if _ea and _ea == _eb:

@@ -32,7 +32,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 <label>Modal per OP (USDC)<input id="modal_per_op" type="number" value="{{ limits.get('modal_per_op','') }}"></label>
 <label>SL (% pengaman posisi terbuka)<input id="sl" type="number" step="0.1" value="{{ limits.get('sl','') }}"></label>
 <label>TP (% ambil profit awal)<input id="tp" type="number" step="0.1" value="{{ limits.get('tp','') }}"></label>
-<label>Min profit per trade (USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}"></label>
+<label>Min profit per trade <span style="color:#64748b;font-size:10px">(aman: paper 1–2¢ · real terkunci 2–3¢ · cross-cat ber-flag ≥5¢)</span> (USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}"></label>
 <label>Rugi harian max (USDC, auto-stop)<input id="rugi_harian" type="number" value="{{ limits.get('rugi_harian','') }}"></label>
 <button id="save" disabled onclick="simpan()">Simpan Pengaturan Pair</button>
 <span id="notif" style="display:none;color:#86efac;margin-left:10px">
