@@ -503,6 +503,10 @@ def _loop():
                     _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
                     continue
                 _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
+                if m.get("locked") is False and not bool(lim.get("exec_unlocked", False)):
+                    continue
+                if m.get("locked") is False and m["pi"] < 0.05:
+                    continue
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
                     leg_a_side = m.get("leg_a_side", "YES")

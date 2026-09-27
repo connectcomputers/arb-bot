@@ -781,4 +781,37 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
   setTimeout(fillUnrealizedEmpty, 1200);
 })();
 </script>
+
+<script>
+(function(){
+  function fmtRow(m){
+    var tag = (m.locked === false) ? '⚠ cross-cat ' : '';
+    return '<div class="item" style="margin:2px 0">' + tag + '[' + m.cat + '] ' + m.a + ' \u2194 ' + m.b +
+           ' \u00b7 kotor ' + ((m.gross||0)*100).toFixed(1) + '\u00a2 \u2212 fee ' + ((m.fees||0)*100).toFixed(1) +
+           '\u00a2 = \u03a0 ' + ((m.pi||0)*100).toFixed(2) + '\u00a2<br>' +
+           '<span style="color:#64748b;font-size:10px">' + (m.ta||'') + ' \u2194 ' + (m.tb||'') + '</span></div>';
+  }
+  function refreshMatch(){
+    fetch('/api/engine/status').then(function(r){return r.json();}).then(function(s){
+      var ms = s.matches || [];
+      var heads = [];
+      document.querySelectorAll('h4,div,span').forEach(function(el){
+        if (el.children.length === 0 && /^match\s*\+\s*\u03a0/i.test((el.textContent||'').trim())) heads.push(el);
+      });
+      var venues = ['polymarket','kalshi','limitless'];
+      heads.forEach(function(h, i){
+        var box = h.nextElementSibling;
+        if (!box) return;
+        var v = venues[i] || '';
+        var rows = ms.filter(function(m){ return m.a === v || m.b === v; });
+        rows.sort(function(x,y){ return (y.pi||0) - (x.pi||0); });
+        box.innerHTML = rows.length ? rows.map(fmtRow).join('')
+                                    : '<div class="muted">belum ada kejadian yang sama</div>';
+      });
+    }).catch(function(){});
+  }
+  setInterval(refreshMatch, 15000);
+  setTimeout(refreshMatch, 3000);
+})();
+</script>
 </body></html>
