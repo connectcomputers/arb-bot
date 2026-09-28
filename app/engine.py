@@ -506,7 +506,7 @@ def _loop():
             added = 0
             for m in st["matches"]:
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
-                if m["pi"] <= float(lim.get("min_profit", 0)) / 100 or m["pi"] > 0.10:
+                if m["pi"] <= float(lim.get("min_profit", 0)) / 100 or m["pi"] > float(lim.get("pi_ceiling", 0.10)):
                     continue
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
                 if m.get("direction") not in ("YES_NO", "NO_YES"):
@@ -518,7 +518,7 @@ def _loop():
                     _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
                     continue
                 _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
-                if m.get("locked") is False and not bool(lim.get("exec_unlocked", False)):
+                if m.get("locked") is False and not (bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"):
                     continue
                 if m.get("locked") is False and m["pi"] < 0.05:
                     continue
