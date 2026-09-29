@@ -321,6 +321,28 @@ def limits(request: Request):
         "pairs": cfg.get("pairs", {}),
     })
 
+@app.get("/api/limits/flag")
+def api_limits_flag_get():
+    from app.config_store import load_config
+    c = load_config()["limits"]
+    return {k: c.get(k) for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit")}
+
+
+@app.post("/api/limits/flag")
+async def api_limits_flag(request: Request):
+    from app.config_store import load_config, save_config
+    try:
+        body = await request.json()
+        c = load_config()
+        for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit"):
+            if k in body:
+                c["limits"][k] = body[k]
+        save_config(c)
+        return {"ok": True, "limits": c["limits"]}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+
+
 @app.post("/api/limits")
 async def api_limits(request: Request):
     cfg = load_config()

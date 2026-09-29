@@ -506,10 +506,14 @@ def _loop():
             added = 0
             for m in st["matches"]:
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
-                if m["pi"] <= float(lim.get("min_profit", 0)) / 100 or m["pi"] > float(lim.get("pi_ceiling", 0.10)):
+                _floor = float(lim.get("min_profit", 0)) / 100
+                if bool(lim.get("use_pi_band", True)):
+                    _floor = max(_floor, 0.02)
+                if m["pi"] <= _floor or m["pi"] > float(lim.get("pi_ceiling", 0.10)):
+                    continue
                     continue
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
-                if m.get("direction") not in ("YES_NO", "NO_YES"):
+                if m.get("direction") not in ("YES_NO", "NO_YES", "CROSS_CAT"):
                     continue
                 # X: batas max open-posisi per pasangan (anti overtrade, permintaan Robert)
                 _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
