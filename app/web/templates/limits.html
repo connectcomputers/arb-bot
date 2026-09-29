@@ -32,13 +32,17 @@ button:disabled{opacity:.4;cursor:not-allowed}
 <label>Modal per OP (USDC)<input id="modal_per_op" type="number" value="{{ limits.get('modal_per_op','') }}"></label>
 <label>SL (% pengaman posisi terbuka)<input id="sl" type="number" step="0.1" value="{{ limits.get('sl','') }}"></label>
 <label>TP (% ambil profit awal)<input id="tp" type="number" step="0.1" value="{{ limits.get('tp','') }}"></label>
-<label>Min profit per trade <span style="color:#64748b;font-size:10px">(aman: paper 1–2¢ · real terkunci 2–3¢ · cross-cat ber-flag ≥5¢)</span> (USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}"></label>
-<label>Rugi harian max (USDC, auto-stop)<input id="rugi_harian" type="number" value="{{ limits.get('rugi_harian','') }}"></label>
-<div style="margin:12px 0;padding:10px;background:#1e293b;border-radius:6px">
-  <label style="font-size:12px"><input type="checkbox" id="flagBand"> Aktifkan batasan rentang Π 2¢–10¢ (bila TIDAK dicentang: eksekusi semua Π ≥ field Min profit)</label><br><br>
-  <label style="font-size:12px">Max OP per pasangan (anti overtrade): <input type="number" id="flagMaxOp" min="1" max="10" style="width:70px"></label>
-  <button id="flagSave" type="button" style="margin-left:10px;padding:6px 12px">Simpan Flag</button>
-  <span id="flagMsg" style="font-size:11px;color:#64748b"></span>
+<label>Min profit per trade <span style="color:#64748b;font-size:10px">(aman: paper 1–2¢ · real terkunci 2–3¢ · cross-cat ber-flag ≥5¢)</span> (USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}">
+<div style="margin:6px 0 10px 2px">
+  <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+    <input type="checkbox" id="flagBand" style="margin:0;width:14px;height:14px">
+    <span>Aktifkan batasan rentang Π 2¢–10¢ &nbsp;<span style="color:#64748b">(bila TIDAK dicentang: eksekusi semua Π ≥ field Min profit)</span></span>
+  </label>
+</div>
+<div style="margin:0 0 12px 2px;font-size:12px">
+  Max OP per pasangan (anti overtrade): <input type="number" id="flagMaxOp" min="1" max="10" style="width:64px">
+  <button id="flagSave" type="button" style="margin-left:8px;padding:5px 10px">Simpan Flag</button>
+  <span id="flagMsg" style="color:#64748b;font-size:11px"></span>
 </div>
 <script>
 fetch('/api/limits/flag').then(r=>r.json()).then(d=>{
@@ -52,6 +56,9 @@ document.getElementById('flagSave').addEventListener('click', ()=>{
   }).then(r=>r.json()).then(d=>{ document.getElementById('flagMsg').textContent = d.ok ? '✅ tersimpan' : '❌ '+d.message; });
 });
 </script>
+</label>
+<label>Rugi harian max (USDC, auto-stop)<input id="rugi_harian" type="number" value="{{ limits.get('rugi_harian','') }}"></label>
+
 <button id="save" disabled onclick="simpan()">Simpan Pengaturan Pair</button>
 <span id="notif" style="display:none;color:#86efac;margin-left:10px">
   ✅ Berhasil disimpan ke <code>data/trading_config.json</code></span>

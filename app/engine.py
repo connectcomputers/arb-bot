@@ -522,6 +522,10 @@ def _loop():
                     _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
                     continue
                 _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
+                # HH: tolak eksekusi bila snapshot quote terlalu tua (config quote_max_age_sec, 0=mati)
+                _maxage = float(lim.get("quote_max_age_sec", 20))
+                if _maxage > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > _maxage:
+                    continue
                 # DD: tolak eksekusi bila quote basi (scan > 20 detik lalu)
                 if time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > 20:
                     continue
