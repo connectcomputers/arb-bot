@@ -522,6 +522,9 @@ def _loop():
                     _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
                     continue
                 _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
+                # DD: tolak eksekusi bila quote basi (scan > 20 detik lalu)
+                if time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > 20:
+                    continue
                 if m.get("locked") is False and not (bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"):
                     continue
                 if m.get("locked") is False and m["pi"] < 0.05:
