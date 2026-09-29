@@ -526,9 +526,6 @@ def _loop():
                 _maxage = float(lim.get("quote_max_age_sec", 20))
                 if _maxage > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > _maxage:
                     continue
-                # DD: tolak eksekusi bila quote basi (scan > 20 detik lalu)
-                if time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > 20:
-                    continue
                 if m.get("locked") is False and not (bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"):
                     continue
                 if m.get("locked") is False and m["pi"] < 0.05:
