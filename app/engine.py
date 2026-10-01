@@ -511,7 +511,6 @@ def _loop():
                     _floor = max(_floor, 0.02)
                 if m["pi"] <= _floor or m["pi"] > float(lim.get("pi_ceiling", 0.10)):
                     continue
-                    continue
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
                 if m.get("direction") not in ("YES_NO", "NO_YES", "CROSS_CAT"):
                     continue
