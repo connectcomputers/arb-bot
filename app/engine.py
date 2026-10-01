@@ -504,6 +504,15 @@ def _loop():
                 sp = {"today": today, "amount": 0.0}
 
             added = 0
+            try:
+                import json as _jov, pathlib as _pov
+                _ovf = _pov.Path("data/limits_flags.json")
+                if _ovf.exists():
+                    for _k, _v in _jov.loads(_ovf.read_text()).items():
+                        if _v is not None:
+                            lim[_k] = _v
+            except Exception:
+                pass
             for m in st["matches"]:
                 # Filter eksekusi: Π > 0 (positif) DAN Π ≤ 0.20 (anti false-match)
                 _floor = float(lim.get("min_profit", 0)) / 100
