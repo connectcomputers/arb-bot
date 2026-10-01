@@ -537,7 +537,10 @@ def _loop():
                     continue
                 if m.get("locked") is False and not (bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"):
                     continue
-                if m.get("locked") is False and m["pi"] < 0.05:
+                _ufloor = 0.05
+                if st.get("mode") == "paper":
+                    _ufloor = float(lim.get("unlocked_floor", 0.05))
+                if m.get("locked") is False and m["pi"] < _ufloor:
                     continue
                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
                     # MODE ARBITRASE KLASIK: YES+NO (dua kaki berlawanan arah)
