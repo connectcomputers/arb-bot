@@ -333,12 +333,15 @@ async def api_limits_flag(request: Request):
     from app.config_store import load_config, save_config
     try:
         body = await request.json()
-        c = load_config()
-        for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit"):
+        import json as _jf2, pathlib as _pf2
+        _fp = _pf2.Path("data/limits_flags.json")
+        cur = _jf2.loads(_fp.read_text()) if _fp.exists() else {}
+        for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "quote_max_age_sec"):
             if k in body:
-                c["limits"][k] = body[k]
-        save_config(c)
-        return {"ok": True, "limits": c["limits"]}
+                cur[k] = body[k]
+        _fp.write_text(_jf2.dumps(cur, indent=2))
+        from app.config_store import load_config as _lc2
+        return {"ok": True, "limits": _lc2()["limits"]}
     except Exception as e:
         return {"ok": False, "message": str(e)}
 

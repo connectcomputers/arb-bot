@@ -254,6 +254,13 @@ def load_config() -> dict:
         if key in saved:
             base[key] = saved[key]
 
+    try:
+        import json as _jf, pathlib as _pf
+        _ov = _pf.Path("data/limits_flags.json")
+        if _ov.exists():
+            _cfg["limits"].update(_jf.loads(_ov.read_text()))
+    except Exception:
+        pass
     return base
 
 
