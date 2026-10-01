@@ -523,13 +523,14 @@ def _loop():
                 # K: hanya arbitrase TERKUNCI (YES+NO berlawanan); tolak arah SPREAD
                 if m.get("direction") not in ("YES_NO", "NO_YES", "CROSS_CAT"):
                     continue
-                # X: batas max open-posisi per pasangan (anti overtrade, permintaan Robert)
-                _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
-                _maxop = int(float(lim.get("max_op_per_pair", 2)))
-                if _PAIR_COUNT.get(_pkey, 0) >= _maxop:
-                    _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
-                    continue
-                _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
+                # X: batas max open-posisi per pasangan (hanya untuk REAL; PAPER = unlimited)
+                if st.get("mode") == "real":
+                    _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
+                    _maxop = int(float(lim.get("max_op_per_pair", 2)))
+                    if _PAIR_COUNT.get(_pkey, 0) >= _maxop:
+                        _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
+                        continue
+                    _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
                 # HH: tolak eksekusi bila snapshot quote terlalu tua (config quote_max_age_sec, 0=mati)
                 _maxage = float(lim.get("quote_max_age_sec", 20))
                 if _maxage > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > _maxage:
