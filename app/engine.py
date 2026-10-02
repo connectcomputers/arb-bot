@@ -1,15 +1,6 @@
 # /app/engine.py
 """Engine S3: match lintas venue + Π, eksekusi PAPER. REAL = S4."""
 import json
-
-    """Tulis record trade ke file harian jsonl (audit utuh, tak terpotong buffer)."""
-    try:
-        import json as _j, time as _t, pathlib as _pl
-        _fp = _pl.Path("data/trades_%s.jsonl" % _t.strftime("%Y%m%d"))
-        with open(_fp, "a") as _f:
-            _f.write(_j.dumps(rec) + "\n")
-    except Exception:
-        pass
 import re
 import threading
 import time
