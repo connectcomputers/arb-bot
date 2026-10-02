@@ -598,7 +598,9 @@ def _loop():
                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
                         "mode": st.get("mode", "paper"),
                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op,
-                        "direction": m.get("direction", "SPREAD")})
+                        "direction": m.get("direction", "SPREAD"),
+                        "ta": (m.get("ta") or "")[:60], "tb": (m.get("tb") or "")[:60],
+                        "locked": m.get("locked", True)})
                     st["trades"] = st["trades"][-10000:]
                     added += 1
 
