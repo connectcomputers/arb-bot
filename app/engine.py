@@ -2,7 +2,6 @@
 """Engine S3: match lintas venue + Π, eksekusi PAPER. REAL = S4."""
 import json
 
-def _append_trade_file(rec):
     """Tulis record trade ke file harian jsonl (audit utuh, tak terpotong buffer)."""
     try:
         import json as _j, time as _t, pathlib as _pl
@@ -477,8 +476,7 @@ def _loop():
                         "size": 0.0,
                         "note": f"cancelled {count} stale GTC orders: {', '.join(str(x) for x in tickers[:3])}"
                     })
-                    st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+                    st["trades"] = st["trades"][-10000:]
                 elif err:
                     _log_loop(f"reaper: {err}")
                 else:
@@ -589,8 +587,7 @@ def _loop():
                                 "pi": m["pi"], "size": per_op,
                                 "direction": m.get("direction", "SPREAD"),
                                 "note": msg[:60]})
-                            st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+                            st["trades"] = st["trades"][-10000:]
                             added += 1
 
                             # Track posisi untuk auto-close + P/L
@@ -611,8 +608,7 @@ def _loop():
                         "mode": st.get("mode", "paper"),
                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op,
                         "direction": m.get("direction", "SPREAD")})
-                    st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+                    st["trades"] = st["trades"][-10000:]
                     added += 1
 
             st["spend"] = sp
@@ -1099,8 +1095,7 @@ def status():
 #                         "size": 0.0,
 #                         "note": f"cancelled {count} stale GTC orders: {', '.join(tickers[:3])}"
 #                     })
-#                     st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+#                     st["trades"] = st["trades"][-10000:]
 #                 elif err:
 #                     _log_loop(f"reaper: {err}")
                                     
@@ -1131,16 +1126,14 @@ def status():
 #                                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
 #                                 "mode": "real-auto", "venues": [venue],
 #                                 "pi": m["pi"], "size": per_op, "note": msg[:60]})
-#                             st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+#                             st["trades"] = st["trades"][-10000:]
 #                             added += 1
 #                 else:
 #                     st.setdefault("trades", []).append({
 #                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
 #                         "mode": st.get("mode", "paper"),
 #                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op})
-#                     st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+#                     st["trades"] = st["trades"][-10000:]
 #                     added += 1
 
 #             st["spend"] = sp
@@ -1295,8 +1288,7 @@ def status():
 #         st.setdefault("trades", []).append({
 #             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-micro",
 #             "venues": [venue], "pi": 0.0, "size": per_op, "note": msg[:60]})
-#         st["trades"] = st["trades"][-500:]
-                    _append_trade_file(st["trades"][-1])
+#         st["trades"] = st["trades"][-10000:]
 #         _write(st)
 #     return {"ok": ok, "message": msg}
 
