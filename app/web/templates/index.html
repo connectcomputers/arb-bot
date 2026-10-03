@@ -810,6 +810,31 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
       });
     }).catch(function(){});
   }
+  function refreshExec(){
+    fetch('/api/engine/status').then(function(r){return r.json();}).then(function(s){
+      var today = new Date(((s.info && s.info.epoch) || (Date.now()/1000)) * 1000).toISOString().slice(0,10);
+      var heads = [];
+      document.querySelectorAll('h4,div,span').forEach(function(el){
+        if (el.children.length === 0 && /^eksekusi$/i.test((el.textContent||'').trim())) heads.push(el);
+      });
+      var venues = ['polymarket','kalshi','limitless'];
+      heads.forEach(function(h, i){
+        var box = h.nextElementSibling;
+        if (!box) return;
+        var v = venues[i] || '';
+        var rows = (s.trades||[]).filter(function(t){
+          return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today;
+        }).slice().reverse();
+        box.innerHTML = rows.length ? rows.map(function(t){
+          return '<div class="item" style="margin:2px 0">' + (t.ts||'').slice(11,19) + ' · ' + t.mode +
+                 ' · Π=' + ((t.pi||0)*100).toFixed(2) + '¢ · $' + (t.size||'?') +
+                 (t.resolved ? ' · pnl ' + t.pnl : '') + '</div>';
+        }).join('') : '<div class="muted">belum ada</div>';
+      });
+    }).catch(function(){});
+  }
+  setInterval(refreshExec, 15000);
+  setTimeout(refreshExec, 3000);
   setInterval(refreshMatch, 15000);
   setTimeout(refreshMatch, 3000);
 })();
