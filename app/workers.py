@@ -1,52 +1,34 @@
-"""Workers S6: paper-resolver (wasit Binance) + negrisk Polymarket. Paper-only."""
+"""Workers S7: paper-resolver (ea/eb faktual + fallback judul) + negrisk. Paper-only."""
 import json, re, threading, time, urllib.request
-from datetime import datetime, timezone, timedelta
 
 _BIN = {"bitcoin": "BTCUSDT", "ethereum": "ETHUSDT", "solana": "SOLUSDT",
         "dogecoin": "DOGEUSDT", "bnb": "BNBUSDT", "xrp": "XRPUSDT",
         "litecoin": "LTCUSDT"}
 _INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
-_MONTHS = {"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,
-           "sep":9,"oct":10,"nov":11,"dec":12}
+
+def _range_step(title):
+    m = re.search(r"(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)", title or "", re.I)
+    if not m:
+        s = (title or "").lower()
+        for kw, st in (("5 min", 300), ("15 min", 900), ("hourly", 3600), ("daily", 86400)):
+            if kw in s:
+                return st
+        return 300
+    def mins(h, mi, ap):
+        h = int(h) % 12 + (0 if ap.upper() == "AM" else 12)
+        return h * 60 + int(mi)
+    d = mins(m.group(4), m.group(5), m.group(6)) - mins(m.group(1), m.group(2), m.group(3))
+    return abs(d) * 60 or 300
 
 def _step_of(title):
     s = (title or "").lower()
-    if "5 min" in s: return 300
-    if "15 min" in s: return 900
-    if "hourly" in s or "1 hour" in s: return 3600
-    if "daily" in s or "24 hour" in s: return 86400
-    if "weekly" in s: return 604800
+    for kw, st in (("5 min", 300), ("15 min", 900), ("hourly", 3600), ("daily", 86400), ("weekly", 604800)):
+        if kw in s:
+            return st
     return None
 
-def _et_window(title):
-    m = re.search(r"([a-zA-Z]+)\s+(\d{1,2}),\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)\s*ET",
-                  title or "", re.I)
-    if not m: return None, None
-    mo = _MONTHS.get(m.group(1).lower())
-    if not mo: return None, None
-    day = int(m.group(2))
-    def hh(h, ap):
-        h = int(h); ap = ap.upper()
-        if ap == "PM" and h != 12: h += 12
-        if ap == "AM" and h == 12: h = 0
-        return h
-    tz = timezone(timedelta(hours=-4))  # EDT (Mar-Nov); benar untuk Okt 2026
-    s = datetime(2026, mo, day, hh(m.group(3), m.group(5)), int(m.group(4)), tzinfo=tz)
-    e = datetime(2026, mo, day, hh(m.group(6), m.group(8)), int(m.group(7)), tzinfo=tz)
-    return int(s.timestamp()), int(e.timestamp())
-
-def _end_ts(title, entry_ts):
-    s, e = _et_window(title)
-    if e:
-        return e, (e - s if e > s else 300)
-    st = _step_of(title)
-    if st and entry_ts:
-        ts = int(datetime.fromisoformat(entry_ts).timestamp())
-        return (ts // st) * st + st, st
-    return None, None
-
-def _kline(symbol, interval, start_epoch):
-    url = (f"https://api.binance.com/api/v3/klines?symbol={symbol}"
+def _kline(sym, interval, start_epoch):
+    url = (f"https://api.binance.com/api/v3/klines?symbol={sym}"
            f"&interval={interval}&startTime={int(start_epoch)*1000}&limit=1")
     with urllib.request.urlopen(url, timeout=10) as r:
         k = json.loads(r.read())[0]
@@ -54,68 +36,89 @@ def _kline(symbol, interval, start_epoch):
 
 def _yes_win(asset, end, step):
     sym = _BIN.get(asset)
-    if not sym or step not in _INT: return None
+    if not sym or step not in _INT:
+        return None
     o, c = _kline(sym, _INT[step], end - step)
     return 1 if c > o else 0
 
-def _sides(direction):
-    if direction in ("YES_NO", "CROSS_CAT"): return "YES", "NO"
-    if direction == "NO_YES": return "NO", "YES"
+def _sides(d):
+    if d in ("YES_NO", "CROSS_CAT"): return "YES", "NO"
+    if d == "NO_YES": return "NO", "YES"
     return None, None
 
 def resolve_once():
     from app import engine as E
     st = E._read()
     now = time.time()
-    checked = changed = noend = future = noasset = 0
+    checked = done = noend = future = noasset = 0
     for t in st.get("trades", []):
-        if t.get("mode") != "paper" or t.get("resolved"): continue
+        if t.get("mode") != "paper" or t.get("resolved"):
+            continue
         ta, tb = t.get("ta") or "", t.get("tb") or ""
-        if not ta or not tb: continue
+        if not ta or not tb:
+            continue
         checked += 1
-        ea, sa = _end_ts(ta, t.get("ts"))
-        eb, sb = _end_ts(tb, t.get("ts"))
+        ea = t.get("ea") or None
+        eb = t.get("eb") or None
         if not ea or not eb:
-            noend += 1; continue
+            noend += 1
+            continue
         if now < max(ea, eb) + 120:
-            future += 1; continue
+            future += 1
+            continue
+        sa = _range_step(ta) if not _step_of(ta) else _step_of(ta)
+        sb = _step_of(tb) or _range_step(tb)
         wa = _yes_win(E._ckey(ta), ea, sa)
         wb = _yes_win(E._ckey(tb), eb, sb)
         if wa is None or wb is None:
-            noasset += 1; continue
+            noasset += 1
+            continue
         da, db = _sides(t.get("direction"))
-        if da is None: continue
+        if da is None:
+            continue
         pay = (wa if da == "YES" else 1 - wa) + (wb if db == "YES" else 1 - wb)
         pnl = round(float(t.get("size", 5)) * (pay - 1 + float(t.get("pi", 0))), 2)
-        t["resolved"] = True; t["pnl"] = pnl
+        t["resolved"] = True
+        t["pnl"] = pnl
         t["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        t["resolver"] = "binance-proxy"; t["outcomes"] = [wa, wb]
-        changed += 1
+        t["resolver"] = "binance-proxy"
+        t["outcomes"] = [wa, wb]
+        done += 1
         try:
             with open("data/paper_resolved.jsonl", "a") as f:
                 f.write(json.dumps(t) + "\n")
-        except Exception: pass
-    if changed: E._write(st)
-    E._log_loop(f"resolver: checked={checked} resolved={changed} noend={noend} future={future} noasset={noasset}")
-    return changed
+        except Exception:
+            pass
+    if done:
+        E._write(st)
+    E._log_loop(f"resolver: checked={checked} resolved={done} noend={noend} future={future} noasset={noasset}")
+    return done
 
 def negrisk_once():
     from app import engine as E
     from app.config_store import load_creds
     from app.venue_markets import _poly_events
-    try: rs = _poly_events(load_creds()["polymarket"])
-    except Exception: return 0
-    st = E._read(); done = st.setdefault("negrisk_done", {}); added = 0
+    try:
+        rs = _poly_events(load_creds()["polymarket"])
+    except Exception:
+        return 0
+    st = E._read()
+    donek = st.setdefault("negrisk_done", {})
+    added = 0
     for r in rs:
         ys = [y for y in (r.get("yes_list") or []) if 0.005 < y < 0.995]
-        if len(ys) < 3: continue
-        s = sum(ys); key = r["title"][:60]
-        if key in done: continue
-        side, profit = (None, 0.0)
+        if len(ys) < 3:
+            continue
+        s = sum(ys)
+        key = r["title"][:60]
+        if key in donek:
+            continue
+        side, profit = None, 0.0
         if s < 0.98: side, profit = "YES", 1.0 - s
         elif s > 1.02: side, profit = "NO", s - 1.0
-        if side is None: continue
-        done[key] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        if side is None:
+            continue
+        donek[key] = time.strftime("%Y-%m-%dT%H:%M:%S")
         st.setdefault("trades", []).append({
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "paper",
             "venues": ["polymarket"], "pi": round(profit, 4), "size": 5.0,
@@ -127,31 +130,27 @@ def negrisk_once():
         st["trades"] = st["trades"][-10000:]
         added += 1
         E._log_loop(f"negrisk paper: {side} S={s:.3f} {key[:40]}")
-    if added: E._write(st)
+    if added:
+        E._write(st)
     return added
 
-def _loop_resolve():
+def _loop(fn, every, tag):
     while True:
-        try: resolve_once()
+        try:
+            fn()
         except Exception as e:
             try:
-                from app import engine as E; E._log_loop(f"resolver error: {e}")
-            except Exception: pass
-        time.sleep(300)
-
-def _loop_negrisk():
-    while True:
-        try: negrisk_once()
-        except Exception as e:
-            try:
-                from app import engine as E; E._log_loop(f"negrisk error: {e}")
-            except Exception: pass
-        time.sleep(120)
+                from app import engine as E
+                E._log_loop(f"{tag} error: {e}")
+            except Exception:
+                pass
+        time.sleep(every)
 
 _started = False
 def start_workers():
     global _started
-    if _started: return
+    if _started:
+        return
     _started = True
-    threading.Thread(target=_loop_resolve, daemon=True).start()
-    threading.Thread(target=_loop_negrisk, daemon=True).start()
+    threading.Thread(target=_loop, args=(resolve_once, 300, "resolver"), daemon=True).start()
+    threading.Thread(target=_loop, args=(negrisk_once, 120, "negrisk"), daemon=True).start()
