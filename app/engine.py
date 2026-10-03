@@ -684,6 +684,11 @@ def start(mode):
     if not _wd_on:
         _wd_on = True
         threading.Thread(target=_watchdog, daemon=True).start()
+    try:
+        from app.workers import start_workers
+        start_workers()
+    except Exception as _we:
+        _log_loop(f"workers start failed: {_we}")
     _log_loop(f"engine started mode={mode}")
     return True, f"engine {mode} dimulai"
 
