@@ -286,7 +286,7 @@ def _scan():
                                                         "gross": round(1.0 - _mc2, 4), "fees": _f2,
                                                         "pi": _pi2, "direction": "CROSS_CAT",
                                                         "leg_a_side": "YES", "leg_b_side": "NO",
-                                                        "locked": False})
+                                                        "locked": False, "ea": _ea, "eb": _eb})
                     else:
                         same = s >= 0.65
 
@@ -349,7 +349,8 @@ def _scan():
                         "pi": pi,
                         "direction": direction,
                         "leg_a_side": leg_a_side,
-                        "leg_b_side": leg_b_side
+                        "leg_b_side": leg_b_side,
+                        "ea": _row_end(ma), "eb": _row_end(mb)
                     })
                     L(f"MATCH {a}×{b} {direction} Π {pi*100:.1f}¢: "
                       f"{ma['title'][:28]} ↔ {mb['title'][:28]}")
