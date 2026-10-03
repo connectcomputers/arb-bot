@@ -601,7 +601,8 @@ def _loop():
                         "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op,
                         "direction": m.get("direction", "SPREAD"),
                         "ta": (m.get("ta") or "")[:60], "tb": (m.get("tb") or "")[:60],
-                        "locked": m.get("locked", True)})
+                        "locked": m.get("locked", True),
+                        "ea": m.get("ea"), "eb": m.get("eb")})
                     st["trades"] = st["trades"][-10000:]
                     added += 1
 
