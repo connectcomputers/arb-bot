@@ -1,4 +1,4 @@
-"""Workers S9: paper-resolver (wasit Coinbase utama, Binance cadangan, cache) + negrisk. Paper-only."""
+"""Workers S10: resolver Coinbase + CoinGecko fallback + negrisk. Paper-only."""
 import json, re, threading, time, urllib.request
 
 _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
@@ -10,6 +10,9 @@ _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
 _CB = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD",
        "XRPUSDT": "XRP-USD", "DOGEUSDT": "DOGE-USD", "LTCUSDT": "LTC-USD",
        "ZECUSDT": "ZEC-USD"}
+_CG = {"BTCUSDT": "bitcoin", "ETHUSDT": "ethereum", "SOLUSDT": "solana",
+       "XRPUSDT": "ripple", "DOGEUSDT": "dogecoin", "LTCUSDT": "litecoin",
+       "ZECUSDT": "zcash", "BNBUSDT": "binancecoin", "HYPEUSDT": "hyperliquid"}
 _INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
 _CACHE = {}
 
@@ -46,6 +49,27 @@ def _http_json(url, timeout=10):
         return json.loads(r.read())
 
 
+def _cg_window(sym, step, start):
+    cid = _CG.get(sym)
+    if not cid or step not in (300, 900, 3600, 86400):
+        return None
+    key = ("CG", sym, step, start)
+    if key in _CACHE:
+        return _CACHE[key]
+    try:
+        url = (f"https://api.coingecko.com/api/v3/coins/{cid}/market_chart/range"
+               f"?vs_currency=usd&from={start - 60}&to={start + step + 60}")
+        prices = (_http_json(url, timeout=15) or {}).get("prices") or []
+        win = [px for tsms, px in prices if start * 1000 <= tsms <= (start + step) * 1000]
+        if len(win) < 2:
+            return None
+        val = (win[0], win[-1])
+        _CACHE[key] = val
+        return val
+    except Exception:
+        return None
+
+
 def _candle(sym, step, start):
     key = (sym, step, start)
     if key in _CACHE:
@@ -63,6 +87,8 @@ def _candle(sym, step, start):
                 val = (float(c[3]), float(c[4]))
         except Exception:
             val = None
+    if val is None:
+        val = _cg_window(sym, step, start)
     if val is None and step in _INT:
         try:
             k = _http_json(f"https://api.binance.com/api/v3/klines?symbol={sym}"
@@ -131,7 +157,7 @@ def resolve_once():
         t["resolved"] = True
         t["pnl"] = pnl
         t["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        t["resolver"] = "coinbase-primary"
+        t["resolver"] = "coinbase+coingecko"
         t["outcomes"] = [wa, wb]
         done += 1
         try:
