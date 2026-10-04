@@ -267,7 +267,7 @@ def api_report_csv(from_date: str = "", to_date: str = ""):
         if not _in_range(ts): continue
         w.writerow(["trade", ts, t_.get("mode",""), ",".join(t_.get("venues") or []),
                     t_.get("side",""), t_.get("price"), t_.get("size"), t_.get("pi"),
-                    t_.get("title","")[:60], "", ""])
+                    ((t_.get("ta") or "") + " | " + (t_.get("tb") or ""))[:60], str(t_.get("resolved", "")), str(t_.get("pnl", ""))])
     for p_ in positions:
         ts = p_.get("resolved_ts") or p_.get("ts","")
         if not _in_range(ts): continue
