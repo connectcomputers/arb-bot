@@ -536,8 +536,13 @@ def _loop():
                 _maxage = float(lim.get("quote_max_age_sec", 20))
                 if _maxage > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > _maxage:
                     continue
-                if m.get("locked") is False and not (bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"):
-                    continue
+                if m.get("locked") is False:
+                    _rc = bool(lim.get("real_crosscat", False)) and st.get("mode") == "real"
+                    _pk = bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"
+                    if not _pk and not _rc:
+                        continue
+                    if _rc and m["pi"] < float(lim.get("real_micro_floor", 0.05)):
+                        continue
                 _ufloor = 0.05
                 if st.get("mode") == "paper":
                     _ufloor = float(lim.get("unlocked_floor", 0.05))
@@ -555,11 +560,32 @@ def _loop():
                         return {_syn.get(w, w) for w in _re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2 and _syn.get(w, w) not in _stop}
                     if not (_toks(m.get("ta")) & _toks(m.get("tb"))):
                         continue
+                    try:
+                        _rq = {}
+                        for _v, _tt in ((m["a"], m["ta"]), (m["b"], m["tb"])):
+                            _rows = FETCH[_v](load_creds().get(_v, {}))
+                            _hit = next((r for r in _rows if r.get("title") == _tt), None)
+                            _rq[_v] = (_hit or {}).get("yes")
+                        if _rq.get(m["a"]) is None or _rq.get(m["b"]) is None:
+                            _log_loop("fort: requote gagal - skip")
+                            continue
+                        _y1, _y2 = float(_rq[m["a"]]), float(_rq[m["b"]])
+                        _c2 = min(_y1 + (1 - _y2), (1 - _y1) + _y2)
+                        _pi2 = (1.0 - _c2) - (FEES[m["a"]] + FEES[m["b"]])
+                        if _pi2 < float(lim.get("real_micro_floor", 0.05)) or _pi2 < m["pi"] - float(lim.get("requote_tol", 0.02)):
+                            _log_loop(f"fort: Pi requote {_pi2*100:.1f}c menyusut - skip")
+                            continue
+                    except Exception as _fe:
+                        _log_loop(f"fort: requote exception {_fe} - skip")
+                        continue
                     legs = [(m["a"], leg_a_side), (m["b"], leg_b_side)]
+                    _fills = []
+                    _abort = False
                     for venue, side in legs:
                         fn = EXEC.get(venue)
                         if not fn:
-                            continue
+                            _abort = True
+                            break
                         _usd = max(per_op, MIN_ORDER_USD.get(venue, 0.0))
                         try:
                             ok, msg = fn(load_creds().get(venue, {}), usd=_usd, side=side)
@@ -572,6 +598,7 @@ def _loop():
                         except Exception:
                             ok, msg = False, "executor exception"
                         if ok:
+                            _fills.append((venue, side, msg))
                             sp["amount"] = round(sp["amount"] + per_op, 2)
                             st.setdefault("trades", []).append({
                                 "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -594,6 +621,23 @@ def _loop():
                                 )
                             except ImportError:
                                 pass
+                        else:
+                            _log_loop(f"fort: leg {venue} gagal: {msg}")
+                            _abort = True
+                            break
+                    if _abort and _fills:
+                        _ov, _os, _om = _fills[0]
+                        _log_loop(f"fort: ORPHAN {_ov}/{_os} - coba tutup")
+                        try:
+                            if _ov == "kalshi":
+                                from app.executor import sell_kalshi
+                                _tick = (_om or "").split("::")[-1].strip()
+                                sell_kalshi(load_creds().get("kalshi", {}), _tick, _os, per_op)
+                                _log_loop(f"fort: orphan kalshi {_tick} ditutup")
+                            else:
+                                dispatch_alert("critical", f"ORPHAN {_ov} {_os} - tutup manual", "orphan")
+                        except Exception as _oe:
+                            dispatch_alert("critical", f"ORPHAN {_ov} {_os} ({_oe}) - tutup manual", "orphan")
                 else:
                     st.setdefault("trades", []).append({
                         "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
