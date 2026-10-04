@@ -331,7 +331,7 @@ async function poll(){
 
     <h4>Eksekusi</h4>
     <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
-    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)).slice().reverse()
+    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse()
       .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('')
       || '<div class="muted">belum ada</div>'}
     </div>
@@ -823,7 +823,7 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
         if (!box) return;
         var v = venues[i] || '';
         var rows = (s.trades||[]).filter(function(t){
-          return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today;
+          return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today && (t.mode||'').indexOf(s.mode === 'real' ? 'real' : 'paper') === 0;
         }).slice().reverse();
         box.innerHTML = rows.length ? rows.map(function(t){
           return '<div class="item" style="margin:2px 0">' + (t.ts||'').slice(11,19) + ' · ' + t.mode +
