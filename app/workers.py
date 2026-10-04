@@ -1,9 +1,20 @@
 """Workers S7: paper-resolver (ea/eb faktual + fallback judul) + negrisk. Paper-only."""
 import json, re, threading, time, urllib.request
 
-_BIN = {"bitcoin": "BTCUSDT", "ethereum": "ETHUSDT", "solana": "SOLUSDT",
-        "dogecoin": "DOGEUSDT", "bnb": "BNBUSDT", "xrp": "XRPUSDT",
-        "litecoin": "LTCUSDT"}
+_SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
+        ("dogecoin", "DOGEUSDT"), ("hyperliquid", "HYPEUSDT"), ("zcash", "ZECUSDT"),
+        ("litecoin", "LTCUSDT"), ("binance", "BNBUSDT"), ("ripple", "XRPUSDT"),
+        ("eth", "ETHUSDT"), ("btc", "BTCUSDT"), ("sol", "SOLUSDT"),
+        ("doge", "DOGEUSDT"), ("hype", "HYPEUSDT"), ("zec", "ZECUSDT"),
+        ("ltc", "LTCUSDT"), ("bnb", "BNUSDT".replace("BNUSDT", "BNBUSDT")), ("xrp", "XRPUSDT")]
+
+
+def _sym_of(title):
+    s = (title or "").lower()
+    for kw, sym in _SYM:
+        if re.search(r"\b" + kw + r"\b", s):
+            return sym
+    return None
 _INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
 
 def _range_step(title):
@@ -34,8 +45,7 @@ def _kline(sym, interval, start_epoch):
         k = json.loads(r.read())[0]
     return float(k[1]), float(k[4])
 
-def _yes_win(asset, end, step):
-    sym = _BIN.get(asset)
+def _yes_win(sym, end, step):
     if not sym or step not in _INT:
         return None
     o, c = _kline(sym, _INT[step], end - step)
@@ -68,8 +78,8 @@ def resolve_once():
             continue
         sa = _range_step(ta) if not _step_of(ta) else _step_of(ta)
         sb = _step_of(tb) or _range_step(tb)
-        wa = _yes_win(E._ckey(ta), ea, sa)
-        wb = _yes_win(E._ckey(tb), eb, sb)
+        wa = _yes_win(_sym_of(ta), ea, sa)
+        wb = _yes_win(_sym_of(tb), eb, sb)
         if wa is None or wb is None:
             noasset += 1
             continue
