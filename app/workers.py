@@ -1,4 +1,4 @@
-"""Workers S8: paper-resolver (wasit Binance, peta simbol kanonikal) + negrisk Polymarket. Paper-only."""
+"""Workers S9: paper-resolver (wasit Coinbase utama, Binance cadangan, cache) + negrisk. Paper-only."""
 import json, re, threading, time, urllib.request
 
 _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
@@ -7,7 +7,11 @@ _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
         ("eth", "ETHUSDT"), ("btc", "BTCUSDT"), ("sol", "SOLUSDT"),
         ("doge", "DOGEUSDT"), ("hype", "HYPEUSDT"), ("zec", "ZECUSDT"),
         ("ltc", "LTCUSDT"), ("bnb", "BNBUSDT"), ("xrp", "XRPUSDT")]
+_CB = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD",
+       "XRPUSDT": "XRP-USD", "DOGEUSDT": "DOGE-USD", "LTCUSDT": "LTC-USD",
+       "ZECUSDT": "ZEC-USD"}
 _INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
+_CACHE = {}
 
 
 def _sym_of(title):
@@ -37,22 +41,47 @@ def _range_step(title):
     return abs(d) * 60 or 300
 
 
-def _kline(sym, interval, start_epoch):
-    url = (f"https://api.binance.com/api/v3/klines?symbol={sym}"
-           f"&interval={interval}&startTime={int(start_epoch)*1000}&limit=1")
-    with urllib.request.urlopen(url, timeout=10) as r:
-        k = json.loads(r.read())[0]
-    return float(k[1]), float(k[4])
+def _http_json(url, timeout=10):
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def _candle(sym, step, start):
+    key = (sym, step, start)
+    if key in _CACHE:
+        return _CACHE[key]
+    val = None
+    pid = _CB.get(sym)
+    if pid and step in (300, 900, 3600, 86400):
+        try:
+            i1 = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(start))
+            i2 = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(start + step))
+            data = _http_json(f"https://api.exchange.coinbase.com/products/{pid}/candles"
+                              f"?granularity={step}&start={i1}&end={i2}")
+            if data:
+                c = data[0]
+                val = (float(c[3]), float(c[4]))
+        except Exception:
+            val = None
+    if val is None and step in _INT:
+        try:
+            k = _http_json(f"https://api.binance.com/api/v3/klines?symbol={sym}"
+                           f"&interval={_INT[step]}&startTime={start*1000}&limit=1")[0]
+            val = (float(k[1]), float(k[4]))
+        except Exception:
+            val = None
+    if val is not None:
+        _CACHE[key] = val
+    return val
 
 
 def _yes_win(sym, end, step):
-    if not sym or step not in _INT:
+    if not sym or not step:
         return None
-    try:
-        o, c = _kline(sym, _INT[step], end - step)
-    except Exception:
+    oc = _candle(sym, step, end - step)
+    if not oc:
         return None
-    return 1 if c > o else 0
+    return 1 if oc[1] > oc[0] else 0
 
 
 def _sides(direction):
@@ -65,9 +94,11 @@ def _sides(direction):
 
 def resolve_once():
     from app import engine as E
+    t0 = time.time()
     st = E._read()
     now = time.time()
-    checked = done = noend = future = noasset = 0
+    cutoff = now - 3 * 86400
+    checked = done = noend = future = noasset = old = 0
     for t in st.get("trades", []):
         if t.get("mode") != "paper" or t.get("resolved"):
             continue
@@ -78,6 +109,9 @@ def resolve_once():
         ea, eb = t.get("ea"), t.get("eb")
         if not ea or not eb:
             noend += 1
+            continue
+        if max(ea, eb) < cutoff:
+            old += 1
             continue
         if now < max(ea, eb) + 120:
             future += 1
@@ -97,7 +131,7 @@ def resolve_once():
         t["resolved"] = True
         t["pnl"] = pnl
         t["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        t["resolver"] = "binance-proxy"
+        t["resolver"] = "coinbase-primary"
         t["outcomes"] = [wa, wb]
         done += 1
         try:
@@ -107,7 +141,8 @@ def resolve_once():
             pass
     if done:
         E._write(st)
-    E._log_loop(f"resolver: checked={checked} resolved={done} noend={noend} future={future} noasset={noasset}")
+    E._log_loop(f"resolver: checked={checked} resolved={done} noend={noend} future={future} "
+                f"noasset={noasset} old={old} sec={round(time.time()-t0,1)}")
     return done
 
 
@@ -175,5 +210,5 @@ def start_workers():
     if _started:
         return
     _started = True
-    threading.Thread(target=_loop, args=(resolve_once, 300, "resolver"), daemon=True).start()
+    threading.Thread(target=_loop, args=(resolve_once, 120, "resolver"), daemon=True).start()
     threading.Thread(target=_loop, args=(negrisk_once, 120, "negrisk"), daemon=True).start()
