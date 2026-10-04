@@ -822,6 +822,33 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
         var box = h.nextElementSibling;
         if (!box) return;
         var v = venues[i] || '';
+        var pid = 'panel-' + i;
+        var pan = document.getElementById(pid);
+        if (!pan) {
+          pan = document.createElement('div'); pan.id = pid;
+          pan.className = 'item muted';
+          pan.style.cssText = 'margin:4px 0;padding:6px;border-left:3px solid #2c7;font-size:11px';
+          box.parentNode.insertBefore(pan, box);
+        }
+        var tr2 = s.trades || [];
+        var pap = tr2.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('paper')===0; });
+        var res2 = pap.filter(function(t){ return t.resolved; });
+        var pn2 = res2.map(function(t){ return t.pnl||0; });
+        var mean2 = pn2.length ? (pn2.reduce(function(a,b){return a+b;},0)/pn2.length) : 0;
+        var win2 = pn2.length ? Math.round(100*pn2.filter(function(x){return x>0;}).length/pn2.length) : 0;
+        var ms2 = s.matches || [];
+        var lk2 = ms2.filter(function(m){ return m.locked && m.pi>=0.03; }).length;
+        var xc2 = ms2.filter(function(m){ return m.locked===false && m.pi>=0.05; }).length;
+        var age2 = (s.info&&s.info.epoch)? Math.max(0, Math.round(Date.now()/1000 - s.info.epoch)) : -1;
+        var real2 = tr2.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('real')===0; }).length;
+        var why2 = [];
+        if ((s.mode||'')!=='real') { why2.push('mode aktif '+(s.mode||'?')+' - kolom real memang kosong'); }
+        else if (real2===0) {
+          if (lk2===0 && xc2===0) why2.push('tak ada pasangan lolos lantai (locked>=3c: '+lk2+', crosscat>=5c: '+xc2+')');
+          if (age2>150) why2.push('quote scan tua ('+age2+'s > 150s)');
+          if ((lk2+xc2)>0 && age2<=150) why2.push('kandidat ada tapi tertahan requote/maxOP/cap - lihat log fort:');
+        } else { why2.push('eksekusi real hari ini: '+real2); }
+        pan.innerHTML = '<b>BAYANGAN PAPER ('+v+'):</b> '+pap.length+' baris · teresolusi '+res2.length+' · pnl mean '+mean2.toFixed(2)+' · win '+win2+'%<br><b>KENAPA EKSEKUSI KOSONG:</b> '+(why2.length? why2.join(' · ') : 'tidak ada yang menahan');
         var rows = (s.trades||[]).filter(function(t){
           return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today && (t.mode||'').indexOf(s.mode === 'real' ? 'real' : 'paper') === 0;
         }).slice().reverse();
