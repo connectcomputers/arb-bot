@@ -1,4 +1,4 @@
-"""Workers S7: paper-resolver (ea/eb faktual + fallback judul) + negrisk. Paper-only."""
+"""Workers S8: paper-resolver (wasit Binance, peta simbol kanonikal) + negrisk Polymarket. Paper-only."""
 import json, re, threading, time, urllib.request
 
 _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
@@ -6,7 +6,8 @@ _SYM = [("ethereum", "ETHUSDT"), ("bitcoin", "BTCUSDT"), ("solana", "SOLUSDT"),
         ("litecoin", "LTCUSDT"), ("binance", "BNBUSDT"), ("ripple", "XRPUSDT"),
         ("eth", "ETHUSDT"), ("btc", "BTCUSDT"), ("sol", "SOLUSDT"),
         ("doge", "DOGEUSDT"), ("hype", "HYPEUSDT"), ("zec", "ZECUSDT"),
-        ("ltc", "LTCUSDT"), ("bnb", "BNUSDT".replace("BNUSDT", "BNBUSDT")), ("xrp", "XRPUSDT")]
+        ("ltc", "LTCUSDT"), ("bnb", "BNBUSDT"), ("xrp", "XRPUSDT")]
+_INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
 
 
 def _sym_of(title):
@@ -15,21 +16,7 @@ def _sym_of(title):
         if re.search(r"\b" + kw + r"\b", s):
             return sym
     return None
-_INT = {300: "5m", 900: "15m", 3600: "1h", 86400: "1d", 604800: "1w"}
 
-def _range_step(title):
-    m = re.search(r"(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)", title or "", re.I)
-    if not m:
-        s = (title or "").lower()
-        for kw, st in (("5 min", 300), ("15 min", 900), ("hourly", 3600), ("daily", 86400)):
-            if kw in s:
-                return st
-        return 300
-    def mins(h, mi, ap):
-        h = int(h) % 12 + (0 if ap.upper() == "AM" else 12)
-        return h * 60 + int(mi)
-    d = mins(m.group(4), m.group(5), m.group(6)) - mins(m.group(1), m.group(2), m.group(3))
-    return abs(d) * 60 or 300
 
 def _step_of(title):
     s = (title or "").lower()
@@ -38,6 +25,18 @@ def _step_of(title):
             return st
     return None
 
+
+def _range_step(title):
+    m = re.search(r"(\d{1,2}):(\d{2})\s*(AM|PM)\s*-\s*(\d{1,2}):(\d{2})\s*(AM|PM)", title or "", re.I)
+    if not m:
+        return _step_of(title) or 300
+    def mins(h, mi, ap):
+        h = int(h) % 12 + (0 if ap.upper() == "AM" else 12)
+        return h * 60 + int(mi)
+    d = mins(m.group(4), m.group(5), m.group(6)) - mins(m.group(1), m.group(2), m.group(3))
+    return abs(d) * 60 or 300
+
+
 def _kline(sym, interval, start_epoch):
     url = (f"https://api.binance.com/api/v3/klines?symbol={sym}"
            f"&interval={interval}&startTime={int(start_epoch)*1000}&limit=1")
@@ -45,16 +44,24 @@ def _kline(sym, interval, start_epoch):
         k = json.loads(r.read())[0]
     return float(k[1]), float(k[4])
 
+
 def _yes_win(sym, end, step):
     if not sym or step not in _INT:
         return None
-    o, c = _kline(sym, _INT[step], end - step)
+    try:
+        o, c = _kline(sym, _INT[step], end - step)
+    except Exception:
+        return None
     return 1 if c > o else 0
 
-def _sides(d):
-    if d in ("YES_NO", "CROSS_CAT"): return "YES", "NO"
-    if d == "NO_YES": return "NO", "YES"
+
+def _sides(direction):
+    if direction in ("YES_NO", "CROSS_CAT"):
+        return "YES", "NO"
+    if direction == "NO_YES":
+        return "NO", "YES"
     return None, None
+
 
 def resolve_once():
     from app import engine as E
@@ -68,15 +75,14 @@ def resolve_once():
         if not ta or not tb:
             continue
         checked += 1
-        ea = t.get("ea") or None
-        eb = t.get("eb") or None
+        ea, eb = t.get("ea"), t.get("eb")
         if not ea or not eb:
             noend += 1
             continue
         if now < max(ea, eb) + 120:
             future += 1
             continue
-        sa = _range_step(ta) if not _step_of(ta) else _step_of(ta)
+        sa = _step_of(ta) or _range_step(ta)
         sb = _step_of(tb) or _range_step(tb)
         wa = _yes_win(_sym_of(ta), ea, sa)
         wb = _yes_win(_sym_of(tb), eb, sb)
@@ -104,6 +110,7 @@ def resolve_once():
     E._log_loop(f"resolver: checked={checked} resolved={done} noend={noend} future={future} noasset={noasset}")
     return done
 
+
 def negrisk_once():
     from app import engine as E
     from app.config_store import load_creds
@@ -124,8 +131,10 @@ def negrisk_once():
         if key in donek:
             continue
         side, profit = None, 0.0
-        if s < 0.98: side, profit = "YES", 1.0 - s
-        elif s > 1.02: side, profit = "NO", s - 1.0
+        if s < 0.98:
+            side, profit = "YES", 1.0 - s
+        elif s > 1.02:
+            side, profit = "NO", s - 1.0
         if side is None:
             continue
         donek[key] = time.strftime("%Y-%m-%dT%H:%M:%S")
@@ -144,6 +153,7 @@ def negrisk_once():
         E._write(st)
     return added
 
+
 def _loop(fn, every, tag):
     while True:
         try:
@@ -156,7 +166,10 @@ def _loop(fn, every, tag):
                 pass
         time.sleep(every)
 
+
 _started = False
+
+
 def start_workers():
     global _started
     if _started:
