@@ -840,21 +840,25 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
         var ms = s.matches || [];
         var lk = ms.filter(function(m){ return m.locked && m.pi>=0.03; }).length;
         var xc = ms.filter(function(m){ return m.locked===false && m.pi>=0.05; }).length;
-        var realN = tr.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('real-auto')===0; }).length;
+        var realN = tr.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('real')===0; }).length;
         var why = [];
-        if ((s.mode||'') !== 'real') { why.push('mode aktif '+(s.mode||'?')+' - gerbang real tertutup'); }
+        if ((s.mode||'') !== 'real') { why.push('mode aktif '+(s.mode||'')+' - gerbang real tertutup'); }
         else if (realN === 0) {
           if (lk===0 && xc===0) why.push('tak ada kandidat lolos lantai (locked>=3c: '+lk+', crosscat>=5c: '+xc+')');
-          if (age > 150) why.push('quote scan tua ('+age+'s > gate) - siklus dilewati');
-          if ((lk+xc)>0 && age<=150) why.push('kandidat ada tapi tertahan requote/maxOP/cap - lihat log fort:');
+          if (age > 240) why.push('quote scan tua ('+age+'s > gate 240s)');
+          if ((lk+xc)>0 && age<=240) why.push('kandidat ada tapi tertahan requote/maxOP/cap - lihat log fort:');
         } else { why.push('eksekusi real hari ini: '+realN); }
+        var det = pap.slice().reverse().slice(0,6).map(function(t){
+          return '<div style="margin:1px 0">'+(t.ts||'').slice(11,16)+' · Π='+((t.pi||0)*100).toFixed(1)+'c · '+(t.resolved ? ('pnl '+(t.pnl||0)) : 'belum resolve')+'</div>';
+        }).join('');
         pan.innerHTML = '<b>HASIL PAPER ('+v+'):</b> '+pap.length+' baris hari ini · teresolusi '+res.length+' · pnl mean '+mean.toFixed(2)+' · win '+win+'%<br>' +
+                        (det ? '<b>DETAIL PAPER:</b><br>'+det : '') +
                         '<b>KENAPA BELUM EKSEKUSI REAL:</b> '+(why.length? why.join(' · ') : 'tidak ada penahan - menunggu fill');
         var rows = tr.filter(function(t){
           return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today && (t.mode||'').indexOf(s.mode === 'real' ? 'real' : 'paper') === 0;
         }).slice().reverse();
         box.innerHTML = rows.length ? rows.map(function(t){
-          return '<div class="item" style="margin:2px 0">'+(t.ts||'').slice(11,19)+' · '+t.mode+' · Π='+((t.pi||0)*100).toFixed(2)+'¢ · $'+(t.size||'?')+(t.resolved?' · pnl '+t.pnl:'')+'</div>';
+          return '<div class="item" style="margin:2px 0">'+(t.ts||'').slice(11,19)+' · '+t.mode+' · Π='+((t.pi||0)*100).toFixed(2)+'c · $'+(t.size||'?')+(t.resolved?' · pnl '+t.pnl:'')+'</div>';
         }).join('') : '<div class="muted">belum ada</div>';
       });
     }).catch(function(){});
