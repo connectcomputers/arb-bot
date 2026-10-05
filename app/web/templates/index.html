@@ -828,7 +828,7 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
         if (!pan) {
           pan = document.createElement('div'); pan.id = pid;
           pan.className = 'item muted';
-          pan.style.cssText = 'margin:4px 0;padding:6px;border-left:3px solid #2c7;font-size:11px';
+          pan.style.cssText = 'margin:4px 0;padding:6px;border-left:3px solid #2c7;font-size:11px;max-height:180px;overflow-y:auto';
           h.parentNode.insertBefore(pan, h);
         }
         var tr = s.trades || [];
@@ -848,7 +848,7 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
           if (age > 240) why.push('quote scan tua ('+age+'s > gate 240s)');
           if ((lk+xc)>0 && age<=240) why.push('kandidat ada tapi tertahan requote/maxOP/cap - lihat log fort:');
         } else { why.push('eksekusi real hari ini: '+realN); }
-        var det = pap.slice().reverse().slice(0,6).map(function(t){
+        var det = pap.slice().reverse().slice(0,60).map(function(t){
           return '<div style="margin:1px 0">'+(t.ts||'').slice(11,16)+' · Π='+((t.pi||0)*100).toFixed(1)+'c · '+(t.resolved ? ('pnl '+(t.pnl||0)) : 'belum resolve')+'</div>';
         }).join('');
         pan.innerHTML = '<b>HASIL PAPER ('+v+'):</b> '+pap.length+' baris hari ini · teresolusi '+res.length+' · pnl mean '+mean.toFixed(2)+' · win '+win+'%<br>' +
