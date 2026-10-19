@@ -570,6 +570,11 @@ def _loop():
                         for _v, _tt in ((m["a"], m["ta"]), (m["b"], m["tb"])):
                             _rows = FETCH[_v](load_creds().get(_v, {}))
                             _hit = next((r for r in _rows if r.get("title") == _tt), None)
+                            if _hit is None:
+                                _t = (_tt or "").strip().casefold()
+                                _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold() == _t), None)
+                            if _hit is None and _t:
+                                _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold().startswith(_t[:40])), None)
                             _rq[_v] = (_hit or {}).get("yes")
                         if _rq.get(m["a"]) is None or _rq.get(m["b"]) is None:
                             _log_loop("fort: requote gagal - skip")
