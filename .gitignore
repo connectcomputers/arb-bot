@@ -227,3 +227,6 @@ data/lim_approved.json
 *_lama_q.*
 data/
 data/state.json
+data/credentials.json
+data/live_state.json
+data/trading_config.json

@@ -785,7 +785,7 @@ loadOpenOrders(); setInterval(loadOpenOrders, 30000);
 <script>
 (function(){
   function fmtRow(m){
-    var tag = (m.locked === false) ? '⚠ cross-cat ' : '';
+    var tag = (m.locked === false) ? '' : '';
     return '<div class="item" style="margin:2px 0">' + tag + '[' + m.cat + '] ' + m.a + ' \u2194 ' + m.b +
            ' \u00b7 kotor ' + ((m.gross||0)*100).toFixed(1) + '\u00a2 \u2212 fee ' + ((m.fees||0)*100).toFixed(1) +
            '\u00a2 = \u03a0 ' + ((m.pi||0)*100).toFixed(2) + '\u00a2<br>' +

@@ -113,11 +113,16 @@ def _read():
     """Baca state dari disk, thread-safe."""
     with _state_lock:
         try:
-            if STATE.exists():
-                return json.loads(STATE.read_text())
+            st = json.loads(STATE.read_text()) if STATE.exists() else {}
         except Exception:
-            pass
-        return {}
+            st = {}
+        if not st.get("limits"):
+            try:
+                cfg = json.loads(pathlib.Path("data/trading_config.json").read_text())
+                st["limits"] = cfg.get("limits", {})
+            except Exception:
+                st["limits"] = {}
+        return st
 
 
 def _write(st):
@@ -558,7 +563,7 @@ def _loop():
                     _stop = set(("who what when where will the of after before next be to in on for and or a an by from vs hit above below up down price week month daily hourly minute min year day open close higher lower reach at end between than more less over under once ever win host champion become which how many is it its this that with without during through per each any some all no yes not new old first last final round match game team player score points total number count rate cut hike decision meeting announce official confirmed winner candidate nominee party vote votes poll polls election elections prime minister ministers president presidential king queen leader leaders win wins won lose loses lost beat beats defeat defeats championship champion champions cup cups league leagues series world national international global local regional state states country countries city cities get gets got go goes gone went come comes came make makes made take takes took taken see sees saw seen know knows knew known think thinks thought believe believes believed say says said tell tells told ask asks asked").split())
                     def _toks(s):
                         return {_syn.get(w, w) for w in _re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2 and _syn.get(w, w) not in _stop}
-                    if not (_toks(m.get("ta")) & _toks(m.get("tb"))):
+                    if bool(lim.get("require_shared_token", True)) and not (_toks(m.get("ta")) & _toks(m.get("tb"))):
                         continue
                     try:
                         _rq = {}
