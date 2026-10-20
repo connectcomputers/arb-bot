@@ -434,8 +434,6 @@ def _loop():
     _PAIR_COUNT = {}  # Reset counter di awal setiap siklus
     """Loop eksekusi keputusan (paper/real)."""
     global _run
-    global _PAIR_COUNT
-    _PAIR_COUNT = {}  # Reset per siklus, _last_reaper_ts, _last_alert_ts
     errs = 0
     _log_loop("loop start")
     while _run:
