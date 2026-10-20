@@ -430,8 +430,12 @@ def _auto_take_profit():
     
     return closed_count
 def _loop():
+    global _PAIR_COUNT
+    _PAIR_COUNT = {}  # Reset counter di awal setiap siklus
     """Loop eksekusi keputusan (paper/real)."""
-    global _run, _last_reaper_ts, _last_alert_ts
+    global _run
+    global _PAIR_COUNT
+    _PAIR_COUNT = {}  # Reset per siklus, _last_reaper_ts, _last_alert_ts
     errs = 0
     _log_loop("loop start")
     while _run:
@@ -534,9 +538,9 @@ def _loop():
                     _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
                     _maxop = int(float(lim.get("max_op_per_pair", 2)))
                     if _PAIR_COUNT.get(_pkey, 0) >= _maxop:
-                        _log_loop(f"skip overtrade: {_pkey} sudah {_PAIR_COUNT[_pkey]} OP hari-proses ini")
+# REMOVED: counter moved after successful order
                         continue
-                    _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
+#                     _PAIR_COUNT[_pkey] = _PAIR_COUNT.get(_pkey, 0) + 1
                 # HH: tolak eksekusi bila snapshot quote terlalu tua (config quote_max_age_sec, 0=mati)
                 _maxage = float(lim.get("quote_max_age_sec", 20))
                 if _maxage > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > _maxage:
@@ -1100,7 +1104,9 @@ def status():
 # # === Main Loop ===
 # def _loop():
 #     """Loop eksekusi keputusan (paper/real)."""
-#     global _run, _last_reaper_ts, _last_alert_ts
+#     global _run
+    global _PAIR_COUNT
+    _PAIR_COUNT = {}  # Reset per siklus, _last_reaper_ts, _last_alert_ts
 #     errs = 0
 #     _log_loop("loop start")
 #     while _run:
