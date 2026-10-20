@@ -430,10 +430,9 @@ def _auto_take_profit():
     
     return closed_count
 def _loop():
-    global _PAIR_COUNT
-    _PAIR_COUNT = {}  # Reset counter di awal setiap siklus
     """Loop eksekusi keputusan (paper/real)."""
-    global _run
+    global _run, _PAIR_COUNT, _last_scan_ts, _last_reaper_ts, _last_alert_ts
+    _PAIR_COUNT = {}  # Reset counter di awal setiap siklus
     errs = 0
     _log_loop("loop start")
     while _run:
