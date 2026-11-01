@@ -1346,7 +1346,7 @@ def exec_polymarket(creds, usd=1.0, dry=False, ticker=None, side="YES"):
     #     proxy = str(creds.get("proxy_address") or "").strip()
     #     if proxy:
     #         client_args["funder"] = proxy
-    #         client_args["signature_type"] = 1  # POLY_GNOSIS_SAFE untuk Magic
+    #         client_args["signature_type"] = int((_lc().get("limits") or {}).get("poly_signature_type", 3))  # deposit wallet flow
         
     #     c = ClobClient(**client_args)
         
@@ -1398,7 +1398,7 @@ def exec_polymarket(creds, usd=1.0, dry=False, ticker=None, side="YES"):
         
         if proxy:
             client_args["funder"] = proxy
-            client_args["signature_type"] = 1  # POLY_PROXY: signer=EOA agar sama dgn alamat API key
+            client_args["signature_type"] = int((_lc().get("limits") or {}).get("poly_signature_type", 3))  # deposit wallet flow
         
         # c = ClobClient(**client_args)
         
