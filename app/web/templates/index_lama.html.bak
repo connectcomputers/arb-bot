@@ -1,0 +1,873 @@
+<!-- app/web/templates/index.html -->
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8">
+<title>Arb Bot Dashboard</title>
+<style>
+body{font-family:sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:24px}
+.wrap{max-width:1140px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+h1{color:#38bdf8;margin:0;font-size:22px}
+button{background:#059669;color:#fff;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;margin-left:6px}
+button.red{background:#dc2626}button.blue{background:#0ea5e9}button.gray{background:#334155}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.col{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;min-height:320px}
+.col h2{color:#38bdf8;margin:0 0 8px;font-size:15px}
+h4{color:#7dd3fc;margin:12px 0 4px;font-size:11px;text-transform:uppercase}
+.muted{color:#94a3b8;font-size:12px}
+.item{font-size:12px;margin:3px 0;border-bottom:1px dashed #334155;padding-bottom:3px}
+.badge{padding:4px 10px;border-radius:6px;font-weight:700}
+.on{background:#059669}.off{background:#dc2626}
+.tabs{margin:18px 0 8px}.tabs button{background:#334155}
+iframe{width:100%;height:70vh;border:1px solid #334155;border-radius:12px;background:#0f172a}
+a{color:#38bdf8}
+.logbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
+font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;margin:6px 0}
+.matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;
+padding:6px;max-height:220px;overflow:auto;margin:6px 0}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var st=document.createElement('style'); st.textContent='@keyframes lspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
+  var bar=document.createElement('div'); bar.id='live-indicator';
+  bar.style.cssText='position:fixed;right:12px;bottom:12px;z-index:999;background:#052e16;border:1px solid #16a34a;color:#86efac;border-radius:8px;padding:8px 12px;font:12px monospace;display:flex;gap:8px;align-items:center';
+  bar.innerHTML='<span id="li-spin" style="width:12px;height:12px;border:2px solid #22c55e;border-top-color:transparent;border-radius:50%;animation:lspin 1s linear infinite"></span><span id="li-text">SCANNER MENYALA…</span>';
+  document.body.appendChild(bar);
+  var SCAN=30, epoch=0, cycles=0;
+  function findEpoch(o){ if(!o||typeof o!=='object')return null; if(typeof o.epoch==='number')return o.epoch; for(var k in o){var v=findEpoch(o[k]); if(v)return v;} return null; }
+  function pull(){ fetch('/api/engine/status').then(function(r){return r.json();}).then(function(d){ var e=findEpoch(d); if(e&&e!==epoch){epoch=e;cycles++;} else if(e){epoch=e;} }).catch(function(){}); }
+  setInterval(pull,5000); pull();
+  function msg(){
+    var clock=new Date().toLocaleTimeString('id-ID');
+    if(!epoch) return '🟢 SCANNER MENYALA · '+clock;
+    var age=Math.floor(Date.now()/1000)-epoch;
+    if(age>SCAN+45) return '⚠ SCAN LAMBAT '+age+'s · '+clock;
+    if(age>SCAN) return '🟢 SCAN BERJALAN · siklus #'+cycles+' · '+clock;
+    return '🟢 SCAN #'+cycles+' · berikut '+(SCAN-age)+'s · '+clock;
+  }
+  function broadcast(){
+    var m=msg();
+    var tx=document.getElementById('li-text'); if(tx) tx.textContent=m;
+    var sp=document.getElementById('li-spin');
+    if(sp){ var slow=(m.indexOf('⚠')===0); sp.style.borderColor= slow?'#ef4444':'#22c55e'; sp.style.borderTopColor='transparent'; }
+    if(!document.body) return;
+    var w=document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+    var n, tg=[];
+    while((n=w.nextNode())){ var v=n.nodeValue||''; if(/dtk lalu|SCAN BERJALAN|SCAN #|hasil menyusul|SCANNER MENYALA/.test(v)) tg.push(n); }
+    for(var i=0;i<tg.length;i++){ tg[i].nodeValue=m; }
+  }
+  setInterval(broadcast,250); broadcast();
+});
+</script>
+</head>
+<script>
+(function(){
+  function alive(){
+    var now = new Date();
+    var stamp = now.toLocaleTimeString('id-ID');
+    var sec = now.getSeconds();
+    var nodes = document.querySelectorAll('div,span,small');
+    for (var i=0;i<nodes.length;i++){
+      var el = nodes[i];
+      if (el.children.length) continue;
+      var tx = el.textContent || '';
+      if (/memindai ulang|hasil menyusul|memindai… detik|screening aktif/.test(tx)){
+        el.textContent = '⏳ screening aktif · detik ke-' + sec + ' · ' + stamp;
+      }
+    }
+  }
+  setInterval(alive, 1000);
+  setTimeout(alive, 400);
+})();
+</script>
+<body>
+
+<div id="alert-banner" style="display:none;background:#dc2626;color:white;padding:12px;margin:8px;border-radius:6px;font-size:14px">
+  <strong>⚠️ Alert Aktif:</strong> <span id="alert-message"></span>
+</div><div class="wrap">
+<header>
+ <h1>🚀 Arb Bot Dashboard</h1>
+ <div>
+  <span id="badge" class="badge off">INACTIVE</span>
+  <button onclick="start('paper')">▶ Mulai Paper</button>
+  <button class="blue" onclick="start('real')">💰 Mulai Real</button>
+  <button class="gray" onclick="stop()">⏹ Stop</button>
+  <button class="red" onclick="kill()">🛑 Kill Switch</button>
+  <button class="gray" onclick="resetSpend()">🔄 Reset Cap</button>
+  <button class="gray" onclick="location.href='/setup'">⚙️ Setup</button>
+ </div>
+</header>
+
+<!-- SALDO SEMUA VENUE (auto-refresh 30s) -->
+<div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
+  <h2 style="color:#38bdf8;margin:0 0 12px;font-size:16px">💰 Saldo Semua Venue</h2>
+  <!-- <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">📊 Kalshi</h3>
+      <div id="saldo-kalshi" style="font-size:13px">Loading...</div>
+    </div>
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">💎 Limitless</h3>
+      <div id="saldo-limitless" style="font-size:13px">Loading...</div>
+    </div>
+    <div style="background:#0f172a;padding:14px;border-radius:8px;border:1px solid #334155">
+      <h3 style="color:#86efac;margin:0 0 8px;font-size:14px">🎯 Polymarket</h3>
+      <div id="saldo-polymarket" style="font-size:13px">Loading...</div>
+    </div>
+  </div> -->
+<!-- 💰 SALDO SEMUA VENUE — grid identik dengan kolom venue -->
+<div style="margin-bottom:14px">
+  <!-- <h2 style="color:#38bdf8;margin:0 0 8px;font-size:15px">💰 Saldo Semua Venue
+    <span class="muted" id="saldo-updated" style="float:right">-</span>
+  </h2> -->
+  <div class="cols">
+    <div class="col" style="min-height:0">
+      <h2>🎯 POLYMARKET</h2>
+      <div id="saldo-polymarket" class="item">Loading…</div>
+    </div>
+    <div class="col" style="min-height:0">
+      <h2>📊 KALSHI</h2>
+      <div id="saldo-kalshi" class="item">Loading…</div>
+    </div>
+    <div class="col" style="min-height:0">
+      <h2>💎 LIMITLESS</h2>
+      <div id="saldo-limitless" class="item">Loading…</div>
+    </div>
+  </div>
+</div>
+  <p class="muted" style="margin:8px 0 0;font-size:11px">
+    Auto-refresh setiap 30 detik · <span id="saldo-updated">-</span>
+  </p>
+</div>
+
+<div class="cols" id="cols"></div>
+
+<div class="tabs">
+ <button onclick="tab(0)">📊 Dashboard</button>
+ <button onclick="tab(1)">🧾 Audit</button>
+</div>
+<div id="audit" style="display:none"><iframe src="/legacy"></iframe></div>
+
+<script>
+const LINKS = {polymarket:"https://polymarket.com/portfolio",
+               kalshi:"https://kalshi.com/portfolio",
+               limitless:"https://limitless.exchange/portfolio"};
+async function start(mode){
+  if(mode==='real' && !confirm('Mode REAL = order asli dengan dana akun. Lanjut?')) return;
+  const r = await fetch('/api/engine/start',{method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})});
+  const d = await r.json(); if(!d.ok) alert(d.message);
+  poll();
+}
+async function stop(){ await fetch('/api/engine/stop',{method:'POST'}); poll(); setTimeout(()=>{location.href='/setup';},800); }
+async function kill(){ if(confirm('Kill switch: hentikan & kunci eksekusi?')){
+  await fetch('/api/engine/kill',{method:'POST'}); poll(); setTimeout(()=>{location.href='/setup';},800); } }
+function tab(a){ document.getElementById('audit').style.display = a?'block':'none'; }
+const it = s => `<div class="item">${s}</div>`;
+function _todayVps(s){
+  var e = s.epoch || (s.info||{}).epoch;
+  return e ? new Date(e*1000).toISOString().slice(0,10)
+           : new Date().toISOString().slice(0,10);
+}
+
+    // <h4>Match + Π</h4>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it(`[${m.cat}] Π=${(m.pi*100).toFixed(2)}¢ <span class="muted">${m.a}↔${m.b}</span>`)).join('')
+    //   || '<div class="muted">menunggu scanner…</div>'}
+
+    // <h4>Match + Π</h4>
+    // <div class="muted">scan: ${(s.stats||{})[v.venue]||0} event</div>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it('['+m.cat+'] Π='+(m.pi*100).toFixed(2)+'¢ '+m.a+'↔'+m.b)).join('')
+    //   || (s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+    //     .map(n=>it('terdekat sim '+n.s+': '+n.ta+' ↔ '+n.tb)).join('')
+    //   || '<div class="muted">tidak ada kandidat</div>'}
+
+    // <h4>🔄 Screening Realtime</h4>
+    // <div class="item">scan terakhir ${(s.info||{}).ts||'-'} · ${(s.info||{}).duration||0} dtk</div>
+
+    // <h4>Match + Π bersih (terbesar → terkecil)</h4>
+    // ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+    //   .map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+
+    //     ' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+
+    //     '¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>'+
+    //     '<br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>')).join('')
+    //   || '<div class="muted">belum ada kejadian yang sama</div>'}
+    // ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+    //   .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
+
+      // ${v.venue === 'limitless'
+      //   ? ' <button class="gray" disabled title="read-only: butuh EIP-712/partner">🎯</button>'
+      //   : ` <button class="blue" onclick="micro('${v.venue}')">🎯</button>`}      
+
+    // <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·
+    //   <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
+    // </h2>
+
+// async function micro(v){
+//   if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
+//               ' (± sesuai Modal per OP)?')) return;
+//   const r = await fetch('/api/exec/micro',{method:'POST',
+//     headers:{'Content-Type':'application/json'},
+//     body: JSON.stringify({venue:v})});
+//   const d = await r.json();
+//   alert((d.ok?'✅ ':'❌ ')+d.message);
+//   poll();
+// }
+
+async function micro(v){
+  if(!confirm('Eksekusi REAL mikro di '+v.toUpperCase()+
+              ' (± sesuai Modal per OP)?')) return;
+  const r = await fetch('/api/exec/micro',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:v})});
+  const d = await r.json();
+  let msg = (d.ok?'✅ ':'❌ ')+d.message;
+
+  if(!d.ok && v==='polymarket' &&
+     (d.message.includes('geofence') || d.message.includes('403'))){
+    msg = '❌ GEOFENCE / GEOBLOCK\n\n' +
+      'Penggunaan Polymarket di USA terdampak "⚠️ Geoblock (paper trading)", ' +
+      'perlu 🔧 proxy wilayah didukung (opsional → residential proxy URL: ' +
+      'http://user:pass@host:port wilayah didukung) agar aplikasi bot ini ' +
+      'bisa meng-eksekusi order real.\n\n' +
+      'Isi di /setup → field "Proxy URL eksekusi". Bila dikosongkan, ' +
+      'Polymarket tetap scanner + paper trading.';
+  }
+
+  if(!d.ok && v==='limitless' &&
+     (d.message.includes('smart_wallet_profile_id') || d.message.includes('numeric'))){
+    msg = '❌ WALLET MODE ERROR\n\n' +
+      'Karena pilihan "Wallet Limitless" di halaman setup, dibutuhkan scope ' +
+      '(Delegated Signing) agar bot bisa tanda tangan ATAS NAMA wallet web ' +
+      '(tanpa private key) — scope ini hanya untuk partner accounts.\n\n' +
+      'ATAU ubah pilihan wallet menjadi "Wallet Pribadi (EOA)" dan masukkan ' +
+      'Private Key Wallet Pribadi (0x + 64 hex) pada field yang tersedia ' +
+      '(saldo 9.83 USDC di-Withdraw sekali ke alamat EOA tersebut).';
+  }
+
+  if(!d.ok && v==='kalshi' &&
+     (d.message.includes('shard') || d.message.includes('user_not_found'))){
+    msg = '❌ KALSHI EXCHANGE SHARDING\n\n' +
+      'Kalshi kini memecah trading ke beberapa shard: dana akun di shard 0, ' +
+      'sedangkan market target di shard lain → order ditolak sampai kolateral ' +
+      'dialokasikan ke shard market.\n\n' +
+      'Perbaikan aktif: bot memilih market shard 0 + auto-transfer kolateral ' +
+      'bila ticker manual beda shard. Coba lagi tombol 🎯.';
+  }
+
+  if(!d.ok && d.message.includes('cap harian')){
+    msg = '❌ CAP HARIAN TERCAPAI (guardrail risiko)\n\n' +
+      'Order REAL dihentikan untuk SEMUA venue — ini bukan error venue.\n\n' +
+      'Status masing-masing venue bila cap dibuka:\n' +
+      '• KALSHI: ✅ siap (sharding + auto-transfer terbukti)\n' +
+      '• POLYMARKET: ⚠️ geoblock USA — perlu proxy wilayah didukung\n' +
+      '• LIMITLESS: ⚠️ butuh scope Delegated Signing / mode EOA\n\n' +
+      'Naikkan batas di /limits, reset counter (mode tes), atau tunggu besok.';
+  }
+    
+  alert(msg);
+  poll();
+}
+
+async function poll_alerts(){
+  fetch('/api/alerts').then(r=>r.json()).then(d=>{
+    const alerts = d.alerts || [];
+    const banner = document.getElementById('alert-banner');
+    const msg = document.getElementById('alert-message');
+    if (alerts.length > 0) {
+      banner.style.display = 'block';
+      msg.textContent = alerts.map(a=>a.message).join(' | ');
+    } else {
+      banner.style.display = 'none';
+    }
+  }).catch(()=>{});
+}
+
+async function poll(){
+  const [f, s] = await Promise.all([
+    fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()),
+    fetch('/api/engine/status').then(r=>r.json())]);
+  window.__st = s;
+  if (s.kill || s.need_rearm){ location.href = '/setup'; return; }   // ← TAMBAH INI
+  const ep0 = ((s.info||{}).epoch) || 0;
+  const age0 = Math.floor(Date.now()/1000) - ep0;
+  if (age0 > (s.interval||30) * 2 && !window.__rf) {
+    window.__rf = true;
+    fetch('/api/engine/refresh', {method:'POST'})
+      .then(()=>{ window.__rf = false; poll(); });
+  }  
+  const b = document.getElementById('badge');
+  b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'INACTIVE');
+  b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
+  if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }  
+  document.getElementById('cols').innerHTML = f.venues.map(v => `
+  <div class="col">
+    <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} ·
+      <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a>
+      <button class="blue" onclick="micro('${v.venue}')">🎯</button>
+    </h2>
+    <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
+    <h4>Open Positions (OP)</h4><div style="font-size:10px;color:#64748b;margin-bottom:4px">posisi terisi; order GTC menunggu fill tercatat di Rekonsiliasi</div>
+    ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('')
+                         : '<div class="muted">tidak ada</div>'}
+
+    <h4>🔄 Screening Realtime</h4>
+    <div class="item" id="scan-${v.venue}">🔄 …</div>
+    <div class="item">event venue ini: ${((s.info||{}).counts||{})[v.venue]||0}
+      · perbandingan: ${((s.info||{}).comparisons||0).toLocaleString('id-ID')}</div>
+    <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8)
+      .map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>      
+
+    <h4>Match + Π bersih (terbesar → terkecil)</h4>
+    <div class="matchbox">
+      ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
+        .map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+
+          ' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+
+          '¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>'+
+          '<br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>')).join('')
+        || '<div class="muted">belum ada kejadian yang sama</div>'}
+      ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
+        .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
+    </div>
+
+    <h4>Eksekusi</h4>
+    <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
+    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse()
+      .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('')
+      || '<div class="muted">belum ada</div>'}
+    </div>
+  </div>`).join('');
+}
+poll(); 
+
+async function loadSaldo() {
+  try {
+    const r = await fetch('/api/saldo');
+    const d = await r.json();
+    const now = new Date().toLocaleTimeString('id-ID');
+    document.getElementById('saldo-updated').textContent = `terakhir update: ${now}`;
+    
+    // Kalshi
+    const k = d.kalshi;
+    document.getElementById('saldo-kalshi').innerHTML = `
+      <div>Cash: <strong style="color:#86efac">$${(k.cash_usd || 0).toFixed(2)}</strong></div>
+      <div>Portfolio: <strong>$${(k.portfolio_usd || 0).toFixed(2)}</strong></div>
+      <div class="muted">Posisi: ${k.posisi_market || 0} market, ${k.posisi_event || 0} event</div>
+      <div class="muted" style="margin-top:6px">✅ ${k.status}</div>
+    `;
+    
+    // Limitless
+    const l = d.limitless;
+    document.getElementById('saldo-limitless').innerHTML = `
+      <div>Cash (Base): <strong style="color:#86efac">${(l.usdc_base || 0).toFixed(4)}</strong> · Portfolio: <strong style="color:#93c5fd">${(l.posisi_usd || 0).toFixed(2)}</strong></div>
+      <div class="muted">Total: $${(l.portfolio_usd || 0).toFixed(2)}</div>
+      <div class="muted" style="margin-top:6px">✅ ${l.status}</div>
+    `;
+    
+    // Polymarket
+    const p = d.polymarket;
+    document.getElementById('saldo-polymarket').innerHTML = `
+      <div>Cash: <strong style="color:#86efac">$${(p.cash_usd || 0).toFixed(2)}</strong> · Portfolio: <strong style="color:#93c5fd">$${(p.posisi_usd || 0).toFixed(2)}</strong></div>
+      <div class="muted">Total: $${(p.web_usd || 0).toFixed(2)} · On-chain: $${(p.usdce_signer || 0).toFixed(2)}</div>
+    `;
+  } catch (e) {
+    console.error('Load saldo error:', e);
+    ['saldo-kalshi','saldo-limitless','saldo-polymarket'].forEach(id => {
+      document.getElementById(id).innerHTML = '<div class="muted">❌ Error loading</div>';
+    });
+  }
+}
+
+// Load awal + auto-refresh 30 detik
+loadSaldo();
+setInterval(loadSaldo, 30000);
+
+async function resetSpend(){
+  if(!confirm('Reset counter belanja harian (cap)?\nHanya untuk tes/demo — guardrail risiko dinolkan hari ini.')) return;
+  const r = await fetch('/api/engine/reset-spend',{method:'POST'});
+  const d = await r.json();
+  alert((d.ok?'✅ ':'❌ ')+d.message);
+  poll();
+}
+
+// setInterval(poll, 10000);
+setInterval(()=>{
+  const st = window.__st;
+  if(!st) return;
+  const now = Math.floor(Date.now()/1000);
+  const ep = ((st.info||{}).epoch) || now;
+  const iv = st.interval || 30;
+  const age = now - ep;
+  // const txt = age < 3 ? '🔄 sedang scanning…'
+  //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+  // const txt = age < 3 ? '🔄 sedang scanning…'
+  //   : age > iv*2 ? '🟢 SCAN BERJALAN — hasil menyusul'
+  //   : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;
+
+  const txt = !st.running ? '⏹ mesin berhenti — mulai lagi bila siap'
+    : age < 3 ? '🔄 sedang scanning…'
+    : age > iv*2 ? '🟢 SCAN BERJALAN — hasil menyusul'
+    : `🔄 scan ${age} dtk lalu · berikutnya ±${Math.max(iv-age,0)} dtk`;  
+  document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; });
+},1000);
+</script>
+</div>
+<script>
+(function(){
+  function fix(){
+    document.querySelectorAll('div,span,h3,h4,b,strong,i,u').forEach(function(el){
+      if (el.children.length === 0 && /^eksekusi$/i.test((el.textContent||'').trim())) {
+        var c = el.nextElementSibling;
+        if (c && !c.dataset.scrollfix) {
+          c.style.maxHeight = '240px';
+          c.style.overflowY = 'auto';
+          c.style.border = '1px solid #1e293b';
+          c.style.padding = '4px';
+          c.style.borderRadius = '6px';
+          c.dataset.scrollfix = '1';
+        }
+      }
+    });
+  }
+  setInterval(fix, 1500);
+  fix();
+})();
+
+setInterval(poll_alerts, 30000); setTimeout(poll_alerts, 1500);
+</script>
+<div id="reconciliation" style="margin-top:24px;padding:16px;background:#0b1220;border:1px solid #1e293b;border-radius:8px">
+  <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+  <label style="font-size:11px">Filter:
+    <select id="rekFilter" style="font-size:11px">
+      <option value="all">Semua</option>
+      <option value="today" selected>Hari ini</option>
+      <option value="week">7 hari</option>
+      <option value="month">30 hari</option>
+    </select>
+  </label>
+  <label style="font-size:11px">Dari: <input type="date" id="rekFrom" style="font-size:11px"></label>
+  <label style="font-size:11px">Sampai: <input type="date" id="rekTo" style="font-size:11px"></label>
+  <button id="rekDownload" style="font-size:11px;padding:2px 8px">⬇ Download CSV</button> <button id="rekScopeBtn" style="font-size:11px;padding:2px 8px">🕘 Lihat Riwayat</button>
+  <span id="rekCount" style="font-size:10px;color:#64748b"></span>
+</div>
+<h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
+  <div style="font-size:11px;color:#64748b;margin-bottom:8px">Catatan: "Order Real" = riwayat transaksi (audit trail), bukan posisi aktif saat ini.</div>
+  <div id="recon-content" style="color:#94a3b8">Loading...</div>
+  <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
+  <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
+</div>
+<script>
+window.loadRecon = function(scope){
+    scope = scope || 'today';
+  fetch('/api/reconciliation?scope=' + scope).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('recon-content');
+    const baseline = d.baseline.saldo || {};
+    const ts = d.baseline.ts ? new Date(d.baseline.ts).toLocaleString('id-ID') : 'belum diset';
+    
+    let html = '<div style="font-size:13px;margin-bottom:12px">';
+    html += '<strong>Baseline diset:</strong> ' + ts + '<br>';
+    html += '<strong>Saldo baseline:</strong> ';
+    if (baseline.polymarket || baseline.kalshi || baseline.limitless) {
+      html += 'Poly $' + (baseline.polymarket||0).toFixed(2) + 
+              ' · Kalshi $' + (baseline.kalshi||0).toFixed(2) + 
+              ' · Limitless $' + (baseline.limitless||0).toFixed(2);
+    } else {
+      html += '<em>belum ada (klik tombol di bawah)</em>';
+    }
+    html += '</div>';
+    
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px">';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Order Real ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + (scope==='today' ? (d.trades_real_today||d.trades_real) : d.trades_real) + (d.trades_real_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_real_all+'</div>' : '') + '</div>';
+    html += '</div>';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Order Paper ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</div>';
+    html += '<div style="font-size:18px;font-weight:600">' + (scope==='today' ? (d.trades_paper_today||d.trades_paper) : d.trades_paper) + (d.trades_paper_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_paper_all+'</div>' : '') + '</div>';
+    html += '</div>';
+    html += '<div style="padding:8px;background:#1e293b;border-radius:4px">';
+    html += '<div style="font-size:11px;color:#64748b">Spend Hari Ini (hari ini)</div>';
+    html += '<div style="font-size:18px;font-weight:600">$' + d.spend_today.toFixed(2) + '</div>';
+    html += '</div></div>';
+    
+    html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + ':</strong><br>';
+    if (Object.keys(d.by_venue).length > 0) {
+      for (const [v, data] of Object.entries(d.by_venue)) {
+        html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
+                ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
+      }
+    } else {
+      html += '<em style="color:#64748b">belum ada order ' + (scope==='today' ? 'hari ini' : 'sejak baseline') + '</em>';
+    }
+    html += '</div>';
+    
+    if (d.recent_trades.length > 0) {
+      html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>';
+      d.recent_trades.slice().reverse().forEach(t => {
+        html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + 
+                t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + 
+                ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>' +
+              '<em style="color:#64748b">belum ada trade ' + (scope==='today' ? 'real hari ini' : 'tercatat') + '</em></div>';
+    }
+    
+    el.innerHTML = html;
+  }).catch(e => {
+    document.getElementById('recon-content').innerHTML = 'Error: ' + e.message;
+  });
+}
+
+function setBaseline(){
+  if(!confirm('Simpan saldo sekarang sebagai baseline rekonsiliasi?')) return;
+  fetch('/api/saldo').then(r=>r.json()).then(s=>{
+    const baseline = {
+      polymarket: s.polymarket?.web_usd || s.polymarket?.cash_usd || 0,
+      kalshi: (s.kalshi?.cash_usd || 0) + (s.kalshi?.portfolio_usd || 0),
+      limitless: s.limitless?.portfolio_usd || s.limitless?.usdc_base || 0
+    };
+    fetch('/api/baseline/set', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(baseline)
+    }).then(r=>r.json()).then(d=>{
+      alert(d.ok ? '✅ Baseline tersimpan' : '❌ ' + d.message);
+      loadRecon();
+    });
+  });
+}
+
+loadRecon();
+setInterval(loadRecon, 60000);  // refresh tiap menit
+</script>
+<button onclick="resetHistory()" style="margin-left:8px;background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">🧹 Reset Riwayat</button>
+<button onclick="setBaseline()" style="margin-top:12px;padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:4px;cursor:pointer">
+  Set Baseline Sekarang
+</button>
+
+<script>
+function loadPnl(){
+  fetch('/api/pnl?scope=' + (window.__rekScope || 'today')).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('pnl-content');
+    if(!el) return;
+    let h = '<strong>💹 P/L Resolve-Based:</strong> ';
+    h += 'Harian: $' + (d.by_period.today||0).toFixed(2) +
+         ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) +
+         ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) +
+         ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
+    h += '<br><span style="font-size:12px">Posisi resolve ' + ((window.__rekScope||'today')==='today' ? '(hari ini): ' : '(semua): ') + d.resolved_count +
+         ' · Posisi aktif: ' + d.active_count + '</span>';
+    if (d.by_venue_period && Object.keys(d.by_venue_period).length){
+      h += '<br><span style="font-size:12px">' + ((window.__rekScope||'today')==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):');
+      for (const [v, r] of Object.entries(d.by_venue_period)){
+        h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) +
+             ' · mingguan $' + (r.week||0).toFixed(2) +
+             ' · bulanan $' + (r.month||0).toFixed(2) +
+             ' · total $' + (r.total||0).toFixed(2);
+      }
+      h += '</span>';
+    }
+    el.innerHTML = h;
+  }).catch(()=>{});
+}
+function resetHistory(){
+  if(!confirm('Hapus riwayat trades & spend? Backup otomatis dibuat di server.')) return;
+  fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{
+    alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal'));
+    if (window.loadRecon) loadRecon();
+    if (window.loadPnl) loadPnl();
+  }).catch(e=>alert('❌ '+e));
+}
+loadPnl(); setInterval(loadPnl, 60000);
+</script>
+
+<style>@keyframes hbspin{to{transform:rotate(360deg)}}</style>
+
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  setInterval(function(){
+    var opDivs = document.querySelectorAll('[id^="op-"]');
+    opDivs.forEach(function(div){
+      if(div.querySelector('.close-btn')) return;
+      var venue = div.id.replace('op-','');
+      var items = div.querySelectorAll('li, div');
+      items.forEach(function(item){
+        if(item.textContent.includes('$') && !item.querySelector('.close-btn')){
+          var btn = document.createElement('button');
+          btn.className = 'close-btn';
+          btn.textContent = '❌';
+          btn.style.cssText = 'margin-left:8px;background:#dc2626;color:white;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:11px';
+          btn.onclick = function(){
+            if(!confirm('Close posisi ini?')) return;
+            var title = item.textContent.split('·')[0].trim();
+            fetch('/api/close-position',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({venue:venue, position_id:title, size:1})
+            }).then(r=>r.json()).then(d=>{
+              alert(d.ok ? '✅ Posisi ditutup' : '❌ '+d.message);
+              setTimeout(function(){ location.reload(); }, 1000);
+            });
+          };
+          item.appendChild(btn);
+        }
+      });
+    });
+  }, 2000);
+});
+</script>
+
+<script>
+function loadUnrealized(){
+  fetch('/api/unrealized').then(function(r){return r.json();}).then(function(d){
+    var el = document.getElementById('unrealized-content');
+    if(!el) return;
+    var h = '<strong>💼 ${(window.__rekScope||'today')==='today' ? 'Posisi Aktif (hari ini):' : '💼 Posisi Aktif (unrealized, lintas hari):'}</strong>';
+    var any = false;
+    for (var v in d){
+      (d[v]||[]).forEach(function(x){
+        any = true;
+        var pnl = x.pnl||0;
+        var col = pnl>0 ? '#4ade80' : (pnl<0 ? '#f87171' : '#94a3b8');
+        h += '<br><span style="font-size:12px">' + v.toUpperCase() + ': ' + x.title +
+             ' · nilai $' + (x.value||0).toFixed(2) +
+             ' · <span style="color:'+col+'">P/L ' + (pnl>=0?'+':'') + pnl.toFixed(2) +
+             ' (' + (x.pnl_pct||0).toFixed(2) + '%)</span>' + (x.note ? ' · <i>'+x.note+'</i>' : '') + '</span>';
+      });
+    }
+    if(!any) h += ' <span style="font-size:12px">tidak ada posisi aktif</span>';
+    el.innerHTML = h;
+  }).catch(function(){});
+}
+loadUnrealized(); setInterval(loadUnrealized, 30000);
+</script>
+
+<script>
+var BTN_STYLE = "margin-left:6px;background:#dc2626;color:#fff;border:none;border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px";
+document.addEventListener('click', function(e){
+  var b = e.target.closest ? e.target.closest('.close-btn') : null;
+  if(!b) return;
+  e.preventDefault();
+  if(!confirm('Tutup posisi ini sekarang?')) return;
+  fetch('/api/close-position',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:b.getAttribute('data-venue'), position_id:b.getAttribute('data-title'), size:1})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok ? '✅ Posisi ditutup' : '❌ '+(d.message||'gagal'));
+    setTimeout(function(){ location.reload(); }, 800);
+  });
+});
+document.addEventListener('click', function(e){
+  var b = e.target.closest ? e.target.closest('.cancel-order-btn') : null;
+  if(!b) return;
+  e.preventDefault();
+  if(!confirm('Batalkan open order ini?')) return;
+  fetch('/api/cancel-order',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({venue:b.getAttribute('data-venue'), order_id:b.getAttribute('data-order-id'), ticker:b.getAttribute('data-ticker')||''})
+  }).then(function(r){return r.json();}).then(function(d){
+    alert(d.ok ? '✅ Order dibatalkan' : '❌ '+(d.message||'gagal'));
+    setTimeout(function(){ location.reload(); }, 800);
+  });
+});
+function loadOpenOrders(){
+  fetch('/api/open-orders').then(function(r){return r.json();}).then(function(d){
+    var h4s = Array.prototype.slice.call(document.querySelectorAll('h4')).filter(function(h){
+      return h.textContent.trim().indexOf('Open Positions (OP)') === 0; });
+    var venues = ['polymarket','kalshi','limitless'];
+    h4s.forEach(function(h4, idx){
+      var v = venues[idx];
+      var parent = h4.parentElement;
+      var box = parent.querySelector('.open-orders-box');
+      if(!box){ box = document.createElement('div'); box.className='open-orders-box';
+                box.style.cssText='font-size:11px;color:#94a3b8;margin-top:4px';
+                h4.insertAdjacentElement('afterend', box); }
+      var rows = [];
+      if(v === 'kalshi'){ (d.kalshi||[]).forEach(function(o){
+        rows.push('⏳ OPEN ORDER (resting): '+(o.ticker||'?')+' '+(o.side||''));
+      }); }
+      if(v === 'limitless'){ (d.limitless||[]).forEach(function(o){
+        rows.push('⏳ OPEN ORDER (GTC): '+(o.ticker||o.msg||'?')+' $'+(o.size||''));
+      }); }
+      ((d.manual)||[]).forEach(function(m){
+        if(m.venue === v){
+          rows.push('📌 ORDER MANUAL TERCATAT: '+(m.ticker||m.msg||'?')+' $'+(m.size||'')+' · '+(m.ts||''));
+        }
+      });
+      box.innerHTML = rows.join('<br>');
+    });
+  }).catch(function(){});
+}
+loadOpenOrders(); setInterval(loadOpenOrders, 30000);
+</script>
+
+<script>
+// Filter rekonsiliasi harian (default: hari ini)
+(function(){
+  const today = new Date().toISOString().slice(0,10);
+  const fromEl = document.getElementById('rekFrom');
+  const toEl = document.getElementById('rekTo');
+  const filterEl = document.getElementById('rekFilter');
+  const dlBtn = document.getElementById('rekDownload');
+  const cntEl = document.getElementById('rekCount');
+  if (fromEl) fromEl.value = today;
+  if (toEl) toEl.value = today;
+
+  function applyFilter(){
+    const mode = filterEl.value;
+    const now = new Date();
+    let from = fromEl.value, to = toEl.value;
+    if (mode === 'today'){ from = to = today; }
+    else if (mode === 'week'){ const d=new Date(now); d.setDate(d.getDate()-7); from=d.toISOString().slice(0,10); to=today; }
+    else if (mode === 'month'){ const d=new Date(now); d.setDate(d.getDate()-30); from=d.toISOString().slice(0,10); to=today; }
+    if (fromEl) fromEl.value = from;
+    if (toEl) toEl.value = to;
+    // AMAN: hanya sembunyikan elemen DAUN ber-atribut data-ts; kontainer tidak pernah disentuh
+    let shown=0, hidden=0;
+    document.querySelectorAll('[data-ts]').forEach(el=>{
+      const d = (el.getAttribute('data-ts')||'').slice(0,10);
+      if ((from && d<from) || (to && d>to)) { el.style.display='none'; hidden++; }
+      else { el.style.display=''; shown++; }
+    });
+    if (cntEl) cntEl.textContent = shown+' baris sesuai rentang'+(hidden?(', '+hidden+' riwayat disembunyikan (Filter=Semua untuk lihat)'):'');
+    if (window.loadRecon) window.loadRecon(mode);
+  }
+  if (filterEl){
+    filterEl.addEventListener('change', applyFilter);
+    if (fromEl) fromEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); });
+    if (toEl) toEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); });
+    setTimeout(applyFilter, 500);
+  }
+  if (dlBtn){
+    dlBtn.addEventListener('click', ()=>{
+      const from = fromEl.value || '';
+      const to = toEl.value || '';
+      window.location.href = '/api/report.csv?from=' + from + '&to=' + to;
+    });
+  }
+})();
+</script>
+
+<script>
+(function(){
+  const map = {today:'today', week:'7d', month:'30d', all:'all'};
+  const sel = document.getElementById('rekFilter');
+  const btn = document.getElementById('rekScopeBtn');
+  if (sel) sel.addEventListener('change', () => {
+    window.__rekScope = map[sel.value] || 'today';
+    if (btn) btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini';
+    if (window.loadRecon) loadRecon();
+  });
+  if (btn) btn.addEventListener('click', () => {
+    window.__rekScope = (window.__rekScope === 'today') ? 'all' : 'today';
+    btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini';
+    if (window.loadRecon) loadRecon();
+  });
+})();
+</script>
+
+<script>
+(function(){
+  function fillUnrealizedEmpty(){
+    var el = document.getElementById('unrealized-content');
+    if (!el) return;
+    if ((el.textContent || '').trim().length > 0) return;
+    var today = (window.__rekScope || 'today') === 'today';
+    el.innerHTML = '<strong>\u{1F4BC} Posisi Aktif ' + (today ? '(hari ini):' : '(unrealized, lintas hari):') + '</strong><br>' +
+                   '<em style="color:#64748b">tidak ada posisi aktif ' + (today ? 'hari ini' : 'saat ini') + '</em>';
+  }
+  setInterval(fillUnrealizedEmpty, 2500);
+  setTimeout(fillUnrealizedEmpty, 1200);
+})();
+</script>
+
+<script>
+(function(){
+  function fmtRow(m){
+    var tag = (m.locked === false) ? '' : '';
+    return '<div class="item" style="margin:2px 0">' + tag + '[' + m.cat + '] ' + m.a + ' \u2194 ' + m.b +
+           ' \u00b7 kotor ' + ((m.gross||0)*100).toFixed(1) + '\u00a2 \u2212 fee ' + ((m.fees||0)*100).toFixed(1) +
+           '\u00a2 = \u03a0 ' + ((m.pi||0)*100).toFixed(2) + '\u00a2<br>' +
+           '<span style="color:#64748b;font-size:10px">' + (m.ta||'') + ' \u2194 ' + (m.tb||'') + '</span></div>';
+  }
+  function refreshMatch(){
+    fetch('/api/engine/status').then(function(r){return r.json();}).then(function(s){
+      var ms = s.matches || [];
+      var heads = [];
+      document.querySelectorAll('h4,div,span').forEach(function(el){
+        if (el.children.length === 0 && /^match\s*\+\s*\u03a0/i.test((el.textContent||'').trim())) heads.push(el);
+      });
+      var venues = ['polymarket','kalshi','limitless'];
+      heads.forEach(function(h, i){
+        var box = h.nextElementSibling;
+        if (!box) return;
+        var v = venues[i] || '';
+        var rows = ms.filter(function(m){ return m.a === v || m.b === v; });
+        rows.sort(function(x,y){ return (y.pi||0) - (x.pi||0); });
+        box.innerHTML = rows.length ? rows.map(fmtRow).join('')
+                                    : '<div class="muted">belum ada kejadian yang sama</div>';
+      });
+    }).catch(function(){});
+  }
+  function refreshExec(){
+    fetch('/api/engine/status').then(function(r){return r.json();}).then(function(s){
+      var today = new Date(((s.info && s.info.epoch) || (Date.now()/1000)) * 1000).toISOString().slice(0,10);
+      var heads = [];
+      document.querySelectorAll('h4,div,span').forEach(function(el){
+        if (el.children.length === 0 && /^eksekusi$/i.test((el.textContent||'').trim())) heads.push(el);
+      });
+      var venues = ['polymarket','kalshi','limitless'];
+      var age = (s.info && s.info.epoch) ? Math.max(0, Math.round(Date.now()/1000 - s.info.epoch)) : -1;
+      heads.forEach(function(h, i){
+        var box = h.nextElementSibling;
+        if (!box) return;
+        var v = venues[i] || '';
+        var pid = 'panel-' + i;
+        var pan = document.getElementById(pid);
+        if (!pan) {
+          pan = document.createElement('div'); pan.id = pid;
+          pan.className = 'item muted';
+          pan.style.cssText = 'margin:4px 0;padding:6px;border-left:3px solid #2c7;font-size:11px;max-height:180px;overflow-y:auto';
+          h.parentNode.insertBefore(pan, h);
+        }
+        var tr = s.trades || [];
+        var pap = tr.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('paper')===0; });
+        var res = pap.filter(function(t){ return t.resolved; });
+        var pn = res.map(function(t){ return t.pnl||0; });
+        var mean = pn.length ? (pn.reduce(function(a,b){return a+b;},0)/pn.length) : 0;
+        var win = pn.length ? Math.round(100*pn.filter(function(x){return x>0;}).length/pn.length) : 0;
+        var ms = s.matches || [];
+        var lk = ms.filter(function(m){ return m.locked && m.pi>=0.03; }).length;
+        var xc = ms.filter(function(m){ return m.locked===false && m.pi>=0.05; }).length;
+        var realN = tr.filter(function(t){ return (t.venues||[]).indexOf(v)>=0 && (t.ts||'').slice(0,10)===today && (t.mode||'').indexOf('real')===0; }).length;
+        var why = [];
+        if ((s.mode||'') !== 'real') { why.push('mode aktif '+(s.mode||'')+' - gerbang real tertutup'); }
+        else if (realN === 0) {
+          if (lk===0 && xc===0) why.push('tak ada kandidat lolos lantai (locked>=3c: '+lk+', crosscat>=5c: '+xc+')');
+          if (age > 240) why.push('quote scan tua ('+age+'s > gate 240s)');
+          if ((lk+xc)>0 && age<=240) why.push('kandidat ada tapi tertahan requote/maxOP/cap - lihat log fort:');
+        } else { why.push('eksekusi real hari ini: '+realN); }
+        var det = pap.slice().reverse().slice(0,60).map(function(t){
+          return '<div style="margin:1px 0">'+(t.ts||'').slice(11,16)+' · Π='+((t.pi||0)*100).toFixed(1)+'c · '+(t.resolved ? ('pnl '+(t.pnl||0)) : 'belum resolve')+'</div>';
+        }).join('');
+        pan.innerHTML = '<b>HASIL PAPER ('+v+'):</b> '+pap.length+' baris hari ini · teresolusi '+res.length+' · pnl mean '+mean.toFixed(2)+' · win '+win+'%<br>' +
+                        (det ? '<b>DETAIL PAPER:</b><br>'+det : '') +
+                        '<b>KENAPA BELUM EKSEKUSI REAL:</b> '+(why.length? why.join(' · ') : 'tidak ada penahan - menunggu fill');
+        var rows = tr.filter(function(t){
+          return (t.venues||[]).indexOf(v) >= 0 && (t.ts||'').slice(0,10) === today && (t.mode||'').indexOf(s.mode === 'real' ? 'real' : 'paper') === 0;
+        }).slice().reverse();
+        box.innerHTML = rows.length ? rows.map(function(t){
+          return '<div class="item" style="margin:2px 0">'+(t.ts||'').slice(11,19)+' · '+t.mode+' · Π='+((t.pi||0)*100).toFixed(2)+'c · $'+(t.size||'?')+(t.resolved?' · pnl '+t.pnl:'')+'</div>';
+        }).join('') : '<div class="muted">belum ada</div>';
+      });
+    }).catch(function(){});
+  }
+  setInterval(refreshExec, 15000);
+  setTimeout(refreshExec, 3000);
+  setInterval(refreshMatch, 15000);
+  setTimeout(refreshMatch, 3000);
+})();
+</script>
+</body></html>
