@@ -41,6 +41,17 @@ button:disabled{background:#475569;cursor:not-allowed}
 <label>Max Profit per trade (¢) <span class="muted">(kosongkan atau isi 999 untuk unlimited)</span><input id="max_pi" type="number" step="0.1" value="{{ limits.get('max_pi', 30) }}"></label>
 
 <hr style="border-color:#334155; margin: 16px 0;">
+<h3>⚡ Kontrol Eksekusi & Requote</h3>
+<p class="muted" style="margin-top:-8px;margin-bottom:12px">Atur toleransi agar bot tidak terlalu mudah membatalkan eksekusi saat harga berubah sesaat.</p>
+
+<label>Toleransi Penyusutan Requote (¢) <span class="muted">(default: 10, longgarkan agar tidak mudah skip)</span>
+  <input id="requote_tol" type="number" step="0.1" value="{{ limits.get('requote_tol', 10) }}">
+</label>
+<label>Usia Maksimal Data Quote (detik) <span class="muted">(default: 20, semakin kecil semakin fresh)</span>
+  <input id="quote_max_age_sec" type="number" step="1" value="{{ limits.get('quote_max_age_sec', 20) }}">
+</label>
+
+<hr style="border-color:#334155; margin: 16px 0;">
 
 <label>Min profit per trade (legacy, USDC)<input id="min_profit" type="number" step="0.01" value="{{ limits.get('min_profit','') }}"></label>
 <label>Rugi harian max (USDC, auto-stop)<input id="rugi_harian" type="number" value="{{ limits.get('rugi_harian','') }}"></label>
@@ -64,9 +75,16 @@ button:disabled{background:#475569;cursor:not-allowed}
 </div>
 
 <script>
-// TAMBAHAN: min_pi dan max_pi dimasukkan ke daftar field yang wajib divalidasi
-const ids = ['modal_total','modal_per_op','sl','tp','min_profit','rugi_harian', 'min_pi', 'max_pi'];
-function baca(){ const o={}; ids.forEach(i=>o[i]=parseFloat(document.getElementById(i).value) || (i==='max_pi' ? 999 : 0)); return o; }
+// TAMBAHAN: requote_tol dan quote_max_age_sec dimasukkan ke daftar field
+const ids = ['modal_total','modal_per_op','sl','tp','min_profit','rugi_harian', 'min_pi', 'max_pi', 'requote_tol', 'quote_max_age_sec'];
+function baca(){ 
+  const o={}; 
+  ids.forEach(i=>{
+    const val = document.getElementById(i).value;
+    o[i] = val === '' ? (i==='max_pi' ? 999 : 0) : parseFloat(val);
+  }); 
+  return o; 
+}
 function lengkap(){ return ids.every(i => document.getElementById(i).value !== ''); }
 function update(){
   document.getElementById('save').disabled = !lengkap();
@@ -75,13 +93,13 @@ function update(){
 ids.forEach(i => document.getElementById(i).addEventListener('input', update));
 update();
 
-// Load flag settings
 fetch('/api/limits/flag').then(r=>r.json()).then(d=>{
   document.getElementById('flagBand').checked = (d.use_pi_band !== false);
   document.getElementById('flagMaxOp').value = (d.max_op_per_pair ?? 2);
-  // Pre-fill min_pi/max_pi if they exist in flags (fallback)
   if(d.min_pi) document.getElementById('min_pi').value = d.min_pi;
   if(d.max_pi) document.getElementById('max_pi').value = d.max_pi;
+  if(d.requote_tol) document.getElementById('requote_tol').value = d.requote_tol;
+  if(d.quote_max_age_sec) document.getElementById('quote_max_age_sec').value = d.quote_max_age_sec;
 });
 
 document.getElementById('flagSave').addEventListener('click', ()=>{
@@ -90,7 +108,9 @@ document.getElementById('flagSave').addEventListener('click', ()=>{
       use_pi_band: document.getElementById('flagBand').checked,
       max_op_per_pair: parseInt(document.getElementById('flagMaxOp').value||'2',10),
       min_pi: parseFloat(document.getElementById('min_pi').value) || 0.1,
-      max_pi: parseFloat(document.getElementById('max_pi').value) || 30
+      max_pi: parseFloat(document.getElementById('max_pi').value) || 30,
+      requote_tol: parseFloat(document.getElementById('requote_tol').value) || 10,
+      quote_max_age_sec: parseInt(document.getElementById('quote_max_age_sec').value) || 20
     })
   }).then(r=>r.json()).then(d=>{ document.getElementById('flagMsg').textContent = d.ok ? '✅ tersimpan' : '❌ '+d.message; });
 });

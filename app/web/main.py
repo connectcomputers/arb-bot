@@ -18,7 +18,8 @@ from app import engine
 from app.venue_positions import get_positions
 
 # TAMBAHAN: min_pi dan max_pi dimasukkan ke validasi
-LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi"]
+# LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi"]
+LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]
 
 def config_complete(cfg: dict) -> bool:
     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
@@ -185,10 +186,15 @@ def limits(request: Request):
         "pairs": cfg.get("pairs", {}),
     })
 
+# @app.get("/api/limits/flag")
+# def api_limits_flag_get():
+#     c = load_config()["limits"]
+#     return {k: c.get(k) for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit", "min_pi", "max_pi")}
+
 @app.get("/api/limits/flag")
 def api_limits_flag_get():
     c = load_config()["limits"]
-    return {k: c.get(k) for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit", "min_pi", "max_pi")}
+    return {k: c.get(k) for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec")}
 
 @app.post("/api/limits/flag")
 async def api_limits_flag(request: Request):
