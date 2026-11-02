@@ -466,6 +466,115 @@ def api_unrealized():
         except Exception: out[v] = []
     return out
 
+@app.post("/api/sync-positions")
+def api_sync_positions():
+    """Sync posisi lokal dengan exchange real-time."""
+    from app.venue_positions import get_positions_detailed
+    from app.position_manager import load_positions, save_positions, track_new_position
+    from app.config_store import load_creds
+    import time
+    
+    creds = load_creds()
+    local_positions = load_positions()
+    synced_count = 0
+    new_positions = []
+    closed_positions = []
+    
+    for venue in ["polymarket", "kalshi", "limitless"]:
+        try:
+            # Ambil posisi dari exchange
+            exchange_positions = get_positions_detailed(venue, creds.get(venue, {}))
+            exchange_titles = {p.get("title") or p.get("ticker"): p for p in exchange_positions}
+            
+            # Update posisi lokal
+            for pos in local_positions:
+                if pos.get("venue") != venue or pos.get("resolved"):
+                    continue
+                
+                market_id = pos.get("market_id")
+                
+                # Cek apakah masih ada di exchange
+                if market_id not in exchange_titles:
+                    # Posisi sudah close di exchange (manual close)
+                    pos["resolved"] = True
+                    pos["manual_close"] = True
+                    pos["synced"] = True
+                    pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    closed_positions.append(market_id)
+                    synced_count += 1
+                    continue
+                
+                # Update data dari exchange
+                exchange_pos = exchange_titles[market_id]
+                pos["size"] = exchange_pos.get("size", pos.get("size"))
+                pos["value"] = exchange_pos.get("value", pos.get("value"))
+                pos["cur_price"] = exchange_pos.get("cur_price", pos.get("cur_price"))
+                pos["pnl"] = exchange_pos.get("pnl", pos.get("pnl", 0))
+                pos["pnl_pct"] = exchange_pos.get("pnl_pct", pos.get("pnl_pct", 0))
+                pos["synced"] = True
+                synced_count += 1
+            
+            # Tambahkan posisi baru yang tidak ada di lokal
+            for title, exchange_pos in exchange_titles.items():
+                exists = any(p.get("market_id") == title and p.get("venue") == venue 
+                            for p in local_positions)
+                if not exists:
+                    # Posisi baru dari exchange
+                    new_pos = {
+                        "venue": venue,
+                        "market_id": title,
+                        "buy_price": exchange_pos.get("cur_price", 0),
+                        "size": exchange_pos.get("size", 0),
+                        "value": exchange_pos.get("value", 0),
+                        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                        "synced": True,
+                        "from_exchange": True
+                    }
+                    local_positions.append(new_pos)
+                    new_positions.append(title)
+                    synced_count += 1
+                    
+        except Exception as e:
+            _log_loop(f"sync-positions error {venue}: {e}")
+    
+    # Simpan posisi yang sudah diupdate
+    save_positions(local_positions)
+    
+    return {
+        "ok": True,
+        "message": f"Synced {synced_count} positions",
+        "details": {
+            "synced": synced_count,
+            "new_positions": new_positions,
+            "closed_positions": closed_positions
+        }
+    }
+
+
+@app.get("/api/positions/status")
+def api_positions_status():
+    """Get status posisi real-time dari semua venue."""
+    from app.venue_positions import get_positions_detailed
+    from app.position_manager import load_positions
+    from app.config_store import load_creds
+    
+    creds = load_creds()
+    local_positions = load_positions()
+    all_positions = {}
+    
+    for venue in ["polymarket", "kalshi", "limitless"]:
+        try:
+            exchange_pos = get_positions_detailed(venue, creds.get(venue, {}))
+            all_positions[venue] = {
+                "exchange": exchange_pos,
+                "local": [p for p in local_positions if p.get("venue") == venue]
+            }
+        except Exception as e:
+            all_positions[venue] = {"error": str(e)}
+    
+    return all_positions
+
+
 @app.get("/api/open-orders")
 def api_open_orders():
     import json as _j, base64 as _b64, time as _t

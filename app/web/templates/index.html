@@ -227,10 +227,17 @@ setInterval(()=>{ const st = window.__st; if(!st) return; const now = Math.floor
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
   <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
   
-  <div style="margin-top:16px">
+  <!-- <div style="margin-top:16px">
     <button onclick="resetHistory()" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;margin-right:8px">🧹 Reset Riwayat</button>
     <button onclick="setBaseline()" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">📌 Set Baseline Sekarang</button>
-  </div>
+  </div> -->
+
+  <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
+    <button onclick="syncPositions()" style="background:#10b981;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600">🔄 Sync Posisi</button>
+    <button onclick="resetHistory()" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer"> Reset Riwayat</button>
+    <button onclick="setBaseline()" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">📌 Set Baseline Sekarang</button>
+    <span id="syncMsg" style="color:#86efac;font-size:12px;margin-left:8px"></span>
+  </div>  
 </div>
 
 </div></body></html>
@@ -315,6 +322,43 @@ function loadUnrealized(){
     if(!any) h += ' <span style="font-size:12px">tidak ada posisi aktif</span>';
     el.innerHTML = h;
   }).catch(()=>{});
+}
+
+async function syncPositions(){
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.textContent = ' Syncing...';
+  btn.disabled = true;
+  
+  try {
+    const r = await fetch('/api/sync-positions', {method:'POST'});
+    const d = await r.json();
+    
+    const msgEl = document.getElementById('syncMsg');
+    if(d.ok){
+      msgEl.textContent = `✅ ${d.message} (New: ${d.details.new_positions.length}, Closed: ${d.details.closed_positions.length})`;
+      msgEl.style.color = '#86efac';
+      
+      // Refresh reconciliation
+      if(window.loadRecon) loadRecon();
+      if(window.loadPnl) loadPnl();
+      if(window.loadUnrealized) loadUnrealized();
+      
+      // Poll dashboard untuk update
+      if(window.poll) setTimeout(poll, 1000);
+    } else {
+      msgEl.textContent = `❌ ${d.message}`;
+      msgEl.style.color = '#f87171';
+    }
+  } catch(e){
+    const msgEl = document.getElementById('syncMsg');
+    msgEl.textContent = `❌ Error: ${e.message}`;
+    msgEl.style.color = '#f87171';
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+    setTimeout(()=>{ document.getElementById('syncMsg').textContent = ''; }, 5000);
+  }
 }
 
 // Filter dan scope
