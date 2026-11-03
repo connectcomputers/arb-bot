@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function(){
 </header>
 
 <!-- TAMBAHAN BARU: Kotak Aturan Eksekusi Aktif -->
-<div id="active-rules-box" class="rule-box" style="display:none">
+<!-- <div id="active-rules-box" class="rule-box" style="display:none">
   <strong>⚙️ Aturan Eksekusi Aktif Saat Ini:</strong>
   <ul>
     <li>Min Profit (Π): <strong id="rule-min-pi">0.1</strong>¢</li>
@@ -94,15 +94,43 @@ document.addEventListener('DOMContentLoaded', function(){
     <li>Batas Rugi Harian: <strong>$<span id="rule-rugi">5</span></strong></li>
   </ul>
   <small class="muted" style="display:block;margin-top:6px">*Aturan tersembunyi (locked>=3c, crosscat>=5c) telah dihapus. Bot mengikuti rentang di atas.</small>
-</div>
+</div> -->
 
 <!-- TAMBAHAN: Notifikasi Skip Realtime -->
-<div id="skip-notif-box" class="rule-box" style="display:none; background:#451a03; border-color:#b45309;">
+<!-- <div id="skip-notif-box" class="rule-box" style="display:none; background:#451a03; border-color:#b45309;">
   <strong>⚠️ Notifikasi: Match TIDAK Dieksekusi (Realtime)</strong>
-  <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:12px; color:#fcd34d;">
+  <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:12px; color:#fcd34d;"> -->
     <!-- Diisi oleh JS -->
-  </ul>
+  <!-- </ul>
   <small class="muted" style="display:block;margin-top:6px">*Menampilkan 10 alasan skip terakhir. Jika penuh, bot sedang bekerja sesuai aturan Anda.</small>
+</div> -->
+
+<!-- LAYOUT 2 KOLOM: Kiri = Skip Notif, Kanan = Active Rules -->
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px">
+  
+  <!-- KOLOM KIRI: Notifikasi Skip Realtime -->
+  <div id="skip-notif-box" class="rule-box" style="display:none; background:#451a03; border-color:#b45309; margin:0">
+    <strong>⚠️ Notifikasi: Match TIDAK Dieksekusi (Realtime)</strong>
+    <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:11px; color:#fcd34d; max-height:150px; overflow-y:auto">
+      <!-- Diisi oleh JS -->
+    </ul>
+    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Menampilkan 10 alasan skip terakhir. Jika penuh, bot sedang bekerja sesuai aturan Anda.</small>
+  </div>
+  
+  <!-- KOLOM KANAN: Aturan Eksekusi Aktif -->
+  <div id="active-rules-box" class="rule-box" style="display:none; background:#1e3a8a; border-color:#3b82f6; margin:0">
+    <strong>⚙️ Aturan Eksekusi Aktif Saat Ini:</strong>
+    <ul style="margin:4px 0 0 20px; padding:0; font-size:12px">
+      <li>Min Profit (Π): <strong id="rule-min-pi">0.1</strong>¢</li>
+      <li>Max Profit (Π): <strong id="rule-max-pi">30</strong>¢</li>
+      <li>Toleransi Requote: <strong id="rule-requote-tol">10</strong>¢</li>
+      <li>Max Usia Quote: <strong id="rule-max-age">20</strong> detik</li>
+      <li>Max OP per Pasangan: <strong id="rule-max-op">2</strong></li>
+      <li>Batas Rugi Harian: <strong>$<span id="rule-rugi">5</span></strong></li>
+    </ul>
+    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Aturan tersembunyi (locked>=3c, crosscat>=5c) telah dihapus. Bot mengikuti rentang di atas.</small>
+  </div>
+  
 </div>
 
 <div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
@@ -154,10 +182,13 @@ async function poll_alerts(){ fetch('/api/alerts').then(r=>r.json()).then(d=>{ c
 
 // Load aturan aktif
 // async function loadActiveRules(){
-  // try {
-//     const r = await fetch('/api/limits/flag'); const d = await r.json();
+//   try {
+//     const r = await fetch('/api/limits/flag');
+//     const d = await r.json();
 //     document.getElementById('rule-min-pi').textContent = (d.min_pi || 0.1).toFixed(1);
 //     document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞ (Unlimited)' : (d.max_pi || 30).toFixed(1));
+//     document.getElementById('rule-requote-tol').textContent = (d.requote_tol || 10).toFixed(1);
+//     document.getElementById('rule-max-age').textContent = (d.quote_max_age_sec || 20);
 //     document.getElementById('rule-max-op').textContent = d.max_op_per_pair || 2;
 //     document.getElementById('active-rules-box').style.display = 'block';
 //   } catch(e) { console.error('Load rules error:', e); }
@@ -167,13 +198,25 @@ async function loadActiveRules(){
   try {
     const r = await fetch('/api/limits/flag');
     const d = await r.json();
+    
+    // Update semua field aturan
     document.getElementById('rule-min-pi').textContent = (d.min_pi || 0.1).toFixed(1);
     document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞ (Unlimited)' : (d.max_pi || 30).toFixed(1));
     document.getElementById('rule-requote-tol').textContent = (d.requote_tol || 10).toFixed(1);
     document.getElementById('rule-max-age').textContent = (d.quote_max_age_sec || 20);
     document.getElementById('rule-max-op').textContent = d.max_op_per_pair || 2;
-    document.getElementById('active-rules-box').style.display = 'block';
-  } catch(e) { console.error('Load rules error:', e); }
+    
+    // Ambil rugi_harian dari config utama
+    const r2 = await fetch('/api/limits');
+    const d2 = await r2.json();
+    document.getElementById('rule-rugi').textContent = (d2.limits && d2.limits.rugi_harian) ? d2.limits.rugi_harian : 5;
+    
+    // Tampilkan box
+    const box = document.getElementById('active-rules-box');
+    if (box) box.style.display = 'block';
+  } catch(e) { 
+    console.error('Load rules error:', e); 
+  }
 }
 
 // async function poll(){
@@ -290,7 +333,39 @@ async function poll(){
     </div>
   </div>`).join('');
 }
+// Auto-refresh reconciliation setiap 30 detik
+if (!window.__rekLastUpdate || Date.now() - window.__rekLastUpdate > 30000) {
+  if (window.loadRecon) {
+    loadRecon(window.__rekScope || 'today');
+    window.__rekLastUpdate = Date.now();
+  }
+  if (window.loadPnl) loadPnl();
+  if (window.loadUnrealized) loadUnrealized();
+}
 poll();
+
+// Poll skip reasons setiap 5 detik
+setInterval(async function(){
+  try {
+    const s = await fetch('/api/engine/status').then(r=>r.json());
+    
+    // Update skip notifications
+    const skipBox = document.getElementById('skip-notif-box');
+    const skipList = document.getElementById('skip-reasons-list');
+    if (skipBox && skipList) {
+      if (s.skip_reasons && s.skip_reasons.length > 0) {
+        skipBox.style.display = 'block';
+        skipList.innerHTML = s.skip_reasons.map(r => 
+          `<li style="margin:2px 0; font-family:monospace; font-size:11px; white-space:pre-wrap">[${r.ts}] ${r.reason}</li>`
+        ).join('');
+      } else {
+        skipBox.style.display = 'none';
+      }
+    }
+  } catch(e) {
+    console.error('Poll skip error:', e);
+  }
+}, 5000); // Update setiap 5 detik
 
 async function loadSaldo() {
   try {

@@ -398,11 +398,23 @@ def _loop():
                             
                             # 3. Cek toleransi penyusutan profit (REQUOTE)
                             if _pi2 < 0.01 or _pi2 < m["pi"] - requote_tol_decimal:
+                                # skip_msg = f"fort: Pi requote {_pi2*100:.1f}¢ menyusut (toleransi {requote_tol_cent}¢) - skip"
+                                # _log_loop(skip_msg)
+                                # st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
+                                # st["skip_reasons"] = st["skip_reasons"][-10:]
+                                # continue
+
+                                # Setelah baris: if _pi2 < 0.01 or _pi2 < m["pi"] - requote_tol_decimal:
                                 skip_msg = f"fort: Pi requote {_pi2*100:.1f}¢ menyusut (toleransi {requote_tol_cent}¢) - skip"
                                 _log_loop(skip_msg)
-                                st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
+                                st.setdefault("skip_reasons", []).append({
+                                    "ts": time.strftime("%H:%M:%S"), 
+                                    "reason": skip_msg,
+                                    "match": f"{m['a']} ↔ {m['b']} - Π={m['pi']*100:.1f}¢"
+                                })
                                 st["skip_reasons"] = st["skip_reasons"][-10:]
                                 continue
+
                     except Exception as _fe:
                         _log_loop(f"fort: requote exception {_fe} - skip")
                         continue

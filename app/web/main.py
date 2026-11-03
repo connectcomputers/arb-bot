@@ -615,6 +615,25 @@ async def api_cancel_order(request: Request):
             return {"ok": False, "message": str(e)[:100]}
     return {"ok": False, "message": "venue tidak didukung untuk cancel via API ini"}
 
+@app.get("/api/positions/refresh")
+def api_positions_refresh():
+    """Force refresh posisi dari semua exchange."""
+    from app.venue_positions import get_positions_detailed
+    from app.position_manager import load_positions, save_positions
+    from app.config_store import load_creds
+    
+    creds = load_creds()
+    all_positions = {}
+    
+    for venue in ["polymarket", "kalshi", "limitless"]:
+        try:
+            positions = get_positions_detailed(venue, creds.get(venue, {}))
+            all_positions[venue] = positions
+        except Exception as e:
+            all_positions[venue] = {"error": str(e)}
+    
+    return all_positions
+
 # =================================================================================
 # # /app/web/main.py
 # """
