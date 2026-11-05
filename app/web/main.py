@@ -430,41 +430,119 @@ def engine_kill():
 def engine_status():
     return engine.status()
 
+# @app.get("/api/reconciliation")
+# def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str = ""):
+#     from app.baseline import load_baseline
+#     import json
+#     from pathlib import Path as _P2
+#     baseline = load_baseline()
+#     try:
+#         state = json.loads(_P2("data/live_state.json").read_text())
+#         trades = state.get("trades", [])
+#         spend = state.get("spend", {})
+#     except Exception:
+#         trades, spend = [], {}
+#     from datetime import datetime as _dt2, timedelta as _td2
+#     _now2 = _dt2.now(); _today2 = _now2.strftime("%Y-%m-%d")
+#     if scope == "today": _f2, _t2v = _today2, _today2
+#     elif scope == "week": _f2, _t2v = (_now2 - _td2(days=7)).strftime("%Y-%m-%d"), _today2
+#     elif scope == "month": _f2, _t2v = (_now2 - _td2(days=30)).strftime("%Y-%m-%d"), _today2
+#     else: _f2, _t2v = from_date, to_date
+#     trades = _filter_trades_by_date(trades, _f2 or None, _t2v or None)
+#     from datetime import datetime as _dtN, timedelta as _tdN
+#     _today = _dtN.now().strftime("%Y-%m-%d")
+#     _cut = {"today": _today, "7d": (_dtN.now() - _tdN(days=7)).strftime("%Y-%m-%d"), "30d": (_dtN.now() - _tdN(days=30)).strftime("%Y-%m-%d"), "all": "0000-00-00"}.get(scope, _today)
+#     trades_all = trades
+#     trades = [t for t in trades if (t.get("ts") or "")[:10] >= _cut]
+#     real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
+#     paper_trades = [t for t in trades if t.get("mode") == "paper"]
+#     real_all = [t for t in trades_all if t.get("mode") in ("real-auto", "real-micro")]
+#     paper_all = [t for t in trades_all if t.get("mode") == "paper"]
+#     by_venue = {}
+#     for t in real_trades:
+#         for v in t.get("venues", []):
+#             by_venue.setdefault(v, {"count": 0, "size": 0})
+#             by_venue[v]["count"] += 1
+#             by_venue[v]["size"] += t.get("size", 0)
+#     return {"baseline": baseline, "scope": scope, "trades_real": len(real_trades), "trades_paper": len(paper_trades), "spend_today": spend.get("amount", 0), "by_venue": by_venue, "recent_trades": real_trades[-10:], "trades_real_all": len(real_all), "trades_paper_all": len(paper_all), "recent_trades_all": real_all[-10:]}
+
 @app.get("/api/reconciliation")
 def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str = ""):
+    """Data rekonsiliasi: saldo baseline vs sekarang + trades."""
     from app.baseline import load_baseline
     import json
     from pathlib import Path as _P2
+    
+    print(f"RECON API: scope={scope}, from_date={from_date}, to_date={to_date}")
+    
     baseline = load_baseline()
+    
     try:
         state = json.loads(_P2("data/live_state.json").read_text())
         trades = state.get("trades", [])
         spend = state.get("spend", {})
     except Exception:
-        trades, spend = [], {}
+        trades = []
+        spend = {}
+    
     from datetime import datetime as _dt2, timedelta as _td2
     _now2 = _dt2.now(); _today2 = _now2.strftime("%Y-%m-%d")
-    if scope == "today": _f2, _t2v = _today2, _today2
-    elif scope == "week": _f2, _t2v = (_now2 - _td2(days=7)).strftime("%Y-%m-%d"), _today2
-    elif scope == "month": _f2, _t2v = (_now2 - _td2(days=30)).strftime("%Y-%m-%d"), _today2
-    else: _f2, _t2v = from_date, to_date
+    
+    # Determine date range based on scope
+    if scope == "today":
+        _f2, _t2v = _today2, _today2
+    elif scope == "week":
+        _f2, _t2v = (_now2 - _td2(days=7)).strftime("%Y-%m-%d"), _today2
+    elif scope == "month":
+        _f2, _t2v = (_now2 - _td2(days=30)).strftime("%Y-%m-%d"), _today2
+    elif scope == "all":
+        _f2, _t2v = "", ""
+    else:
+        _f2, _t2v = from_date, to_date
+    
+    print(f"RECON: Filtering from {_f2} to {_t2v}")
+    
+    # Apply date filter
     trades = _filter_trades_by_date(trades, _f2 or None, _t2v or None)
+    print(f"RECON: Filtered {len(trades)} trades")
+    
     from datetime import datetime as _dtN, timedelta as _tdN
     _today = _dtN.now().strftime("%Y-%m-%d")
-    _cut = {"today": _today, "7d": (_dtN.now() - _tdN(days=7)).strftime("%Y-%m-%d"), "30d": (_dtN.now() - _tdN(days=30)).strftime("%Y-%m-%d"), "all": "0000-00-00"}.get(scope, _today)
+    _cut = {"today": _today,
+            "7d": (_dtN.now() - _tdN(days=7)).strftime("%Y-%m-%d"),
+            "30d": (_dtN.now() - _tdN(days=30)).strftime("%Y-%m-%d"),
+            "all": "0000-00-00"}.get(scope, _today)
+    
     trades_all = trades
     trades = [t for t in trades if (t.get("ts") or "")[:10] >= _cut]
-    real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro")]
+
+    real_trades = [t for t in trades if t.get("mode") in ("real-auto", "real-micro", "real")]
     paper_trades = [t for t in trades if t.get("mode") == "paper"]
-    real_all = [t for t in trades_all if t.get("mode") in ("real-auto", "real-micro")]
+    real_all = [t for t in trades_all if t.get("mode") in ("real-auto", "real-micro", "real")]
     paper_all = [t for t in trades_all if t.get("mode") == "paper"]
+    
     by_venue = {}
     for t in real_trades:
         for v in t.get("venues", []):
             by_venue.setdefault(v, {"count": 0, "size": 0})
             by_venue[v]["count"] += 1
             by_venue[v]["size"] += t.get("size", 0)
-    return {"baseline": baseline, "scope": scope, "trades_real": len(real_trades), "trades_paper": len(paper_trades), "spend_today": spend.get("amount", 0), "by_venue": by_venue, "recent_trades": real_trades[-10:], "trades_real_all": len(real_all), "trades_paper_all": len(paper_all), "recent_trades_all": real_all[-10:]}
+    
+    result = {
+        "baseline": baseline,
+        "scope": scope,
+        "trades_real": len(real_trades),
+        "trades_paper": len(paper_trades),
+        "spend_today": spend.get("amount", 0),
+        "by_venue": by_venue,
+        "recent_trades": real_trades[-10:],
+        "trades_real_all": len(real_all),
+        "trades_paper_all": len(paper_all),
+        "recent_trades_all": real_all[-10:]
+    }
+    
+    print(f"RECON RESULT: real={len(real_trades)}, paper={len(paper_trades)}")
+    return result
 
 @app.post("/api/baseline/set")
 async def api_baseline_set(request: Request):
