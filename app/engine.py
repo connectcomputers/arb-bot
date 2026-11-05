@@ -278,9 +278,41 @@ def _auto_take_profit():
                 elif venue == "limitless":
                     if current.get("order_id") or current.get("ticker"): ok, msg = sell_limitless(creds.get(venue, {}), current.get("order_id") or current.get("ticker"), size)
                     else: msg = "order_id/ticker tidak ditemukan"
+                # if ok:
+                #     pos.update({"resolved": True, "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2), "resolved_ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "auto_tp": True, "close_price": current_price})
+                #     closed_count += 1; _log_loop(f"✅ auto-tp SUKSES: {venue} {market_id} P/L=${pnl:.2f} ({pnl_pct:.1f}%)")
+
                 if ok:
-                    pos.update({"resolved": True, "pnl": round(pnl, 2), "pnl_pct": round(pnl_pct, 2), "resolved_ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "auto_tp": True, "close_price": current_price})
-                    closed_count += 1; _log_loop(f"✅ auto-tp SUKSES: {venue} {market_id} P/L=${pnl:.2f} ({pnl_pct:.1f}%)")
+                    pnl = current_value - buy_value
+                    pnl_pct = (pnl / buy_value) * 100 if buy_value > 0 else 0
+                    
+                    pos.update({
+                        "resolved": True, 
+                        "pnl": round(pnl, 2), 
+                        "pnl_pct": round(pnl_pct, 2), 
+                        "resolved_ts": time.strftime("%Y-%m-%dT%H:%M:%S"), 
+                        "auto_tp": True, 
+                        "close_price": current_price
+                    })
+                    
+                    # JUGA UPDATE DI live_state.json
+                    st = _read()
+                    st.setdefault("trades", []).append({
+                        "ts": pos.get("resolved_ts"),
+                        "mode": "auto-close",
+                        "venues": [venue],
+                        "pi": 0,
+                        "size": size,
+                        "pnl": round(pnl, 2),
+                        "resolved": True,
+                        "ta": market_id,
+                        "tb": ""
+                    })
+                    _write(st)
+                    
+                    closed_count += 1
+                    _log_loop(f"✅ auto-tp SUKSES: {venue} {market_id} P/L=${pnl:.2f} ({pnl_pct:.1f}%)")
+
                 else: _log_loop(f"❌ auto-tp GAGAL: {venue} {market_id} - {msg}")
         except Exception as e: _log_loop(f"❌ auto-tp ERROR: {venue} {market_id} - {type(e).__name__}: {str(e)[:100]}")
     if closed_count > 0: save_positions(positions); _log_loop(f"🎯 Auto-TP selesai: {closed_count} posisi ditutup")
