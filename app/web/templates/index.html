@@ -84,40 +84,12 @@ document.addEventListener('DOMContentLoaded', function(){
  </div>
 </header>
 
-<!-- TAMBAHAN BARU: Kotak Aturan Eksekusi Aktif -->
-<!-- <div id="active-rules-box" class="rule-box" style="display:none">
-  <strong>⚙️ Aturan Eksekusi Aktif Saat Ini:</strong>
-  <ul>
-    <li>Min Profit (Π): <strong id="rule-min-pi">0.1</strong>¢</li>
-    <li>Max Profit (Π): <strong id="rule-max-pi">30</strong>¢</li>
-    <li>Max OP per Pasangan: <strong id="rule-max-op">2</strong></li>
-    <li>Batas Rugi Harian: <strong>$<span id="rule-rugi">5</span></strong></li>
-  </ul>
-  <small class="muted" style="display:block;margin-top:6px">*Aturan tersembunyi (locked>=3c, crosscat>=5c) telah dihapus. Bot mengikuti rentang di atas.</small>
-</div> -->
-
-<!-- TAMBAHAN: Notifikasi Skip Realtime -->
-<!-- <div id="skip-notif-box" class="rule-box" style="display:none; background:#451a03; border-color:#b45309;">
-  <strong>⚠️ Notifikasi: Match TIDAK Dieksekusi (Realtime)</strong>
-  <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:12px; color:#fcd34d;"> -->
-    <!-- Diisi oleh JS -->
-  <!-- </ul>
-  <small class="muted" style="display:block;margin-top:6px">*Menampilkan 10 alasan skip terakhir. Jika penuh, bot sedang bekerja sesuai aturan Anda.</small>
-</div> -->
-
-<!-- LAYOUT 2 KOLOM: Kiri = Skip Notif, Kanan = Active Rules -->
 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px">
-  
-  <!-- KOLOM KIRI: Notifikasi Skip Realtime -->
   <div id="skip-notif-box" class="rule-box" style="display:none; background:#451a03; border-color:#b45309; margin:0">
     <strong>⚠️ Notifikasi: Match TIDAK Dieksekusi (Realtime)</strong>
-    <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:11px; color:#fcd34d; max-height:150px; overflow-y:auto">
-      <!-- Diisi oleh JS -->
-    </ul>
-    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Menampilkan 10 alasan skip terakhir. Jika penuh, bot sedang bekerja sesuai aturan Anda.</small>
+    <ul id="skip-reasons-list" style="margin:4px 0 0 20px; padding:0; font-size:11px; color:#fcd34d; max-height:150px; overflow-y:auto"></ul>
+    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Menampilkan 10 alasan skip terakhir.</small>
   </div>
-  
-  <!-- KOLOM KANAN: Aturan Eksekusi Aktif -->
   <div id="active-rules-box" class="rule-box" style="display:none; background:#1e3a8a; border-color:#3b82f6; margin:0">
     <strong>⚙️ Aturan Eksekusi Aktif Saat Ini:</strong>
     <ul style="margin:4px 0 0 20px; padding:0; font-size:12px">
@@ -128,26 +100,16 @@ document.addEventListener('DOMContentLoaded', function(){
       <li>Max OP per Pasangan: <strong id="rule-max-op">2</strong></li>
       <li>Batas Rugi Harian: <strong>$<span id="rule-rugi">5</span></strong></li>
     </ul>
-    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Aturan tersembunyi (locked>=3c, crosscat>=5c) telah dihapus. Bot mengikuti rentang di atas.</small>
+    <small class="muted" style="display:block;margin-top:6px; font-size:10px">*Aturan tersembunyi telah dihapus.</small>
   </div>
-  
 </div>
 
 <div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
   <h2 style="color:#38bdf8;margin:0 0 12px;font-size:16px">💰 Saldo Semua Venue</h2>
   <div class="cols">
-    <div class="col" style="min-height:0">
-      <h2>🎯 POLYMARKET</h2>
-      <div id="saldo-polymarket" class="item">Loading…</div>
-    </div>
-    <div class="col" style="min-height:0">
-      <h2>📊 KALSHI</h2>
-      <div id="saldo-kalshi" class="item">Loading…</div>
-    </div>
-    <div class="col" style="min-height:0">
-      <h2>💎 LIMITLESS</h2>
-      <div id="saldo-limitless" class="item">Loading…</div>
-    </div>
+    <div class="col" style="min-height:0"><h2>🎯 POLYMARKET</h2><div id="saldo-polymarket" class="item">Loading…</div></div>
+    <div class="col" style="min-height:0"><h2>📊 KALSHI</h2><div id="saldo-kalshi" class="item">Loading…</div></div>
+    <div class="col" style="min-height:0"><h2>💎 LIMITLESS</h2><div id="saldo-limitless" class="item">Loading…</div></div>
   </div>
   <p class="muted" style="margin:8px 0 0;font-size:11px">Auto-refresh setiap 30 detik · <span id="saldo-updated">-</span></p>
 </div>
@@ -174,234 +136,92 @@ async function micro(v){
   const r = await fetch('/api/exec/micro',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({venue:v})});
   const d = await r.json();
   let msg = (d.ok?'✅ ':'❌ ')+d.message;
-  if(!d.ok && v==='polymarket' && (d.message.includes('geofence') || d.message.includes('403'))){ msg = '❌ GEOFENCE / GEOBLOCK\n\nPerlu proxy wilayah didukung agar aplikasi bot ini bisa meng-eksekusi order real.\nIsi di /setup → field "Proxy URL eksekusi".'; }
+  if(!d.ok && v==='polymarket' && (d.message.includes('geofence') || d.message.includes('403'))){ msg = '❌ GEOFENCE / GEOBLOCK\n\nPerlu proxy wilayah didukung.'; }
   alert(msg); poll();
 }
 
-async function poll_alerts(){ fetch('/api/alerts').then(r=>r.json()).then(d=>{ const alerts = d.alerts || []; const banner = document.getElementById('alert-banner'); const msg = document.getElementById('alert-message'); if (alerts.length > 0) { banner.style.display = 'block'; msg.textContent = alerts.map(a=>a.message).join(' | '); } else { banner.style.display = 'none'; } }).catch(()=>{}); }
-
-// Load aturan aktif
-// async function loadActiveRules(){
-//   try {
-//     const r = await fetch('/api/limits/flag');
-//     const d = await r.json();
-//     document.getElementById('rule-min-pi').textContent = (d.min_pi || 0.1).toFixed(1);
-//     document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞ (Unlimited)' : (d.max_pi || 30).toFixed(1));
-//     document.getElementById('rule-requote-tol').textContent = (d.requote_tol || 10).toFixed(1);
-//     document.getElementById('rule-max-age').textContent = (d.quote_max_age_sec || 20);
-//     document.getElementById('rule-max-op').textContent = d.max_op_per_pair || 2;
-//     document.getElementById('active-rules-box').style.display = 'block';
-//   } catch(e) { console.error('Load rules error:', e); }
-// }
-
 async function loadActiveRules(){
   try {
-    const r = await fetch('/api/limits/flag');
-    const d = await r.json();
-    
-    // Update semua field aturan
+    const r = await fetch('/api/limits/flag'); const d = await r.json();
     document.getElementById('rule-min-pi').textContent = (d.min_pi || 0.1).toFixed(1);
-    document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞ (Unlimited)' : (d.max_pi || 30).toFixed(1));
+    document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞' : (d.max_pi || 30).toFixed(1));
     document.getElementById('rule-requote-tol').textContent = (d.requote_tol || 10).toFixed(1);
     document.getElementById('rule-max-age').textContent = (d.quote_max_age_sec || 20);
     document.getElementById('rule-max-op').textContent = d.max_op_per_pair || 2;
-    
-    // Ambil rugi_harian dari config utama
-    const r2 = await fetch('/api/limits');
-    const d2 = await r2.json();
+    const r2 = await fetch('/api/limits'); const d2 = await r2.json();
     document.getElementById('rule-rugi').textContent = (d2.limits && d2.limits.rugi_harian) ? d2.limits.rugi_harian : 5;
-    
-    // Tampilkan box
-    const box = document.getElementById('active-rules-box');
-    if (box) box.style.display = 'block';
-  } catch(e) { 
-    console.error('Load rules error:', e); 
-  }
+    document.getElementById('active-rules-box').style.display = 'block';
+  } catch(e) { console.error('Load rules error:', e); }
 }
-
-// async function poll(){
-//   const [f, s] = await Promise.all([ fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()), fetch('/api/engine/status').then(r=>r.json()) ]);
-//   window.__st = s;
-//   if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
-//   const ep0 = ((s.info||{}).epoch) || 0; const age0 = Math.floor(Date.now()/1000) - ep0;
-//   if (age0 > (s.interval||30) * 2 && !window.__rf) { window.__rf = true; fetch('/api/engine/refresh', {method:'POST'}).then(()=>{ window.__rf = false; poll(); }); }
-//   const b = document.getElementById('badge');
-//   b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
-//   b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
-//   if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
-//   if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
-//   document.getElementById('cols').innerHTML = f.venues.map(v => `
-//   <div class="col">
-//     <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a> <button class="blue" onclick="micro('${v.venue}')"></button></h2>
-//     <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
-//     <h4>Open Positions (OP)</h4><div style="font-size:10px;color:#64748b;margin-bottom:4px">posisi terisi; order GTC menunggu fill tercatat di Rekonsiliasi</div>
-//     ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
-//     <h4>🔄 Screening Realtime</h4>
-//     <div class="item" id="scan-${v.venue}">🔄 …</div>
-//     <div class="item">event venue ini: ${((s.info||{}).counts||{})[v.venue]||0} · perbandingan: ${((s.info||{}).comparisons||0).toLocaleString('id-ID')}</div>
-//     <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8).map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>
-//     <h4>Match + Π bersih (terbesar → terkecil)</h4>
-//     <div class="matchbox">
-//       ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue).map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+'¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b><br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>')).join('') || '<div class="muted">belum ada kejadian yang sama</div>'}
-//       ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue).map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>')).join('')}
-//     </div>
-//     <h4>Eksekusi</h4>
-//     <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
-//     ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse().map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('') || '<div class="muted">belum ada</div>'}
-//     </div>
-//   </div>`).join('');
-// }
-// poll();
 
 async function poll(){
-  const [f, s] = await Promise.all([ 
-    fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()), 
-    fetch('/api/engine/status').then(r=>r.json()) 
-  ]);
-  
-  window.__st = s;
-  
-  if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
-  
-  const ep0 = ((s.info||{}).epoch) || 0; 
-  const age0 = Math.floor(Date.now()/1000) - ep0;
-  if (age0 > (s.interval||30) * 2 && !window.__rf) { 
-    window.__rf = true; 
-    fetch('/api/engine/refresh', {method:'POST'}).then(()=>{ 
-      window.__rf = false; 
-      poll(); 
-    }); 
-  }
-  
-  const b = document.getElementById('badge');
-  b.textContent = s.kill ? ' KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
-  b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
-  if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
-  
-  if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
-  
-  // === TAMBAHAN BARU: Tampilkan Skip Reasons Realtime ===
-  const skipBox = document.getElementById('skip-notif-box');
-  const skipList = document.getElementById('skip-reasons-list');
-  if (skipBox && skipList) {
-    if (s.skip_reasons && s.skip_reasons.length > 0) {
-      skipBox.style.display = 'block';
-      skipList.innerHTML = s.skip_reasons.map(r => 
-        `<li style="margin:2px 0; font-family:monospace; font-size:11px;">[${r.ts}] ${r.reason}</li>`
-      ).join('');
-    } else {
-      skipBox.style.display = 'none';
-    }
-  }
-  // === AKHIR TAMBAHAN ===
-  
-  document.getElementById('cols').innerHTML = f.venues.map(v => `
-  <div class="col">
-    <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · 
-      <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a> 
-      <button class="blue" onclick="micro('${v.venue}')"></button>
-    </h2>
-    <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
-    
-    <h4>Open Positions (OP)</h4>
-    <div style="font-size:10px;color:#64748b;margin-bottom:4px">posisi terisi; order GTC menunggu fill tercatat di Rekonsiliasi</div>
-    ${v.positions.filter(p=>(p.value||0)>0).length ? 
-      v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') 
-      : '<div class="muted">tidak ada</div>'}
-
-    <h4>🔄 Screening Realtime</h4>
-    <div class="item" id="scan-${v.venue}"> …</div>
-    <div class="item">event venue ini: ${((s.info||{}).counts||{})[v.venue]||0} · perbandingan: ${((s.info||{}).comparisons||0).toLocaleString('id-ID')}</div>
-    <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8).map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>      
-
-    <h4>Match + Π bersih (terbesar → terkecil)</h4>
-    <div class="matchbox">
-      ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue)
-        .map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' · kotor '+(m.gross*100).toFixed(1)+'¢ − fee '+(m.fees*100).toFixed(1)+'¢ = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b><br><span class="muted">'+m.ta+' ↔ '+m.tb+'</span>'))
-        .join('') || '<div class="muted">belum ada kejadian yang sama</div>'}
-      ${(s.near||[]).filter(n=>n.a===v.venue||n.b===v.venue)
-        .map(n=>it('<span class="muted">kandidat (sim '+n.s+'): '+n.ta+' ↔ '+n.tb+'</span>'))
-        .join('')}
-    </div>
-
-    <h4>Eksekusi</h4>
-    <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
-    ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0)
-      .slice().reverse()
-      .map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`))
-      .join('') || '<div class="muted">belum ada</div>'}
-    </div>
-  </div>`).join('');
-}
-// // Auto-refresh reconciliation setiap 30 detik
-// if (!window.__rekLastUpdate || Date.now() - window.__rekLastUpdate > 30000) {
-//   if (window.loadRecon) {
-//     loadRecon(window.__rekScope || 'today');
-//     window.__rekLastUpdate = Date.now();
-//   }
-//   if (window.loadPnl) loadPnl();
-//   if (window.loadUnrealized) loadUnrealized();
-// }
-
-// Auto-refresh reconciliation setiap 30 detik
-if (!window.__rekLastUpdate || Date.now() - window.__rekLastUpdate > 30000) {
-  if (window.loadRecon) {
-    const currentScope = window.__rekScope || 'today';
-    loadRecon(currentScope);
-    window.__rekLastUpdate = Date.now();
-  }
-  if (window.loadPnl) loadPnl();
-  if (window.loadUnrealized) loadUnrealized();
-}
-
-poll();
-
-// Poll skip reasons setiap 5 detik
-setInterval(async function(){
   try {
-    const s = await fetch('/api/engine/status').then(r=>r.json());
+    const [f, s] = await Promise.all([ 
+      fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()), 
+      fetch('/api/engine/status').then(r=>r.json()) 
+    ]);
+    window.__st = s;
+    if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
     
-    // Update skip notifications
+    const b = document.getElementById('badge');
+    b.textContent = s.kill ? ' KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
+    b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
+    if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
+    
+    if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
+    
     const skipBox = document.getElementById('skip-notif-box');
     const skipList = document.getElementById('skip-reasons-list');
     if (skipBox && skipList) {
       if (s.skip_reasons && s.skip_reasons.length > 0) {
         skipBox.style.display = 'block';
-        skipList.innerHTML = s.skip_reasons.map(r => 
-          `<li style="margin:2px 0; font-family:monospace; font-size:11px; white-space:pre-wrap">[${r.ts}] ${r.reason}</li>`
-        ).join('');
-      } else {
-        skipBox.style.display = 'none';
-      }
+        skipList.innerHTML = s.skip_reasons.map(r => `<li style="margin:2px 0; font-family:monospace; font-size:11px;">[${r.ts}] ${r.reason}</li>`).join('');
+      } else { skipBox.style.display = 'none'; }
     }
-  } catch(e) {
-    console.error('Poll skip error:', e);
-  }
-}, 5000); // Update setiap 5 detik
+    
+    document.getElementById('cols').innerHTML = f.venues.map(v => `
+      <div class="col">
+        <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
+        <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
+        <h4>Open Positions (OP)</h4>
+        ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
+        <h4>🔄 Screening Realtime</h4>
+        <div class="item" id="scan-${v.venue}"> …</div>
+        <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8).map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>      
+        <h4>Match + Π bersih</h4>
+        <div class="matchbox">
+          ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue).map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>')).join('') || '<div class="muted">belum ada</div>'}
+        </div>
+        <h4>Eksekusi</h4>
+        <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
+        ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse().map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('') || '<div class="muted">belum ada</div>'}
+        </div>
+      </div>`).join('');
+  } catch(e) { console.error('Poll error:', e); }
+}
+poll(); setInterval(poll, 10000);
 
 async function loadSaldo() {
   try {
-    const r = await fetch('/api/saldo'); const d = await r.json(); const now = new Date().toLocaleTimeString('id-ID');
-    document.getElementById('saldo-updated').textContent = `terakhir update: ${now}`;
-    const k = d.kalshi; document.getElementById('saldo-kalshi').innerHTML = `<div>Cash: <strong style="color:#86efac">$${(k.cash_usd || 0).toFixed(2)}</strong></div><div>Portfolio: <strong>$${(k.portfolio_usd || 0).toFixed(2)}</strong></div><div class="muted" style="margin-top:6px">✅ ${k.status}</div>`;
-    const l = d.limitless; document.getElementById('saldo-limitless').innerHTML = `<div>Cash (Base): <strong style="color:#86efac">${(l.usdc_base || 0).toFixed(4)}</strong> · Portfolio: <strong style="color:#93c5fd">${(l.posisi_usd || 0).toFixed(2)}</strong></div><div class="muted" style="margin-top:6px">✅ ${l.status}</div>`;
-    const p = d.polymarket; document.getElementById('saldo-polymarket').innerHTML = `<div>Cash: <strong style="color:#86efac">$${(p.cash_usd || 0).toFixed(2)}</strong> · Portfolio: <strong style="color:#93c5fd">$${(p.posisi_usd || 0).toFixed(2)}</strong></div><div class="muted">Total: $${(p.web_usd || 0).toFixed(2)} · On-chain: $${(p.usdce_signer || 0).toFixed(2)}</div>`;
+    const r = await fetch('/api/saldo'); const d = await r.json();
+    document.getElementById('saldo-updated').textContent = `terakhir update: ${new Date().toLocaleTimeString('id-ID')}`;
+    document.getElementById('saldo-kalshi').innerHTML = `<div>Cash: <strong style="color:#86efac">$${(d.kalshi.cash_usd || 0).toFixed(2)}</strong></div><div>Portfolio: <strong>$${(d.kalshi.portfolio_usd || 0).toFixed(2)}</strong></div>`;
+    document.getElementById('saldo-limitless').innerHTML = `<div>Cash: <strong style="color:#86efac">${(d.limitless.usdc_base || 0).toFixed(4)}</strong></div><div>Portfolio: <strong>$${(d.limitless.posisi_usd || 0).toFixed(2)}</strong></div>`;
+    document.getElementById('saldo-polymarket').innerHTML = `<div>Cash: <strong style="color:#86efac">$${(d.polymarket.cash_usd || 0).toFixed(2)}</strong></div><div>Portfolio: <strong>$${(d.polymarket.posisi_usd || 0).toFixed(2)}</strong></div>`;
   } catch (e) { console.error('Load saldo error:', e); }
 }
 loadSaldo(); setInterval(loadSaldo, 30000);
-async function resetSpend(){ if(!confirm('Reset counter belanja harian (cap)?\nHanya untuk tes/demo.')) return; const r = await fetch('/api/engine/reset-spend',{method:'POST'}); const d = await r.json(); alert((d.ok?'✅ ':'❌ ')+d.message); poll(); }
-setInterval(()=>{ const st = window.__st; if(!st) return; const now = Math.floor(Date.now()/1000); const ep = ((st.info||{}).epoch) || now; const iv = st.interval || 30; const age = now - ep; const txt = !st.running ? ' mesin berhenti' : age < 3 ? '🔄 sedang scanning…' : age > iv*2 ? '🟢 SCAN BERJALAN' : `🔄 scan ${age} dtk lalu`; document.querySelectorAll('[id^="scan-"]').forEach(el=>{ el.textContent = txt; }); },1000);
+async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) return; const r = await fetch('/api/engine/reset-spend',{method:'POST'}); const d = await r.json(); alert((d.ok?'✅ ':'❌ ')+d.message); poll(); }
 </script>
 
-<!-- ========== BAGIAN REKONSILIASI HARIAN (VERSI LENGKAP DARI FILE LAMA) ========== -->
 <div id="reconciliation" class="recon-section">
   <div class="recon-header">
     <label style="font-size:11px">Filter:
       <select id="rekFilter" style="font-size:11px">
-        <option value="all">Semua</option>
         <option value="today" selected>Hari ini</option>
         <option value="week">7 hari</option>
         <option value="month">30 hari</option>
+        <option value="all">Semua</option>
       </select>
     </label>
     <label style="font-size:11px">Dari: <input type="date" id="rekFrom" style="font-size:11px"></label>
@@ -412,21 +232,14 @@ setInterval(()=>{ const st = window.__st; if(!st) return; const now = Math.floor
   </div>
   
   <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
-  <div style="font-size:11px;color:#64748b;margin-bottom:8px">Catatan: "Order Real" = riwayat transaksi (audit trail), bukan posisi aktif saat ini.</div>
-  
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
   <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
-  
-  <!-- <div style="margin-top:16px">
-    <button onclick="resetHistory()" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;margin-right:8px">🧹 Reset Riwayat</button>
-    <button onclick="setBaseline()" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">📌 Set Baseline Sekarang</button>
-  </div> -->
 
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
     <button onclick="syncPositions()" style="background:#10b981;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600">🔄 Sync Posisi</button>
     <button onclick="resetHistory()" style="background:#dc2626;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer"> Reset Riwayat</button>
-    <button onclick="setBaseline()" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">📌 Set Baseline Sekarang</button>
+    <button onclick="setBaseline()" style="background:#3b82f6;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer">📌 Set Baseline</button>
     <span id="syncMsg" style="color:#86efac;font-size:12px;margin-left:8px"></span>
   </div>  
 </div>
@@ -434,261 +247,112 @@ setInterval(()=>{ const st = window.__st; if(!st) return; const now = Math.floor
 </div></body></html>
 
 <script>
-// // Script untuk load reconciliation (dari file lama)
-// window.loadRecon = function(scope){
-//   scope = scope || 'today';
-//   fetch('/api/reconciliation?scope=' + scope).then(r=>r.json()).then(d=>{
-//     const el = document.getElementById('recon-content');
-//     const baseline = d.baseline.saldo || {};
-//     const ts = d.baseline.ts ? new Date(d.baseline.ts).toLocaleString('id-ID') : 'belum diset';
-    
-//     let html = '<div style="font-size:13px;margin-bottom:12px">';
-//     html += '<strong>Baseline diset:</strong> ' + ts + '<br>';
-//     html += '<strong>Saldo baseline:</strong> ';
-//     if (baseline.polymarket || baseline.kalshi || baseline.limitless) {
-//       html += 'Poly $' + (baseline.polymarket||0).toFixed(2) + ' · Kalshi $' + (baseline.kalshi||0).toFixed(2) + ' · Limitless $' + (baseline.limitless||0).toFixed(2);
-//     } else { html += '<em>belum ada (klik tombol di bawah)</em>'; }
-//     html += '</div>';
-    
-//     html += '<div class="recon-grid">';
-//     html += '<div class="recon-card"><h5>Order Real ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</h5><div class="value">' + (scope==='today' ? (d.trades_real_today||d.trades_real) : d.trades_real) + (d.trades_real_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_real_all+'</div>' : '') + '</div></div>';
-//     html += '<div class="recon-card"><h5>Order Paper ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + '</h5><div class="value">' + (scope==='today' ? (d.trades_paper_today||d.trades_paper) : d.trades_paper) + (d.trades_paper_all!=null ? '<div style=\'font-size:10px;color:#64748b\'>total: '+d.trades_paper_all+'</div>' : '') + '</div></div>';
-//     html += '<div class="recon-card"><h5>Spend Hari Ini</h5><div class="value">$' + d.spend_today.toFixed(2) + '</div></div></div>';
-    
-//     html += '<div style="margin-bottom:12px"><strong>Breakdown per Venue ' + (scope==='today' ? '(hari ini)' : '(sejak baseline)') + ':</strong><br>';
-//     if (Object.keys(d.by_venue).length > 0) {
-//       for (const [v, data] of Object.entries(d.by_venue)) {
-//         html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
-//       }
-//     } else { html += '<em style="color:#64748b">belum ada order ' + (scope==='today' ? 'hari ini' : 'sejak baseline') + '</em>'; }
-//     html += '</div>';
-    
-//     if (d.recent_trades.length > 0) {
-//       html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br>';
-//       d.recent_trades.slice().reverse().forEach(t => {
-//         html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
-//       });
-//       html += '</div>';
-//     } else { html += '<div><strong>10 Trade Terakhir ' + (scope==='today' ? '(hari ini)' : '(lintas hari)') + ':</strong><br><em style="color:#64748b">belum ada trade ' + (scope==='today' ? 'real hari ini' : 'tercatat') + '</em></div>'; }
-    
-//     el.innerHTML = html;
-//   }).catch(e => { document.getElementById('recon-content').innerHTML = 'Error: ' + e.message; });
-// }
-
-// Load Reconciliation
-window.loadRecon = function(scope){
-  scope = scope || 'today';
-  console.log(`Loading reconciliation with scope: ${scope}`);
+// 1. LOAD RECONCILIATION (DIPERBAIKI: MENDUKUNG CUSTOM DATE)
+window.loadRecon = function(scope, fromDate = '', toDate = ''){
+  console.log(`Loading recon: scope=${scope}, from=${fromDate}, to=${toDate}`);
+  let url = `/api/reconciliation?scope=${scope}`;
+  if (fromDate) url += `&from_date=${fromDate}`;
+  if (toDate) url += `&to_date=${toDate}`;
   
-  fetch(`/api/reconciliation?scope=${scope}`).then(r=>r.json()).then(d=>{
+  fetch(url).then(r=>r.json()).then(d=>{
     const el = document.getElementById('recon-content');
     if (!el) return;
+    const scopeLabel = scope === 'today' ? '(hari ini)' : scope === 'week' ? '(7 hari)' : scope === 'month' ? '(30 hari)' : '(semua)';
     
-    const baseline = d.baseline.saldo || {};
-    const ts = d.baseline.ts ? new Date(d.baseline.ts).toLocaleString('id-ID') : 'belum diset';
+    let html = `<div class="recon-grid">
+      <div class="recon-card"><h5>Order Real ${scopeLabel}</h5><div class="value">${d.trades_real || 0}</div></div>
+      <div class="recon-card"><h5>Order Paper ${scopeLabel}</h5><div class="value">${d.trades_paper || 0}</div></div>
+      <div class="recon-card"><h5>Spend</h5><div class="value">$${(d.spend_today||0).toFixed(2)}</div></div>
+    </div>`;
     
-    let html = '<div style="font-size:13px;margin-bottom:12px">';
-    html += '<strong>Baseline diset:</strong> ' + ts + '<br>';
-    html += '<strong>Saldo baseline:</strong> ';
-    if (baseline.polymarket || baseline.kalshi || baseline.limitless) {
-      html += 'Poly $' + (baseline.polymarket||0).toFixed(2) + 
-              ' · Kalshi $' + (baseline.kalshi||0).toFixed(2) + 
-              ' · Limitless $' + (baseline.limitless||0).toFixed(2);
-    } else {
-      html += '<em>belum ada (klik tombol di bawah)</em>';
-    }
-    html += '</div>';
-    
-    const scopeLabel = scope === 'today' ? '(hari ini)' : 
-                       scope === 'week' ? '(7 hari)' : 
-                       scope === 'month' ? '(30 hari)' : '(sejak baseline)';
-    
-    html += '<div class="recon-grid">';
-    html += '<div class="recon-card"><h5>Order Real ' + scopeLabel + '</h5><div class="value">' + d.trades_real + '</div></div>';
-    html += '<div class="recon-card"><h5>Order Paper ' + scopeLabel + '</h5><div class="value">' + d.trades_paper + '</div></div>';
-    html += '<div class="recon-card"><h5>Spend Hari Ini</h5><div class="value">$' + (d.spend_today||0).toFixed(2) + '</div></div></div>';
-    
-    html += '<div style="margin:12px 0"><strong>Breakdown per Venue ' + scopeLabel + ':</strong><br>';
+    html += '<div style="margin:12px 0"><strong>Breakdown per Venue:</strong><br>';
     if (Object.keys(d.by_venue).length > 0) {
       for (const [v, data] of Object.entries(d.by_venue)) {
-        html += '<span style="display:inline-block;margin-right:16px">' + v.toUpperCase() + 
-                ': ' + data.count + ' order, $' + data.size.toFixed(2) + '</span>';
+        html += `<span style="display:inline-block;margin-right:16px">${v.toUpperCase()}: ${data.count} order, $${data.size.toFixed(2)}</span>`;
       }
-    } else {
-      html += '<em style="color:#64748b">belum ada order ' + scopeLabel + '</em>';
-    }
+    } else { html += '<em style="color:#64748b">belum ada order</em>'; }
     html += '</div>';
     
     if (d.recent_trades && d.recent_trades.length > 0) {
-      html += '<div style="margin-top:12px"><strong>10 Trade Terakhir ' + scopeLabel + ':</strong><br>';
+      html += '<div style="margin-top:12px"><strong>Trade Terakhir:</strong><br>';
       d.recent_trades.slice().reverse().forEach(t => {
-        html += '<div style="font-size:12px;margin:4px 0;color:#cbd5e1">' + 
-                t.ts + ' [' + t.mode + '] ' + t.venues.join(',') + 
-                ' Π=' + (t.pi*100).toFixed(1) + '¢ $' + t.size + '</div>';
+        html += `<div style="font-size:12px;margin:4px 0;color:#cbd5e1">${t.ts} [${t.mode}] ${t.venues.join(',')} Π=${(t.pi*100).toFixed(1)}¢ $${t.size}</div>`;
       });
       html += '</div>';
-    } else {
-      html += '<div style="margin-top:12px"><strong>10 Trade Terakhir ' + scopeLabel + ':</strong><br>' +
-              '<em style="color:#64748b">belum ada trade ' + scopeLabel + '</em></div>';
     }
-    
     el.innerHTML = html;
-  }).catch(e => {
-    console.error('Recon error:', e);
-    document.getElementById('recon-content').innerHTML = 'Error: ' + e.message;
-  });
+  }).catch(e => { console.error('Recon error:', e); });
 };
 
-// Load P/L
+// 2. LOAD P/L (DIPERBAIKI: HANYA 1 DEFINISI FUNGSI)
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
-  console.log(`Loading P/L with scope: ${scope}`);
-  
   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(d=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
-    
-    let h = '<strong>💹 P/L Resolve-Based:</strong> ';
-    h += 'Harian: $' + (d.by_period.today||0).toFixed(2) +
-         ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) +
-         ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) +
-         ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
-    
-    h += '<br><span style="font-size:12px">Posisi resolve ' + (scope==='today' ? '(hari ini): ' : '(semua): ') + d.resolved_count +
-         ' · Posisi aktif: ' + d.active_count + '</span>';
+    let h = `<strong>💹 P/L Resolve-Based:</strong> Harian: $${(d.by_period.today||0).toFixed(2)} · Mingguan: $${(d.by_period.week||0).toFixed(2)} · Bulanan: $${(d.by_period.month||0).toFixed(2)} · TOTAL: $${(d.total_pnl||0).toFixed(2)}`;
+    h += `<br><span style="font-size:12px">Posisi resolve: ${d.resolved_count} · Posisi aktif: ${d.active_count}</span>`;
     
     if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">' + (scope==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):');
+      h += '<br><span style="font-size:12px">Rincian per venue:';
       for (const [v, r] of Object.entries(d.by_venue_period)){
-        h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) +
-             ' · mingguan $' + (r.week||0).toFixed(2) +
-             ' · bulanan $' + (r.month||0).toFixed(2) +
-             ' · total $' + (r.total||0).toFixed(2);
+        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
       }
       h += '</span>';
     }
     el.innerHTML = h;
-  }).catch(e=>{
-    console.error('P/L error:', e);
-  });
+  }).catch(e=>{ console.error('P/L error:', e); });
 };
 
-function setBaseline(){
-  if(!confirm('Simpan saldo sekarang sebagai baseline rekonsiliasi?')) return;
-  fetch('/api/saldo').then(r=>r.json()).then(s=>{
-    const baseline = { polymarket: s.polymarket?.web_usd || s.polymarket?.cash_usd || 0, kalshi: (s.kalshi?.cash_usd || 0) + (s.kalshi?.portfolio_usd || 0), limitless: s.limitless?.portfolio_usd || s.limitless?.usdc_base || 0 };
-    fetch('/api/baseline/set', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(baseline) }).then(r=>r.json()).then(d=>{ alert(d.ok ? '✅ Baseline tersimpan' : '❌ ' + d.message); loadRecon(); });
-  });
-}
-
-function loadPnl(){
-  fetch('/api/pnl?scope=' + (window.__rekScope || 'today')).then(r=>r.json()).then(d=>{
-    const el = document.getElementById('pnl-content'); if(!el) return;
-    let h = '<strong>💹 P/L Resolve-Based:</strong> Harian: $' + (d.by_period.today||0).toFixed(2) + ' · Mingguan: $' + (d.by_period.week||0).toFixed(2) + ' · Bulanan: $' + (d.by_period.month||0).toFixed(2) + ' · TOTAL: $' + (d.total_pnl||0).toFixed(2);
-    h += '<br><span style="font-size:12px">Posisi resolve ' + ((window.__rekScope||'today')==='today' ? '(hari ini): ' : '(semua): ') + d.resolved_count + ' · Posisi aktif: ' + d.active_count + '</span>';
-    if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">' + ((window.__rekScope||'today')==='today' ? 'Rincian per venue (hari ini):' : 'Rincian per venue (sejak baseline):');
-      for (const [v, r] of Object.entries(d.by_venue_period)){
-        h += '<br>· ' + v.toUpperCase() + ': harian $' + (r.today||0).toFixed(2) + ' · mingguan $' + (r.week||0).toFixed(2) + ' · bulanan $' + (r.month||0).toFixed(2) + ' · total $' + (r.total||0).toFixed(2);
-      }
-      h += '</span>';
-    }
-    el.innerHTML = h;
-  }).catch(()=>{});
-}
-
-function resetHistory(){
-  if(!confirm('Hapus riwayat trades & spend? Backup otomatis dibuat di server.')) return;
-  fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{ alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal')); if (window.loadRecon) loadRecon(); if (window.loadPnl) loadPnl(); }).catch(e=>alert('❌ '+e));
-}
-
-function loadUnrealized(){
+window.loadUnrealized = function(){
   fetch('/api/unrealized').then(r=>r.json()).then(d=>{
-    var el = document.getElementById('unrealized-content'); if(!el) return;
-    var h = '<strong>💼 ' + ((window.__rekScope||'today')==='today' ? 'Posisi Aktif (hari ini):' : '💼 Posisi Aktif (unrealized, lintas hari):') + '</strong>';
-    var any = false;
-    for (var v in d){ (d[v]||[]).forEach(function(x){ any = true; var pnl = x.pnl||0; var col = pnl>0 ? '#4ade80' : (pnl<0 ? '#f87171' : '#94a3b8'); h += '<br><span style="font-size:12px">' + v.toUpperCase() + ': ' + x.title + ' · nilai $' + (x.value||0).toFixed(2) + ' · <span style="color:'+col+'">P/L ' + (pnl>=0?'+':'') + pnl.toFixed(2) + ' (' + (x.pnl_pct||0).toFixed(2) + '%)</span>' + (x.note ? ' · <i>'+x.note+'</i>' : '') + '</span>'; }); }
+    const el = document.getElementById('unrealized-content'); if(!el) return;
+    let h = '<strong>💼 Posisi Aktif:</strong>';
+    let any = false;
+    for (const v in d){ 
+      (d[v]||[]).forEach(function(x){ 
+        any = true; 
+        const col = x.pnl>0 ? '#4ade80' : (x.pnl<0 ? '#f87171' : '#94a3b8'); 
+        h += `<br><span style="font-size:12px">${v.toUpperCase()}: ${x.title} · nilai $${(x.value||0).toFixed(2)} · <span style="color:${col}">P/L ${x.pnl>=0?'+':''}${(x.pnl||0).toFixed(2)}</span></span>`; 
+      }); 
+    }
     if(!any) h += ' <span style="font-size:12px">tidak ada posisi aktif</span>';
     el.innerHTML = h;
   }).catch(()=>{});
-}
+};
 
 async function syncPositions(){
   const btn = event.target;
-  const originalText = btn.textContent;
-  btn.textContent = ' Syncing...';
-  btn.disabled = true;
-  
+  btn.textContent = ' Syncing...'; btn.disabled = true;
   try {
     const r = await fetch('/api/sync-positions', {method:'POST'});
     const d = await r.json();
-    
     const msgEl = document.getElementById('syncMsg');
     if(d.ok){
-      msgEl.textContent = `✅ ${d.message} (New: ${d.details.new_positions.length}, Closed: ${d.details.closed_positions.length})`;
-      msgEl.style.color = '#86efac';
-      
-      // Refresh reconciliation
-      if(window.loadRecon) loadRecon();
-      if(window.loadPnl) loadPnl();
-      if(window.loadUnrealized) loadUnrealized();
-      
-      // Poll dashboard untuk update
-      if(window.poll) setTimeout(poll, 1000);
-    } else {
-      msgEl.textContent = `❌ ${d.message}`;
-      msgEl.style.color = '#f87171';
-    }
-  } catch(e){
-    const msgEl = document.getElementById('syncMsg');
-    msgEl.textContent = `❌ Error: ${e.message}`;
-    msgEl.style.color = '#f87171';
-  } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+      msgEl.textContent = `✅ ${d.message}`; msgEl.style.color = '#86efac';
+      loadRecon(window.__rekScope || 'today'); loadPnl(); loadUnrealized();
+    } else { msgEl.textContent = `❌ ${d.message}`; msgEl.style.color = '#f87171'; }
+  } catch(e){ document.getElementById('syncMsg').textContent = `❌ Error`; }
+  finally {
+    btn.textContent = '🔄 Sync Posisi'; btn.disabled = false;
     setTimeout(()=>{ document.getElementById('syncMsg').textContent = ''; }, 5000);
   }
 }
 
-// // Filter dan scope
-// (function(){
-//   const today = new Date().toISOString().slice(0,10);
-//   const fromEl = document.getElementById('rekFrom'); const toEl = document.getElementById('rekTo'); const filterEl = document.getElementById('rekFilter'); const dlBtn = document.getElementById('rekDownload'); const cntEl = document.getElementById('rekCount');
-//   if (fromEl) fromEl.value = today; if (toEl) toEl.value = today;
-//   function applyFilter(){
-//     const mode = filterEl.value; const now = new Date(); let from = fromEl.value, to = toEl.value;
-//     if (mode === 'today'){ from = to = today; } else if (mode === 'week'){ const d=new Date(now); d.setDate(d.getDate()-7); from=d.toISOString().slice(0,10); to=today; } else if (mode === 'month'){ const d=new Date(now); d.setDate(d.getDate()-30); from=d.toISOString().slice(0,10); to=today; }
-//     if (fromEl) fromEl.value = from; if (toEl) toEl.value = to;
-//     let shown=0, hidden=0;
-//     document.querySelectorAll('[data-ts]').forEach(el=>{ const d = (el.getAttribute('data-ts')||'').slice(0,10); if ((from && d<from) || (to && d>to)) { el.style.display='none'; hidden++; } else { el.style.display=''; shown++; } });
-//     if (cntEl) cntEl.textContent = shown+' baris sesuai rentang'+(hidden?(', '+hidden+' riwayat disembunyikan (Filter=Semua untuk lihat)'):'');
-//     if (window.loadRecon) window.loadRecon(mode);
-//   }
-//   if (filterEl){ filterEl.addEventListener('change', applyFilter); if (fromEl) fromEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); }); if (toEl) toEl.addEventListener('change', ()=>{ filterEl.value='all'; applyFilter(); }); setTimeout(applyFilter, 500); }
+function setBaseline(){
+  if(!confirm('Simpan saldo sekarang sebagai baseline?')) return;
+  fetch('/api/saldo').then(r=>r.json()).then(s=>{
+    const baseline = { polymarket: s.polymarket?.cash_usd || 0, kalshi: (s.kalshi?.cash_usd || 0) + (s.kalshi?.portfolio_usd || 0), limitless: s.limitless?.usdc_base || 0 };
+    fetch('/api/baseline/set', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(baseline) }).then(r=>r.json()).then(d=>{ alert(d.ok ? '✅ Baseline tersimpan' : '❌ ' + d.message); loadRecon(window.__rekScope || 'today'); });
+  });
+}
 
-// //  if (dlBtn){ dlBtn.addEventListener('click', ()=>{ const from = fromEl.value || ''; const to = toEl.value || ''; window.location.href = '/api/report.csv?from=' + from + '&to=' + to; }); }
+function resetHistory(){
+  if(!confirm('Hapus riwayat trades & spend?')) return;
+  fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{ alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal')); loadRecon(window.__rekScope || 'today'); loadPnl(); }).catch(e=>alert('❌ '+e));
+}
 
-//   if (dlBtn){
-//     dlBtn.addEventListener('click', ()=>{
-//       const from = fromEl.value || '';
-//       const to = toEl.value || '';
-      
-//       // Encode parameter dengan benar
-//       const params = new URLSearchParams();
-//       if (from) params.append('from_date', from);
-//       if (to) params.append('to_date', to);
-      
-//       const queryString = params.toString();
-//       const url = queryString ? `/api/report.csv?${queryString}` : '/api/report.csv';
-      
-//       // Trigger download
-//       window.location.href = url;
-//     });
-//   }
-
-// })();
-
-// ========== FILTER REKONSILIASI (IMPROVED) ==========
+// 3. FILTER LOGIC (DIPERBAIKI: MENANGANI CUSTOM DATE DENGAN BENAR)
 (function(){
   const today = new Date().toISOString().slice(0,10);
   const fromEl = document.getElementById('rekFrom');
@@ -696,142 +360,73 @@ async function syncPositions(){
   const filterEl = document.getElementById('rekFilter');
   const dlBtn = document.getElementById('rekDownload');
   const cntEl = document.getElementById('rekCount');
-  const listBtn = document.getElementById('lihatRiwayatBtn');
   
-  // Set default values
   if (fromEl) fromEl.value = today;
   if (toEl) toEl.value = today;
-  
-  // Initialize scope
   window.__rekScope = 'today';
 
   function applyFilter(){
     if (!filterEl) return;
-    
     const mode = filterEl.value;
     const now = new Date();
     let from = fromEl ? fromEl.value : today;
     let to = toEl ? toEl.value : today;
     
-    // Update scope based on filter
-    if (mode === 'today'){ 
-      from = to = today; 
-      window.__rekScope = 'today';
-    }
-    else if (mode === 'week'){ 
-      const d = new Date(now); 
-      d.setDate(d.getDate() - 7); 
-      from = d.toISOString().slice(0,10); 
-      to = today;
-      window.__rekScope = 'week';
-    }
-    else if (mode === 'month'){ 
-      const d = new Date(now); 
-      d.setDate(d.getDate() - 30); 
-      from = d.toISOString().slice(0,10); 
-      to = today;
-      window.__rekScope = 'month';
-    }
-    else if (mode === 'all'){
-      from = '';
-      to = '';
-      window.__rekScope = 'all';
-    }
+    if (mode === 'today'){ from = to = today; window.__rekScope = 'today'; }
+    else if (mode === 'week'){ const d=new Date(now); d.setDate(d.getDate()-7); from=d.toISOString().slice(0,10); to=today; window.__rekScope = 'week'; }
+    else if (mode === 'month'){ const d=new Date(now); d.setDate(d.getDate()-30); from=d.toISOString().slice(0,10); to=today; window.__rekScope = 'month'; }
+    else if (mode === 'all'){ from = ''; to = ''; window.__rekScope = 'all'; }
     
-    // Update date inputs
     if (fromEl) fromEl.value = from;
     if (toEl) toEl.value = to;
     
-    // Reload reconciliation dengan scope yang benar
-    if (window.loadRecon) {
-      console.log(`Applying filter: ${window.__rekScope}, from: ${from}, to: ${to}`);
+    // Panggil loadRecon dengan parameter from dan to jika mode 'all' dan tanggal diisi
+    if (mode === 'all' && from && to) {
+      window.loadRecon('all', from, to);
+    } else {
       window.loadRecon(window.__rekScope);
     }
     
-    // Update counter text
-    const scopeText = mode === 'today' ? '(hari ini)' : 
-                      mode === 'week' ? '(7 hari)' : 
-                      mode === 'month' ? '(30 hari)' : '(semua)';
+    const scopeText = mode === 'today' ? '(hari ini)' : mode === 'week' ? '(7 hari)' : mode === 'month' ? '(30 hari)' : (from && to ? `(Custom: ${from} s/d ${to})` : '(semua)');
     if (cntEl) cntEl.textContent = `Filter: ${scopeText}`;
   }
   
-  // Event listeners
   if (filterEl){
-    filterEl.addEventListener('change', function(){
-      console.log(`Filter changed to: ${this.value}`);
-      applyFilter();
-    });
-    
-    if (fromEl) {
-      fromEl.addEventListener('change', function(){
-        if (filterEl) filterEl.value = 'all';
-        applyFilter();
-      });
-    }
-    
-    if (toEl) {
-      toEl.addEventListener('change', function(){
-        if (filterEl) filterEl.value = 'all';
-        applyFilter();
-      });
-    }
-    
-    // Initial load
+    filterEl.addEventListener('change', applyFilter);
+    if (fromEl) fromEl.addEventListener('change', ()=>{ if (filterEl) filterEl.value = 'all'; applyFilter(); });
+    if (toEl) toEl.addEventListener('change', ()=>{ if (filterEl) filterEl.value = 'all'; applyFilter(); });
     setTimeout(applyFilter, 500);
   }
   
-  // Download CSV handler
   if (dlBtn){
     dlBtn.addEventListener('click', function(e){
       e.preventDefault();
       const from = fromEl ? fromEl.value : '';
       const to = toEl ? toEl.value : '';
-      
-      // Build URL dengan parameter yang benar
       const params = new URLSearchParams();
       if (from) params.append('from_date', from);
       if (to) params.append('to_date', to);
-      
-      const url = `/api/report.csv?${params.toString()}`;
-      console.log(`Downloading CSV: ${url}`);
-      window.location.href = url;
-    });
-  }
-  
-  // Lihat Riwayat button
-  if (listBtn){
-    listBtn.addEventListener('click', function(){
-      const tab = document.getElementById('audit');
-      if (tab) {
-        tab.style.display = 'block';
-        tab.scrollIntoView({behavior: 'smooth'});
-      }
+      window.location.href = `/api/report.csv?${params.toString()}`;
     });
   }
 })();
 
-// ========== AUTO-REFRESH RECONCILIATION ==========
+// Auto-refresh reconciliation setiap 30 detik
 setInterval(function(){
   if (window.loadRecon && window.__rekScope) {
     const now = Date.now();
     if (!window.__lastReconUpdate || (now - window.__lastReconUpdate) > 30000) {
-      console.log(`Auto-refreshing reconciliation: ${window.__rekScope}`);
-      window.loadRecon(window.__rekScope);
+      const from = document.getElementById('rekFrom')?.value || '';
+      const to = document.getElementById('rekTo')?.value || '';
+      if (window.__rekScope === 'all' && from && to) {
+        window.loadRecon('all', from, to);
+      } else {
+        window.loadRecon(window.__rekScope);
+      }
       window.__lastReconUpdate = now;
     }
   }
   if (window.loadPnl) window.loadPnl();
   if (window.loadUnrealized) window.loadUnrealized();
 }, 30000);
-
-(function(){
-  const map = {today:'today', week:'7d', month:'30d', all:'all'};
-  const sel = document.getElementById('rekFilter'); const btn = document.getElementById('rekScopeBtn');
-  if (sel) sel.addEventListener('change', () => { window.__rekScope = map[sel.value] || 'today'; if (btn) btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini'; if (window.loadRecon) loadRecon(); });
-  if (btn) btn.addEventListener('click', () => { window.__rekScope = (window.__rekScope === 'today') ? 'all' : 'today'; btn.textContent = (window.__rekScope==='today') ? '🕘 Lihat Riwayat' : '📅 Kembali ke Hari Ini'; if (window.loadRecon) loadRecon(); });
-})();
-
-loadRecon(); setInterval(loadRecon, 60000);
-loadPnl(); setInterval(loadPnl, 60000);
-loadUnrealized(); setInterval(loadUnrealized, 30000);
 </script>
