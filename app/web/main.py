@@ -4,6 +4,7 @@ UI Dashboard — FastAPI app dengan kontrol transparan dan filter yang robust.
 """
 import json
 import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -498,6 +499,21 @@ def api_positions_refresh():
         except Exception as e: all_positions[venue] = {"error": str(e)}
     return all_positions
 
+@app.post("/api/sync-settlement")
+def api_sync_settlement():
+    """Trigger settlement sync dari dashboard."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "scripts.sync_settlement", "--execute"],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        return {"ok": True, "message": "Settlement sync completed", "output": result.stdout}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+    
 @app.get("/api/open-orders")
 def api_open_orders():
     out = {"kalshi": [], "limitless": [], "manual": []}

@@ -244,7 +244,79 @@ def _scan():
     L(f"selesai: {comparisons} perbandingan · {len(matches)} match · {round(time.time()-t0,1)} dtk")
     return matches[:10], {"counts": {v: len(rows[v]) for v in rows}, "comparisons": comparisons, "ts": time.strftime("%H:%M:%S"), "epoch": int(time.time()), "duration": round(time.time() - t0, 1)}, near[:5], log[-150:]
 
+# def _auto_take_profit():
+#     from app.venue_positions import get_positions_detailed
+#     from app.executor import sell_kalshi, sell_polymarket, sell_limitless
+#     from app.position_manager import load_positions, save_positions
+#     cfg = load_config()
+#     limits = cfg.get("limits", {})
+#     tp_pct = float(limits.get("tp", 90)) / 100
+#     positions = load_positions()
+#     active = [p for p in positions if not p.get("resolved")]
+#     if not active: return 0
+#     creds = load_creds()
+#     closed_count = 0
+#     for pos in active:
+#         venue, buy_price, size, market_id = pos.get("venue"), pos.get("buy_price", 0), pos.get("size", 0), pos.get("market_id")
+#         buy_value = buy_price * size
+#         target = buy_value * (1 + tp_pct)
+#         try:
+#             current_positions = get_positions_detailed(venue, creds.get(venue, {}))
+#             current = next((p for p in current_positions if p.get("title") == market_id or p.get("ticker") == market_id), None)
+#             if not current:
+#                 pos["resolved"], pos["sync_close"], pos["resolved_ts"] = True, True, time.strftime("%Y-%m-%dT%H:%M:%S")
+#                 closed_count += 1; continue
+#             current_value, current_price = current.get("value", 0), current.get("cur_price", 0)
+#             if current_value >= target and current_value > buy_value:
+#                 pnl, pnl_pct = current_value - buy_value, ((current_value - buy_value) / buy_value) * 100 if buy_value > 0 else 0
+#                 _log_loop(f"auto-tp trigger: {venue} {market_id} buy=${buy_value:.2f} current=${current_value:.2f} pnl=${pnl:.2f} ({pnl_pct:.1f}%)")
+#                 ok, msg = False, "venue not supported"
+#                 if venue == "kalshi": ok, msg = sell_kalshi(creds.get(venue, {}), current.get("ticker") or market_id, current.get("side", "yes"), size)
+#                 elif venue == "polymarket":
+#                     if current.get("token_id"): ok, msg = sell_polymarket(creds.get(venue, {}), current["token_id"], size, max((current.get("cur_price") or 0.5) - 0.03, 0.01))
+#                     else: msg = "token_id tidak ditemukan"
+#                 elif venue == "limitless":
+#                     if current.get("order_id") or current.get("ticker"): ok, msg = sell_limitless(creds.get(venue, {}), current.get("order_id") or current.get("ticker"), size)
+#                     else: msg = "order_id/ticker tidak ditemukan"
+
+#                 if ok:
+#                     pnl = current_value - buy_value
+#                     pnl_pct = (pnl / buy_value) * 100 if buy_value > 0 else 0
+                    
+#                     pos.update({
+#                         "resolved": True, 
+#                         "pnl": round(pnl, 2), 
+#                         "pnl_pct": round(pnl_pct, 2), 
+#                         "resolved_ts": time.strftime("%Y-%m-%dT%H:%M:%S"), 
+#                         "auto_tp": True, 
+#                         "close_price": current_price
+#                     })
+                    
+#                     # JUGA UPDATE DI live_state.json
+#                     st = _read()
+#                     st.setdefault("trades", []).append({
+#                         "ts": pos.get("resolved_ts"),
+#                         "mode": "auto-close",
+#                         "venues": [venue],
+#                         "pi": 0,
+#                         "size": size,
+#                         "pnl": round(pnl, 2),
+#                         "resolved": True,
+#                         "ta": market_id,
+#                         "tb": ""
+#                     })
+#                     _write(st)
+                    
+#                     closed_count += 1
+#                     _log_loop(f"✅ auto-tp SUKSES: {venue} {market_id} P/L=${pnl:.2f} ({pnl_pct:.1f}%)")
+
+#                 else: _log_loop(f"❌ auto-tp GAGAL: {venue} {market_id} - {msg}")
+#         except Exception as e: _log_loop(f"❌ auto-tp ERROR: {venue} {market_id} - {type(e).__name__}: {str(e)[:100]}")
+#     if closed_count > 0: save_positions(positions); _log_loop(f"🎯 Auto-TP selesai: {closed_count} posisi ditutup")
+#     return closed_count
+
 def _auto_take_profit():
+    """Auto-sell posisi bila untung >= tp% dengan P/L tracking yang benar."""
     from app.venue_positions import get_positions_detailed
     from app.executor import sell_kalshi, sell_polymarket, sell_limitless
     from app.position_manager import load_positions, save_positions
@@ -264,8 +336,15 @@ def _auto_take_profit():
             current_positions = get_positions_detailed(venue, creds.get(venue, {}))
             current = next((p for p in current_positions if p.get("title") == market_id or p.get("ticker") == market_id), None)
             if not current:
-                pos["resolved"], pos["sync_close"], pos["resolved_ts"] = True, True, time.strftime("%Y-%m-%dT%H:%M:%S")
-                closed_count += 1; continue
+                # Posisi tidak ada di exchange = sudah close/resolve
+                pos["resolved"] = True
+                pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                pos["pnl"] = 0  # Tidak tahu P/L exact, set 0
+                pos["pnl_pct"] = 0
+                pos["sync_close"] = True
+                closed_count += 1
+                _log_loop(f"auto-tp: {venue} {market_id} tidak ada di exchange (sudah close)")
+                continue
             current_value, current_price = current.get("value", 0), current.get("cur_price", 0)
             if current_value >= target and current_value > buy_value:
                 pnl, pnl_pct = current_value - buy_value, ((current_value - buy_value) / buy_value) * 100 if buy_value > 0 else 0
@@ -280,9 +359,7 @@ def _auto_take_profit():
                     else: msg = "order_id/ticker tidak ditemukan"
 
                 if ok:
-                    pnl = current_value - buy_value
-                    pnl_pct = (pnl / buy_value) * 100 if buy_value > 0 else 0
-                    
+                    # ✅ PENTING: Update posisi dengan P/L yang benar
                     pos.update({
                         "resolved": True, 
                         "pnl": round(pnl, 2), 
@@ -292,7 +369,7 @@ def _auto_take_profit():
                         "close_price": current_price
                     })
                     
-                    # JUGA UPDATE DI live_state.json
+                    # ✅ PENTING: Juga update live_state.json trades
                     st = _read()
                     st.setdefault("trades", []).append({
                         "ts": pos.get("resolved_ts"),
@@ -309,7 +386,6 @@ def _auto_take_profit():
                     
                     closed_count += 1
                     _log_loop(f"✅ auto-tp SUKSES: {venue} {market_id} P/L=${pnl:.2f} ({pnl_pct:.1f}%)")
-
                 else: _log_loop(f"❌ auto-tp GAGAL: {venue} {market_id} - {msg}")
         except Exception as e: _log_loop(f"❌ auto-tp ERROR: {venue} {market_id} - {type(e).__name__}: {str(e)[:100]}")
     if closed_count > 0: save_positions(positions); _log_loop(f"🎯 Auto-TP selesai: {closed_count} posisi ditutup")
