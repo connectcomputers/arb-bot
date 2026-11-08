@@ -20,8 +20,8 @@ h4{color:#7dd3fc;margin:12px 0 4px;font-size:11px;text-transform:uppercase}
 .tabs{margin:18px 0 8px}.tabs button{background:#334155}
 iframe{width:100%;height:70vh;border:1px solid #334155;border-radius:12px;background:#0f172a}
 a{color:#38bdf8}
-.logbox{background:#0b1220;border:1px solid #334155;border-radius:6px;font-family:monospace;font-size:11px;padding:6px;max-height:150px;overflow:auto;margin:6px 0}
-.matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:6px;max-height:220px;overflow:auto;margin:6px 0}
+.logbox{background:#0b1220;border:1px solid #334155;border-radius:6px;font-family:monospace;font-size:10px;padding:6px;max-height:150px;overflow-y:auto;margin:6px 0}
+.matchbox{background:#0b1220;border:1px solid #334155;border-radius:6px;padding:6px;max-height:220px;overflow-y:auto;margin:6px 0}
 .rule-box{background:#1e3a8a;border:1px solid #3b82f6;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px}
 .rule-box ul{margin:4px 0 0 20px;padding:0}
 .rule-box li{margin:2px 0}
@@ -45,11 +45,11 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(pull,5000); pull();
   function msg(){
     var clock=new Date().toLocaleTimeString('id-ID');
-    if(!epoch) return ' SCANNER MENYALA · '+clock;
+    if(!epoch) return '🟢 SCANNER MENYALA · '+clock;
     var age=Math.floor(Date.now()/1000)-epoch;
     if(age>SCAN+45) return '⚠ SCAN LAMBAT '+age+'s · '+clock;
     if(age>SCAN) return '🟢 SCAN BERJALAN · siklus #'+cycles+' · '+clock;
-    return ' SCAN #'+cycles+' · berikut '+(SCAN-age)+'s · '+clock;
+    return '🟢 SCAN #'+cycles+' · berikut '+(SCAN-age)+'s · '+clock;
   }
   function broadcast(){
     var m=msg();
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <strong>⚠️ Alert Aktif:</strong> <span id="alert-message"></span>
 </div><div class="wrap">
 <header>
- <h1> Arb Bot Dashboard</h1>
+ <h1>🚀 Arb Bot Dashboard</h1>
  <div>
   <span id="badge" class="badge off">INACTIVE</span>
   <button onclick="start('paper')">▶ Mulai Paper</button>
@@ -154,6 +154,7 @@ async function loadActiveRules(){
   } catch(e) { console.error('Load rules error:', e); }
 }
 
+// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
 async function poll(){
   try {
     const [f, s] = await Promise.all([ 
@@ -164,7 +165,7 @@ async function poll(){
     if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
     
     const b = document.getElementById('badge');
-    b.textContent = s.kill ? ' KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
+    b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
     b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
     if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
     
@@ -179,27 +180,38 @@ async function poll(){
       } else { skipBox.style.display = 'none'; }
     }
     
-    document.getElementById('cols').innerHTML = f.venues.map(v => `
+    document.getElementById('cols').innerHTML = f.venues.map(v => {
+      // LOGIKA RENDER SCANLOG YANG AMAN DARI OVERWRITE
+      const venueLogs = (s.scanlog || []).filter(l => l.toLowerCase().includes(v.venue)).slice(-10);
+      const logHtml = venueLogs.length > 0 
+        ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;">${l}</div>`).join('')
+        : '<div class="muted">…menunggu log…</div>';
+
+      return `
       <div class="col">
         <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
         <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
         <h4>Open Positions (OP)</h4>
         ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
+        
         <h4>🔄 Screening Realtime</h4>
-        <div class="item" id="scan-${v.venue}"> …</div>
-        <div class="logbox">${(s.scanlog||[]).filter(l=>l.includes(v.venue)).slice(-8).map(l=>'<div>'+l+'</div>').join('') || '<div class="muted">…menunggu log…</div>'}</div>      
+        <div class="logbox">${logHtml}</div>      
+        
         <h4>Match + Π bersih</h4>
         <div class="matchbox">
           ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue).map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>')).join('') || '<div class="muted">belum ada</div>'}
         </div>
+        
         <h4>Eksekusi</h4>
         <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
         ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse().map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('') || '<div class="muted">belum ada</div>'}
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   } catch(e) { console.error('Poll error:', e); }
 }
-poll(); setInterval(poll, 10000);
+poll(); 
+setInterval(poll, 5000); // Diubah ke 5 detik agar lebih realtime
 
 async function loadSaldo() {
   try {
@@ -247,9 +259,8 @@ async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) retur
 </div></body></html>
 
 <script>
-// 1. LOAD RECONCILIATION (DIPERBAIKI: MENDUKUNG CUSTOM DATE)
+// 1. LOAD RECONCILIATION
 window.loadRecon = function(scope, fromDate = '', toDate = ''){
-  console.log(`Loading recon: scope=${scope}, from=${fromDate}, to=${toDate}`);
   let url = `/api/reconciliation?scope=${scope}`;
   if (fromDate) url += `&from_date=${fromDate}`;
   if (toDate) url += `&to_date=${toDate}`;
@@ -284,21 +295,29 @@ window.loadRecon = function(scope, fromDate = '', toDate = ''){
   }).catch(e => { console.error('Recon error:', e); });
 };
 
-// 2. LOAD P/L (DIPERBAIKI: HANYA 1 DEFINISI FUNGSI)
+// 2. LOAD P/L (DIPERBAIKI: MEMBERI PESAN INFORMATIF JIKA DATA MEMANG 0)
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(d=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
-    let h = `<strong>💹 P/L Resolve-Based:</strong> Harian: $${(d.by_period.today||0).toFixed(2)} · Mingguan: $${(d.by_period.week||0).toFixed(2)} · Bulanan: $${(d.by_period.month||0).toFixed(2)} · TOTAL: $${(d.total_pnl||0).toFixed(2)}`;
-    h += `<br><span style="font-size:12px">Posisi resolve: ${d.resolved_count} · Posisi aktif: ${d.active_count}</span>`;
     
-    if (d.by_venue_period && Object.keys(d.by_venue_period).length){
-      h += '<br><span style="font-size:12px">Rincian per venue:';
-      for (const [v, r] of Object.entries(d.by_venue_period)){
-        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+    let h = '';
+    // LOGIKA FALLBACK: Jika benar-benar 0, beri tahu user alasannya
+    if (d.resolved_count === 0 && d.total_pnl === 0) {
+      h = `<strong>💹 P/L Resolve-Based:</strong> <span style="color:#fbbf24">Belum ada data P/L terealisasi.</span><br>
+           <span style="font-size:11px;color:#94a3b8">Catatan: Data trade historis tidak memiliki catatan P/L di database. Mulai saat ini, bot akan mencatat P/L secara otomatis saat posisi close/resolve.</span>`;
+    } else {
+      h = `<strong>💹 P/L Resolve-Based:</strong> Harian: $${(d.by_period.today||0).toFixed(2)} · Mingguan: $${(d.by_period.week||0).toFixed(2)} · Bulanan: $${(d.by_period.month||0).toFixed(2)} · TOTAL: $${(d.total_pnl||0).toFixed(2)}`;
+      h += `<br><span style="font-size:12px">Posisi resolve: ${d.resolved_count} · Posisi aktif: ${d.active_count}</span>`;
+      
+      if (d.by_venue_period && Object.keys(d.by_venue_period).length){
+        h += '<br><span style="font-size:12px">Rincian per venue:';
+        for (const [v, r] of Object.entries(d.by_venue_period)){
+          h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+        }
+        h += '</span>';
       }
-      h += '</span>';
     }
     el.innerHTML = h;
   }).catch(e=>{ console.error('P/L error:', e); });
@@ -352,7 +371,7 @@ function resetHistory(){
   fetch('/api/admin/reset-history',{method:'POST'}).then(r=>r.json()).then(d=>{ alert(d.ok ? '✅ Riwayat dibersihkan' : '❌ '+(d.message||'gagal')); loadRecon(window.__rekScope || 'today'); loadPnl(); }).catch(e=>alert('❌ '+e));
 }
 
-// 3. FILTER LOGIC (DIPERBAIKI: MENANGANI CUSTOM DATE DENGAN BENAR)
+// 3. FILTER LOGIC
 (function(){
   const today = new Date().toISOString().slice(0,10);
   const fromEl = document.getElementById('rekFrom');
@@ -380,7 +399,6 @@ function resetHistory(){
     if (fromEl) fromEl.value = from;
     if (toEl) toEl.value = to;
     
-    // Panggil loadRecon dengan parameter from dan to jika mode 'all' dan tanggal diisi
     if (mode === 'all' && from && to) {
       window.loadRecon('all', from, to);
     } else {
