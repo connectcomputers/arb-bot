@@ -320,190 +320,6 @@ def _scan():
 #     if closed_count > 0: save_positions(positions); _log_loop(f"🎯 Auto-TP selesai: {closed_count} posisi ditutup")
 #     return closed_count
 
-# def _loop():
-#     global _run, _PAIR_COUNT, _last_scan_ts, _last_reaper_ts, _last_alert_ts
-#     _PAIR_COUNT, errs = {}, 0
-#     _log_loop("loop start")
-#     while _run:
-#         t0 = time.time()
-#         try:
-#             cfg = load_config()
-#             st = _read()
-#             st["running"] = True
-#             if (time.time() - _last_scan_ts >= SCAN_EVERY_SEC) or not st.get("matches"):
-#                 st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
-#                 st["interval"] = INTERVAL
-#             if time.time() - _last_alert_ts >= 120:
-#                 try:
-#                     tp_closed = _auto_take_profit()
-#                     if tp_closed > 0: _log_loop(f"auto-tp closed {tp_closed} positions")
-#                 except Exception as e: _log_loop(f"auto-tp exception: {e}")
-#             if time.time() - _last_reaper_ts >= REAPER_EVERY_SEC:
-#                 _last_reaper_ts = time.time()
-#                 try:
-#                     from app.executor import reap_limitless_stale
-#                     count, tickers, err = reap_limitless_stale()
-#                 except Exception as reaper_exc: count, tickers, err = 0, [], None
-#                 if count > 0:
-#                     _log_loop(f"reaper: cancelled {count} stale orders: {tickers}")
-#                     st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "cancel-auto", "venues": ["limitless"], "pi": 0.0, "size": 0.0, "note": f"cancelled {count} stale GTC orders"})
-#                     st["trades"] = st["trades"][-10000:]
-#                 elif err: _log_loop(f"reaper: {err}")
-#                 else: _log_loop("reaper: skip (no open orders)")
-#             try:
-#                 from app.position_manager import check_and_close_positions
-#                 check_and_close_positions()
-#             except Exception: pass
-#             if time.time() - _last_alert_ts >= ALERT_CHECK_SEC:
-#                 _last_alert_ts = time.time()
-#                 if st.get("auto_stop"): dispatch_alert("critical", f"Engine auto-stop: {st['auto_stop']}", "auto_stop")
-#                 if st.get("last_error"): dispatch_alert("warning", f"Loop error: {st['last_error']}", "last_error")
-#                 if _run and _thr is not None and not _thr.is_alive(): dispatch_alert("critical", "Loop thread mati", "thread_dead")
-
-#             lim = cfg.get("limits", {})
-#             # === BACA KONFIGURASI DARI USER (TRANSPARAN) ===
-#             min_pi_cent = float(lim.get("min_pi", 0.1))
-#             max_pi_cent = float(lim.get("max_pi", 30.0))
-#             requote_tol_cent = float(lim.get("requote_tol", 10.0)) # Toleransi penyusutan dalam cent (default 10¢)
-#             quote_max_age = float(lim.get("quote_max_age_sec", 20))
-#             per_op = float(lim.get("modal_per_op", 2))
-#             cap = float(lim.get("rugi_harian", 5))
-
-#             today = time.strftime("%Y-%m-%d")
-#             sp = st.get("spend", {})
-#             if sp.get("today") != today: sp = {"today": today, "amount": 0.0}
-#             added = 0
-            
-#             for m in st["matches"]:
-#                 pi_cent = m["pi"] * 100  # Ubah ke cent
-                
-#                 # 1. Cek rentang profit
-#                 if pi_cent < min_pi_cent or pi_cent > max_pi_cent:
-#                     skip_msg = f"SKIP: Pi {pi_cent:.1f}¢ di luar rentang user {min_pi_cent}¢-{max_pi_cent}¢"
-#                     _log_loop(skip_msg)
-#                     st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
-#                     st["skip_reasons"] = st["skip_reasons"][-10:]
-#                     continue
-                
-#                 if st.get("mode") == "real":
-#                     _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
-#                     _maxop = int(float(lim.get("max_op_per_pair", 2)))
-#                     if _PAIR_COUNT.get(_pkey, 0) >= _maxop: continue
-                
-#                 # 2. Cek usia data quote
-#                 if quote_max_age > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > quote_max_age:
-#                     skip_msg = f"SKIP: Quote data terlalu tua (> {quote_max_age}s)"
-#                     _log_loop(skip_msg)
-#                     st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
-#                     st["skip_reasons"] = st["skip_reasons"][-10:]
-#                     continue
-                
-#                 if m.get("locked") is False:
-#                     _rc = bool(lim.get("real_crosscat", False)) and st.get("mode") == "real"
-#                     _pk = bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"
-#                     if not _pk and not _rc: continue
-#                     if _rc and m["pi"] < float(lim.get("real_micro_floor", 0.01)): continue
-                
-#                 if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
-#                     leg_a_side, leg_b_side = m.get("leg_a_side", "YES"), m.get("leg_b_side", "YES")
-#                     import re as _re
-#                     _syn = {"btc":"bitcoin","eth":"ethereum","sol":"solana","doge":"dogecoin","xrp":"ripple","bnb":"binance"}
-#                     _stop = set(("who what when where will the of after before next be to in on for and or a an by from vs hit above below up down price week month daily hourly minute min year day open close higher lower reach at end between than more less over under once ever win host champion become which how many is it its this that with without during through per each any some all no yes not new old first last final round match game team player score points total number count rate cut hike decision meeting announce official confirmed winner candidate nominee party vote votes poll polls election elections prime minister ministers president presidential king queen leader leaders win wins won lose loses lost beat beats defeat defeats championship champion champions cup cups league leagues series world national international global local regional state states country countries city cities get gets got go goes gone went come comes came make makes made take takes took taken see sees saw seen know knows knew known think thinks thought believe believes believed say says said tell tells told ask asks asked").split())
-#                     def _toks(s): return {_syn.get(w, w) for w in _re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2 and _syn.get(w, w) not in _stop}
-#                     if bool(lim.get("require_shared_token", True)) and not (_toks(m.get("ta")) & _toks(m.get("tb"))): continue
-                    
-#                     try:
-#                         _rq = {}
-#                         for _v, _tt in ((m["a"], m["ta"]), (m["b"], m["tb"])):
-#                             _rows = FETCH[_v](load_creds().get(_v, {}))
-#                             _hit = next((r for r in _rows if r.get("title") == _tt), None)
-#                             if _hit is None:
-#                                 _t = (_tt or "").strip().casefold()
-#                                 _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold() == _t), None)
-#                             if _hit is None and _t: _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold().startswith(_t[:40])), None)
-#                             _rq[_v] = (_hit or {}).get("yes")
-#                         if _rq.get(m["a"]) is None or _rq.get(m["b"]) is None:
-#                             _log_loop("fort: requote gagal - FALLBACK harga snapshot scan")
-#                         else:
-#                             _y1, _y2 = float(_rq[m["a"]]), float(_rq[m["b"]])
-#                             _c2 = min(_y1 + (1 - _y2), (1 - _y1) + _y2)
-#                             _pi2 = (1.0 - _c2) - (FEES[m["a"]] + FEES[m["b"]])
-#                             requote_tol_decimal = requote_tol_cent / 100.0
-                            
-#                             # 3. Cek toleransi penyusutan profit (REQUOTE)
-#                             if _pi2 < 0.01 or _pi2 < m["pi"] - requote_tol_decimal:
-#                                 skip_msg = f"fort: Pi requote {_pi2*100:.1f}¢ menyusut (toleransi {requote_tol_cent}¢) - skip"
-#                                 _log_loop(skip_msg)
-#                                 st.setdefault("skip_reasons", []).append({
-#                                     "ts": time.strftime("%H:%M:%S"), 
-#                                     "reason": skip_msg,
-#                                     "match": f"{m['a']} ↔ {m['b']} - Π={m['pi']*100:.1f}¢"
-#                                 })
-#                                 st["skip_reasons"] = st["skip_reasons"][-10:]
-#                                 continue
-
-#                     except Exception as _fe:
-#                         _log_loop(f"fort: requote exception {_fe} - skip")
-#                         continue
-                    
-#                     legs = [(m["a"], leg_a_side), (m["b"], leg_b_side)]
-#                     _fills, _abort = [], False
-#                     for venue, side in legs:
-#                         fn = EXEC.get(venue)
-#                         if not fn: _abort = True; break
-#                         _usd = max(per_op, MIN_ORDER_USD.get(venue, 0.0))
-#                         try: ok, msg = fn(load_creds().get(venue, {}), usd=_usd, side=side)
-#                         except TypeError:
-#                             try: ok, msg = fn(load_creds().get(venue, {}), usd=_usd)
-#                             except Exception: ok, msg = False, "executor exception"
-#                         except Exception: ok, msg = False, "executor exception"
-#                         if ok:
-#                             _fills.append((venue, side, msg))
-#                             sp["amount"] = round(sp["amount"] + per_op, 2)
-#                             st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-auto", "venues": [venue], "pi": m["pi"], "size": per_op, "direction": m.get("direction", "SPREAD"), "note": msg[:60]})
-#                             st["trades"] = st["trades"][-10000:]
-#                             added += 1
-#                             try:
-#                                 from app.position_manager import track_new_position
-#                                 track_new_position(venue=venue, market_id=m.get("ta", "")[:60], buy_price=m.get("gross", 0) / 2, size=per_op, direction=m.get("direction", "SPREAD"))
-#                             except Exception: pass
-#                         else:
-#                             _log_loop(f"fort: leg {venue} gagal: {msg}")
-#                             _abort = True; break
-#                     if _abort and _fills:
-#                         _ov, _os, _om = _fills[0]
-#                         _log_loop(f"fort: ORPHAN {_ov}/{_os} - coba tutup")
-#                         try:
-#                             if _ov == "kalshi":
-#                                 from app.executor import sell_kalshi
-#                                 _tick = (_om or "").split("::")[-1].strip()
-#                                 sell_kalshi(load_creds().get("kalshi", {}), _tick, _os, per_op)
-#                                 _log_loop(f"fort: orphan kalshi {_tick} ditutup")
-#                             else: dispatch_alert("critical", f"ORPHAN {_ov} {_os} - tutup manual", "orphan")
-#                         except Exception as _oe: dispatch_alert("critical", f"ORPHAN {_ov} {_os} ({_oe}) - tutup manual", "orphan")
-#                 else:
-#                     st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": st.get("mode", "paper"), "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op, "direction": m.get("direction", "SPREAD"), "ta": m.get("ta") or "", "tb": m.get("tb") or "", "locked": m.get("locked", True), "ea": m.get("ea"), "eb": m.get("eb")})
-#                     st["trades"] = st["trades"][-10000:]
-#                     added += 1
-
-#             st["spend"] = sp
-#             errs = 0
-#             st.pop("last_error", None)
-#             if sp["amount"] >= cap:
-#                 st["auto_stop"] = f"{time.strftime('%H:%M:%S')} cap rugi harian tercapai ${sp['amount']:.2f}"
-#                 _write(st); _log_loop("auto-stop cap harian"); stop(); break
-#             _write(st)
-#             _log_loop(f"cycle ok matches={len(st.get('matches') or [])} +trades={added}")
-#             time.sleep(max(5, INTERVAL - (time.time() - t0)))
-#         except Exception as e:
-#             errs += 1
-#             _log_loop(f"cycle error {type(e).__name__}: {e}")
-#             st = _read()
-#             st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
-#             if errs >= 5: st["auto_stop"] = f"{time.strftime('%H:%M:%S')} 5 error beruntun: {type(e).__name__}"; _write(st); _log_loop("auto-stop 5 error"); stop(); break
-#             _write(st); time.sleep(5)
-#     _log_loop("loop exit")
-
 def _auto_take_profit():
     """Auto-sell posisi bila untung >= tp% dengan P/L tracking yang benar."""
     from app.venue_positions import get_positions_detailed
@@ -514,7 +330,8 @@ def _auto_take_profit():
     tp_pct = float(limits.get("tp", 90)) / 100
     positions = load_positions()
     active = [p for p in positions if not p.get("resolved")]
-    if not active: return 0
+    if not active: 
+        return 0
     creds = load_creds()
     closed_count = 0
     for pos in active:
@@ -528,7 +345,7 @@ def _auto_take_profit():
                 # Posisi tidak ada di exchange = sudah close/resolve
                 pos["resolved"] = True
                 pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                pos["pnl"] = 0.0  # Tidak tahu P/L exact dari history, set 0
+                pos["pnl"] = 0.0  # Tidak tahu P/L exact
                 pos["pnl_pct"] = 0.0
                 pos["sync_close"] = True
                 closed_count += 1
@@ -566,7 +383,7 @@ def _auto_take_profit():
                         "close_price": current_price
                     })
                     
-                    # ✅ PENTING: Juga update live_state.json trades agar tampil di Dashboard
+                    # ✅ PENTING: Juga update live_state.json trades
                     st = _read()
                     st.setdefault("trades", []).append({
                         "ts": pos.get("resolved_ts"),
@@ -574,8 +391,8 @@ def _auto_take_profit():
                         "venues": [venue],
                         "pi": 0,
                         "size": size,
-                        "pnl": round(pnl, 2),       # <-- INI YANG SEBELUMNYA HILANG
-                        "resolved": True,            # <-- INI JUGA
+                        "pnl": round(pnl, 2),
+                        "resolved": True,
                         "ta": market_id,
                         "tb": ""
                     })
@@ -592,6 +409,190 @@ def _auto_take_profit():
         save_positions(positions)
         _log_loop(f"🎯 Auto-TP selesai: {closed_count} posisi ditutup")
     return closed_count
+
+def _loop():
+    global _run, _PAIR_COUNT, _last_scan_ts, _last_reaper_ts, _last_alert_ts
+    _PAIR_COUNT, errs = {}, 0
+    _log_loop("loop start")
+    while _run:
+        t0 = time.time()
+        try:
+            cfg = load_config()
+            st = _read()
+            st["running"] = True
+            if (time.time() - _last_scan_ts >= SCAN_EVERY_SEC) or not st.get("matches"):
+                st["matches"], st["info"], st["near"], st["scanlog"] = _scan_shared()
+                st["interval"] = INTERVAL
+            if time.time() - _last_alert_ts >= 120:
+                try:
+                    tp_closed = _auto_take_profit()
+                    if tp_closed > 0: _log_loop(f"auto-tp closed {tp_closed} positions")
+                except Exception as e: _log_loop(f"auto-tp exception: {e}")
+            if time.time() - _last_reaper_ts >= REAPER_EVERY_SEC:
+                _last_reaper_ts = time.time()
+                try:
+                    from app.executor import reap_limitless_stale
+                    count, tickers, err = reap_limitless_stale()
+                except Exception as reaper_exc: count, tickers, err = 0, [], None
+                if count > 0:
+                    _log_loop(f"reaper: cancelled {count} stale orders: {tickers}")
+                    st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "cancel-auto", "venues": ["limitless"], "pi": 0.0, "size": 0.0, "note": f"cancelled {count} stale GTC orders"})
+                    st["trades"] = st["trades"][-10000:]
+                elif err: _log_loop(f"reaper: {err}")
+                else: _log_loop("reaper: skip (no open orders)")
+            try:
+                from app.position_manager import check_and_close_positions
+                check_and_close_positions()
+            except Exception: pass
+            if time.time() - _last_alert_ts >= ALERT_CHECK_SEC:
+                _last_alert_ts = time.time()
+                if st.get("auto_stop"): dispatch_alert("critical", f"Engine auto-stop: {st['auto_stop']}", "auto_stop")
+                if st.get("last_error"): dispatch_alert("warning", f"Loop error: {st['last_error']}", "last_error")
+                if _run and _thr is not None and not _thr.is_alive(): dispatch_alert("critical", "Loop thread mati", "thread_dead")
+
+            lim = cfg.get("limits", {})
+            # === BACA KONFIGURASI DARI USER (TRANSPARAN) ===
+            min_pi_cent = float(lim.get("min_pi", 0.1))
+            max_pi_cent = float(lim.get("max_pi", 30.0))
+            requote_tol_cent = float(lim.get("requote_tol", 10.0)) # Toleransi penyusutan dalam cent (default 10¢)
+            quote_max_age = float(lim.get("quote_max_age_sec", 20))
+            per_op = float(lim.get("modal_per_op", 2))
+            cap = float(lim.get("rugi_harian", 5))
+
+            today = time.strftime("%Y-%m-%d")
+            sp = st.get("spend", {})
+            if sp.get("today") != today: sp = {"today": today, "amount": 0.0}
+            added = 0
+            
+            for m in st["matches"]:
+                pi_cent = m["pi"] * 100  # Ubah ke cent
+                
+                # 1. Cek rentang profit
+                if pi_cent < min_pi_cent or pi_cent > max_pi_cent:
+                    skip_msg = f"SKIP: Pi {pi_cent:.1f}¢ di luar rentang user {min_pi_cent}¢-{max_pi_cent}¢"
+                    _log_loop(skip_msg)
+                    st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
+                    st["skip_reasons"] = st["skip_reasons"][-10:]
+                    continue
+                
+                if st.get("mode") == "real":
+                    _pkey = "|".join([m["a"], m["b"], str(_ckey(m["ta"])), str(_close_ts(m["ta"]))])
+                    _maxop = int(float(lim.get("max_op_per_pair", 2)))
+                    if _PAIR_COUNT.get(_pkey, 0) >= _maxop: continue
+                
+                # 2. Cek usia data quote
+                if quote_max_age > 0 and time.time() - float((st.get("info") or {}).get("epoch", 0) or 0) > quote_max_age:
+                    skip_msg = f"SKIP: Quote data terlalu tua (> {quote_max_age}s)"
+                    _log_loop(skip_msg)
+                    st.setdefault("skip_reasons", []).append({"ts": time.strftime("%H:%M:%S"), "reason": skip_msg})
+                    st["skip_reasons"] = st["skip_reasons"][-10:]
+                    continue
+                
+                if m.get("locked") is False:
+                    _rc = bool(lim.get("real_crosscat", False)) and st.get("mode") == "real"
+                    _pk = bool(lim.get("exec_unlocked", False)) and st.get("mode") == "paper"
+                    if not _pk and not _rc: continue
+                    if _rc and m["pi"] < float(lim.get("real_micro_floor", 0.01)): continue
+                
+                if st.get("mode") == "real" and sp["amount"] + per_op <= cap:
+                    leg_a_side, leg_b_side = m.get("leg_a_side", "YES"), m.get("leg_b_side", "YES")
+                    import re as _re
+                    _syn = {"btc":"bitcoin","eth":"ethereum","sol":"solana","doge":"dogecoin","xrp":"ripple","bnb":"binance"}
+                    _stop = set(("who what when where will the of after before next be to in on for and or a an by from vs hit above below up down price week month daily hourly minute min year day open close higher lower reach at end between than more less over under once ever win host champion become which how many is it its this that with without during through per each any some all no yes not new old first last final round match game team player score points total number count rate cut hike decision meeting announce official confirmed winner candidate nominee party vote votes poll polls election elections prime minister ministers president presidential king queen leader leaders win wins won lose loses lost beat beats defeat defeats championship champion champions cup cups league leagues series world national international global local regional state states country countries city cities get gets got go goes gone went come comes came make makes made take takes took taken see sees saw seen know knows knew known think thinks thought believe believes believed say says said tell tells told ask asks asked").split())
+                    def _toks(s): return {_syn.get(w, w) for w in _re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2 and _syn.get(w, w) not in _stop}
+                    if bool(lim.get("require_shared_token", True)) and not (_toks(m.get("ta")) & _toks(m.get("tb"))): continue
+                    
+                    try:
+                        _rq = {}
+                        for _v, _tt in ((m["a"], m["ta"]), (m["b"], m["tb"])):
+                            _rows = FETCH[_v](load_creds().get(_v, {}))
+                            _hit = next((r for r in _rows if r.get("title") == _tt), None)
+                            if _hit is None:
+                                _t = (_tt or "").strip().casefold()
+                                _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold() == _t), None)
+                            if _hit is None and _t: _hit = next((r for r in _rows if (r.get("title") or "").strip().casefold().startswith(_t[:40])), None)
+                            _rq[_v] = (_hit or {}).get("yes")
+                        if _rq.get(m["a"]) is None or _rq.get(m["b"]) is None:
+                            _log_loop("fort: requote gagal - FALLBACK harga snapshot scan")
+                        else:
+                            _y1, _y2 = float(_rq[m["a"]]), float(_rq[m["b"]])
+                            _c2 = min(_y1 + (1 - _y2), (1 - _y1) + _y2)
+                            _pi2 = (1.0 - _c2) - (FEES[m["a"]] + FEES[m["b"]])
+                            requote_tol_decimal = requote_tol_cent / 100.0
+                            
+                            # 3. Cek toleransi penyusutan profit (REQUOTE)
+                            if _pi2 < 0.01 or _pi2 < m["pi"] - requote_tol_decimal:
+                                skip_msg = f"fort: Pi requote {_pi2*100:.1f}¢ menyusut (toleransi {requote_tol_cent}¢) - skip"
+                                _log_loop(skip_msg)
+                                st.setdefault("skip_reasons", []).append({
+                                    "ts": time.strftime("%H:%M:%S"), 
+                                    "reason": skip_msg,
+                                    "match": f"{m['a']} ↔ {m['b']} - Π={m['pi']*100:.1f}¢"
+                                })
+                                st["skip_reasons"] = st["skip_reasons"][-10:]
+                                continue
+
+                    except Exception as _fe:
+                        _log_loop(f"fort: requote exception {_fe} - skip")
+                        continue
+                    
+                    legs = [(m["a"], leg_a_side), (m["b"], leg_b_side)]
+                    _fills, _abort = [], False
+                    for venue, side in legs:
+                        fn = EXEC.get(venue)
+                        if not fn: _abort = True; break
+                        _usd = max(per_op, MIN_ORDER_USD.get(venue, 0.0))
+                        try: ok, msg = fn(load_creds().get(venue, {}), usd=_usd, side=side)
+                        except TypeError:
+                            try: ok, msg = fn(load_creds().get(venue, {}), usd=_usd)
+                            except Exception: ok, msg = False, "executor exception"
+                        except Exception: ok, msg = False, "executor exception"
+                        if ok:
+                            _fills.append((venue, side, msg))
+                            sp["amount"] = round(sp["amount"] + per_op, 2)
+                            st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": "real-auto", "venues": [venue], "pi": m["pi"], "size": per_op, "direction": m.get("direction", "SPREAD"), "note": msg[:60]})
+                            st["trades"] = st["trades"][-10000:]
+                            added += 1
+                            try:
+                                from app.position_manager import track_new_position
+                                track_new_position(venue=venue, market_id=m.get("ta", "")[:60], buy_price=m.get("gross", 0) / 2, size=per_op, direction=m.get("direction", "SPREAD"))
+                            except Exception: pass
+                        else:
+                            _log_loop(f"fort: leg {venue} gagal: {msg}")
+                            _abort = True; break
+                    if _abort and _fills:
+                        _ov, _os, _om = _fills[0]
+                        _log_loop(f"fort: ORPHAN {_ov}/{_os} - coba tutup")
+                        try:
+                            if _ov == "kalshi":
+                                from app.executor import sell_kalshi
+                                _tick = (_om or "").split("::")[-1].strip()
+                                sell_kalshi(load_creds().get("kalshi", {}), _tick, _os, per_op)
+                                _log_loop(f"fort: orphan kalshi {_tick} ditutup")
+                            else: dispatch_alert("critical", f"ORPHAN {_ov} {_os} - tutup manual", "orphan")
+                        except Exception as _oe: dispatch_alert("critical", f"ORPHAN {_ov} {_os} ({_oe}) - tutup manual", "orphan")
+                else:
+                    st.setdefault("trades", []).append({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "mode": st.get("mode", "paper"), "venues": [m["a"], m["b"]], "pi": m["pi"], "size": per_op, "direction": m.get("direction", "SPREAD"), "ta": m.get("ta") or "", "tb": m.get("tb") or "", "locked": m.get("locked", True), "ea": m.get("ea"), "eb": m.get("eb")})
+                    st["trades"] = st["trades"][-10000:]
+                    added += 1
+
+            st["spend"] = sp
+            errs = 0
+            st.pop("last_error", None)
+            if sp["amount"] >= cap:
+                st["auto_stop"] = f"{time.strftime('%H:%M:%S')} cap rugi harian tercapai ${sp['amount']:.2f}"
+                _write(st); _log_loop("auto-stop cap harian"); stop(); break
+            _write(st)
+            _log_loop(f"cycle ok matches={len(st.get('matches') or [])} +trades={added}")
+            time.sleep(max(5, INTERVAL - (time.time() - t0)))
+        except Exception as e:
+            errs += 1
+            _log_loop(f"cycle error {type(e).__name__}: {e}")
+            st = _read()
+            st["last_error"] = f"{time.strftime('%H:%M:%S')} {type(e).__name__}: {e}"
+            if errs >= 5: st["auto_stop"] = f"{time.strftime('%H:%M:%S')} 5 error beruntun: {type(e).__name__}"; _write(st); _log_loop("auto-stop 5 error"); stop(); break
+            _write(st); time.sleep(5)
+    _log_loop("loop exit")
 
 def refresh():
     if KILL.exists() or not _run: return status()

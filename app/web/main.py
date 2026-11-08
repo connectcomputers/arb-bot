@@ -513,6 +513,17 @@ def api_sync_settlement():
         return {"ok": True, "message": "Settlement sync completed", "output": result.stdout}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+@app.post("/api/reset-scan-interval")
+def api_reset_scan_interval():
+    """Reset scan interval ke normal (30 detik)."""
+    import time
+    st = engine._read()
+    st["last_scan_ts"] = 0  # Reset timestamp
+    st["scan_interval"] = 30  # Set ke 30 detik
+    engine._write(st)
+    _log_loop("Scan interval direset ke 30 detik via API")
+    return {"ok": True, "message": "Scan interval direset ke 30 detik"}
     
 @app.get("/api/open-orders")
 def api_open_orders():
