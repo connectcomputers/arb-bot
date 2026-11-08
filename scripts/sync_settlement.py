@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
 """
-Skrip untuk sinkronisasi settlement data dari exchange history.
-Membantu mengisi data P/L yang hilang untuk posisi yang sudah close.
-
-Cara pakai:
-  cd ~/arb-bot
-  python3 -m scripts.sync_settlement --dry-run    # Preview saja
-  python3 -m scripts.sync_settlement --execute    # Jalankan sync
+Skrip untuk sinkronisasi settlement data dari exchange dan menambal (patch) 
+data P/L yang hilang ke database lokal bot.
 """
-
 import json
 import sys
 import time
@@ -65,7 +59,6 @@ def sync_settlement(dry_run=True):
         return
     
     log(f"Total posisi lokal: {len(positions)}")
-    
     unresolved = [p for p in positions if not p.get("resolved")]
     log(f"Posisi belum resolved: {len(unresolved)}")
     
@@ -83,7 +76,6 @@ def sync_settlement(dry_run=True):
     for pos in unresolved:
         venue = pos.get("venue", "")
         market_id = pos.get("market_id", "")
-        
         log(f"\nMemeriksa: {venue} - {market_id[:50]}...")
         
         try:
@@ -96,18 +88,17 @@ def sync_settlement(dry_run=True):
             
             if not found:
                 log(f"  → Tidak ada di exchange (kemungkinan sudah settle)", "SUCCESS")
-                
                 if dry_run:
                     log(f"  [DRY RUN] Akan update: resolved=True, pnl=0")
                     synced_count += 1
                 else:
                     pos["resolved"] = True
                     pos["resolved_ts"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-                    pos["pnl"] = 0
-                    pos["pnl_pct"] = 0
+                    pos["pnl"] = 0.0
+                    pos["pnl_pct"] = 0.0
                     pos["settlement_synced"] = True
                     synced_count += 1
-                    log(f"  [SYNCED] resolved=True, pnl=0")
+                    log(f"  [SYNCED] resolved=True, pnl=0.0")
             else:
                 log(f"  → Masih aktif di exchange. Skip.", "INFO")
                 skipped_count += 1
@@ -123,15 +114,10 @@ def sync_settlement(dry_run=True):
         log(f"Backup ada di: {BACKUP_DIR}")
         log(f"{'=' * 60}")
         
-        # Update live_state.json
         log("\nMengupdate live_state.json...")
         state = load_live_state()
         trades = state.get("trades", [])
-        
-        synced_market_ids = [
-            p.get("market_id") for p in positions 
-            if p.get("settlement_synced") and p.get("resolved")
-        ]
+        synced_market_ids = [p.get("market_id") for p in positions if p.get("settlement_synced") and p.get("resolved")]
         
         updated_trades = 0
         for trade in trades:
@@ -140,7 +126,7 @@ def sync_settlement(dry_run=True):
                 if market_id and market_id in title:
                     if not trade.get("resolved"):
                         trade["resolved"] = True
-                        trade["pnl"] = 0
+                        trade["pnl"] = 0.0
                         trade["resolved_ts"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
                         updated_trades += 1
         
@@ -160,7 +146,6 @@ def main():
     parser = argparse.ArgumentParser(description="Sync settlement data dari exchange")
     parser.add_argument("--dry-run", action="store_true", help="Preview saja")
     parser.add_argument("--execute", action="store_true", help="Jalankan sync")
-    
     args = parser.parse_args()
     
     if not args.dry_run and not args.execute:
