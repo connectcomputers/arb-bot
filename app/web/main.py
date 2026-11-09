@@ -498,49 +498,84 @@ async def api_baseline_set(request: Request):
 #     }
 
 @app.get("/api/pnl")
-def api_get_pnl(scope: str = "today", from_date: str = "", to_date: str = ""):
+def api_pnl(scope: str = "today"):
     """
-    Get P/L data dengan filter venue aktif.
+    Get P/L data HANYA untuk venue yang AKTIF di Setup.
     """
     try:
-        cfg = load_config()
-        
-        # Dapatkan venue yang AKTIF (valid DAN memiliki categories)
-        active_venues = []
-        for venue_name, venue_config in cfg.get("venues", {}).items():
-            if venue_config.get("valid") and venue_config.get("cats"):
-                active_venues.append(venue_name)
-        
-        # Load trades dari fungsi yang sudah ada
-        from app.data_store import get_trades
-        trades = get_trades(scope=scope, from_date=from_date, to_date=to_date)
-        
-        # Filter trades HANYA untuk venue aktif
-        filtered_trades = []
-        for trade in trades:
-            venues_in_trade = trade.get("venues", [])
-            # Cek apakah ada irisan dengan active venues
-            if any(v in active_venues for v in venues_in_trade):
-                filtered_trades.append(trade)
-        
-        # Hitung P/L dari filtered trades
-        from app.pnl_calculator import calculate_pnl_summary
-        pnl_data = calculate_pnl_summary(filtered_trades, scope, from_date, to_date)
-        
-        return pnl_data
-        
-    except Exception as e:
-        import traceback
-        print(f"ERROR in /api/pnl: {e}")
-        print(traceback.format_exc())
-        # Return data kosong jika error
+        from app.position_manager import load_positions
+        positions = load_positions()
+    except Exception:
         return {
-            "total_pnl": 0.0,
-            "resolved_count": 0,
-            "active_count": 0,
-            "by_period": {"today": 0.0, "week": 0.0, "month": 0.0},
+            "by_venue": {}, 
+            "by_period": {}, 
+            "total_pnl": 0, 
+            "resolved_count": 0, 
+            "active_count": 0, 
             "by_venue_period": {}
         }
+    
+    # 1. Dapatkan venue yang AKTIF di Setup (valid DAN memiliki categories)
+    cfg = load_config()
+    active_venues = []
+    for venue_name, venue_config in cfg.get("venues", {}).items():
+        if venue_config.get("valid") and venue_config.get("cats"):
+            active_venues.append(venue_name)
+    
+    # 2. Filter positions HANYA untuk venue yang aktif
+    filtered_positions = []
+    for pos in positions:
+        if pos.get("venue") in active_venues:
+            filtered_positions.append(pos)
+    
+    # 3. Lanjutkan logika P/L asli dengan data yang sudah difilter
+    resolved = [x for x in filtered_positions if x.get("resolved")]
+    active = [x for x in filtered_positions if not x.get("resolved")]
+    
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    dk = lambda ts: (ts or "")[:10]
+    
+    pnl_by_venue = {}
+    per = {}
+    for x in resolved:
+        v = x.get("venue", "?")
+        d = pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl_realized": 0, "active": 0})
+        d["count"] += 1
+        d["invested"] += x.get("size", 0)
+        if x.get("resolved"): 
+            d["pnl_realized"] += x.get("pnl", 0)
+        else: 
+            d["active"] += 1
+        
+        row = per.setdefault(v, {"today": 0.0, "week": 0.0, "month": 0.0, "total": 0.0})
+        pnl_val = x.get("pnl", 0)
+        row["total"] = round(row["total"] + pnl_val, 2)
+        if dk(x.get("resolved_ts")) == today_str: 
+            row["today"] = round(row["today"] + pnl_val, 2)
+        if dk(x.get("resolved_ts")) >= week0: 
+            row["week"] = round(row["week"] + pnl_val, 2)
+        if dk(x.get("resolved_ts")) >= month0: 
+            row["month"] = round(row["month"] + pnl_val, 2)
+
+    pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today_str)
+    pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
+    pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
+    
+    resolved_count_out = len([x for x in resolved if dk(x.get("resolved_ts")) == today_str]) if scope == "today" else len(resolved)
+    active_count_out = len([x for x in active if dk(x.get("ts")) == today_str]) if scope == "today" else len(active)
+
+    return {
+        "by_venue": pnl_by_venue,
+        "by_period": {"today": round(pt, 2), "week": round(pw, 2), "month": round(pm, 2)},
+        "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
+        "resolved_count": resolved_count_out,
+        "active_count": active_count_out,
+        "by_venue_period": per
+    }
     
 @app.post("/api/admin/reset-history")
 def api_reset_history():
