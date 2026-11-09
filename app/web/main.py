@@ -500,40 +500,48 @@ async def api_baseline_set(request: Request):
 @app.get("/api/pnl")
 def api_get_pnl(scope: str = "today", from_date: str = "", to_date: str = ""):
     """
-    Get P/L data HANYA untuk venue yang AKTIF di Setup.
+    Get P/L data dengan filter venue aktif.
     """
-    cfg = load_config()
+    try:
+        cfg = load_config()
+        
+        # Dapatkan venue yang AKTIF (valid DAN memiliki categories)
+        active_venues = []
+        for venue_name, venue_config in cfg.get("venues", {}).items():
+            if venue_config.get("valid") and venue_config.get("cats"):
+                active_venues.append(venue_name)
+        
+        # Load trades dari fungsi yang sudah ada
+        from app.data_store import get_trades
+        trades = get_trades(scope=scope, from_date=from_date, to_date=to_date)
+        
+        # Filter trades HANYA untuk venue aktif
+        filtered_trades = []
+        for trade in trades:
+            venues_in_trade = trade.get("venues", [])
+            # Cek apakah ada irisan dengan active venues
+            if any(v in active_venues for v in venues_in_trade):
+                filtered_trades.append(trade)
+        
+        # Hitung P/L dari filtered trades
+        from app.pnl_calculator import calculate_pnl_summary
+        pnl_data = calculate_pnl_summary(filtered_trades, scope, from_date, to_date)
+        
+        return pnl_data
+        
+    except Exception as e:
+        import traceback
+        print(f"ERROR in /api/pnl: {e}")
+        print(traceback.format_exc())
+        # Return data kosong jika error
+        return {
+            "total_pnl": 0.0,
+            "resolved_count": 0,
+            "active_count": 0,
+            "by_period": {"today": 0.0, "week": 0.0, "month": 0.0},
+            "by_venue_period": {}
+        }
     
-    # Dapatkan venue yang AKTIF (valid DAN memiliki categories/pairs)
-    active_venues = []
-    for venue_name, venue_config in cfg.get("venues", {}).items():
-        if venue_config.get("valid") and venue_config.get("cats"):
-            active_venues.append(venue_name)
-    
-    # Load trades
-    trades = load_trades()
-    
-    # Filter trades HANYA untuk venue aktif
-    filtered_trades = []
-    for trade in trades:
-        venues_in_trade = trade.get("venues", [])
-        # Cek apakah ada irisan dengan active venues
-        if any(v in active_venues for v in venues_in_trade):
-            filtered_trades.append(trade)
-    
-    # Hitung P/L dari filtered trades
-    pnl_data = calculate_pnl(filtered_trades, scope, from_date, to_date)
-    
-    # Filter by_venue_period HANYA untuk active venues
-    filtered_by_venue = {}
-    for venue in active_venues:
-        if venue in pnl_data.get("by_venue_period", {}):
-            filtered_by_venue[venue] = pnl_data["by_venue_period"][venue]
-    
-    pnl_data["by_venue_period"] = filtered_by_venue
-    
-    return pnl_data
-
 @app.post("/api/admin/reset-history")
 def api_reset_history():
     sp = Path("data/live_state.json")
