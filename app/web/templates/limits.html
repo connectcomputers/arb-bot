@@ -74,10 +74,29 @@ button:disabled{background:#475569;cursor:not-allowed}
     <span>Aktifkan batasan rentang Π 2¢–10¢ (legacy fallback)</span>
   </label>
 </div>
-<div style="margin:0 0 12px 2px;font-size:12px">
+<!-- <div style="margin:0 0 12px 2px;font-size:12px">
   Max OP per pasangan (anti overtrade): <input type="number" id="flagMaxOp" min="1" max="10" style="width:64px">
   <button id="flagSave" type="button" style="margin-left:8px;padding:5px 10px">Simpan Flag</button>
   <span id="flagMsg" style="color:#64748b;font-size:11px"></span>
+</div> -->
+
+<div style="margin-top:16px;padding-top:16px;border-top:1px solid #334155">
+  <label style="display:block;margin-bottom:8px">
+    <strong>Max OP per Pasangan (anti overtrade):</strong>
+  </label>
+  <div style="display:flex;gap:8px;align-items:center">
+    <input type="number" id="max_op_input" min="1" max="10" 
+           value="{{ max_op_per_pair or 1 }}" 
+           style="width:80px;padding:6px;border-radius:4px;border:1px solid #475569;background:#1e293b;color:#e2e8f0">
+    <button onclick="updateMaxOP()" class="btn-primary" 
+            style="background:#10b981;color:white;border:none;border-radius:4px;padding:6px 12px;cursor:pointer">
+      Simpan Flag
+    </button>
+    <span id="max_op_status" style="color:#86efac;font-size:11px"></span>
+  </div>
+  <small class="muted" style="display:block;margin-top:4px">
+    *Membatasi jumlah open position per pasangan market
+  </small>
 </div>
 
 <button id="save" disabled onclick="simpan()">Simpan Pengaturan Pair</button>
@@ -87,6 +106,33 @@ button:disabled{background:#475569;cursor:not-allowed}
 </div>
 
 <script>
+async function updateMaxOP(){
+  const input = document.getElementById('max_op_input');
+  const status = document.getElementById('max_op_status');
+  const maxOp = parseInt(input.value);
+  
+  try {
+    const r = await fetch('/api/limits/max-op', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({max_op: maxOp})
+    });
+    const d = await r.json();
+    
+    if(d.ok){
+      status.textContent = '✅ Berhasil disimpan';
+      status.style.color = '#86efac';
+      setTimeout(()=>{ status.textContent = ''; }, 3000);
+    } else {
+      status.textContent = '❌ ' + d.message;
+      status.style.color = '#f87171';
+    }
+  } catch(e){
+    status.textContent = '❌ Error: ' + e.message;
+    status.style.color = '#f87171';
+  }
+}
+
 // TAMBAHAN: requote_tol dan quote_max_age_sec dimasukkan ke daftar field
 const ids = ['modal_total','modal_per_op','sl','tp','min_profit','rugi_harian', 'min_pi', 'max_pi', 'requote_tol', 'quote_max_age_sec'];
 function baca(){ 

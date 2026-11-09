@@ -216,8 +216,12 @@ def limits(request: Request):
         except Exception:
             flags = {}
     
+    # Pastikan max_op_per_pair ada di flags
+    if "max_op_per_pair" not in flags:
+        flags["max_op_per_pair"] = cfg.get("limits", {}).get("max_op_per_pair", 1)
+    
     # Gunakan nilai dari flags jika ada, fallback ke config
-    max_op = flags.get("max_op_per_pair", cfg.get("limits", {}).get("max_op_per_pair", 1))
+    max_op = flags.get("max_op_per_pair", 1)
     
     return templates.TemplateResponse(request, "limits.html", {
         "limits": cfg.get("limits", {}),
@@ -227,6 +231,26 @@ def limits(request: Request):
         "pairs": cfg.get("pairs", {}),
     })
 
+@app.post("/api/limits/max-op")
+async def api_update_max_op(request: Request):
+    """Update Max OP per Pasangan."""
+    try:
+        data = await request.json()
+        max_op = int(data.get("max_op", 1))
+        
+        # Simpan ke flags file
+        flags_file = Path("data/limits_flags.json")
+        flags = {}
+        if flags_file.exists():
+            flags = json.loads(flags_file.read_text())
+        
+        flags["max_op_per_pair"] = max_op
+        flags_file.write_text(json.dumps(flags, indent=2))
+        
+        return {"ok": True, "message": f"Max OP per Pasangan diset ke {max_op}"}
+    except Exception as e:
+        return {"ok": False, "message": str(e)}
+    
 @app.get("/api/limits/flag")
 def api_limits_flag_get():
     c = load_config().get("limits", {})

@@ -452,14 +452,24 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${d.resolved_count}</strong> · Posisi aktif: <strong>${d.active_count}</strong></span>`;
     
-    // Tampilkan rincian per venue HANYA jika ada data
+    // Tampilkan rincian per venue HANYA jika ada data P/L (bukan $0.00)
     if (d.by_venue_period && Object.keys(d.by_venue_period).length > 0){
-      h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-      for (const [v, r] of Object.entries(d.by_venue_period)){
-        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+      // Filter venue yang memiliki P/L != 0 atau resolved_count > 0
+      const activeVenues = Object.entries(d.by_venue_period).filter(([v, r]) => {
+        return (r.today !== 0 || r.total !== 0);
+      });
+      
+      if (activeVenues.length > 0) {
+        h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
+        for (const [v, r] of activeVenues){
+          h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+        }
+        h += '</span>';
       }
-      h += '</span>';
-    } else {
+    }
+    
+    // Tambahkan catatan jika semua nilai 0
+    if (d.resolved_count === 0 && d.total_pnl === 0) {
       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
     }
     
