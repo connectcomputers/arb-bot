@@ -34,37 +34,78 @@ a{color:#38bdf8}
 </style>
 <script>
 // Fungsi untuk menampilkan rincian per venue
+// function loadVenueBreakdown() {
+//   fetch('/api/venue-feed?scope=today')
+//     .then(r => r.json())
+//     .then(data => {
+//       const venueBreakdown = document.getElementById('venue-breakdown');
+//       const venueList = document.getElementById('venue-list');
+      
+//       if (!venueBreakdown || !venueList) return;
+      
+//       // Filter venue yang valid DAN memiliki menu (cats tidak kosong)
+//       const validVenues = data.venues.filter(v => v.valid && v.cats && v.cats.length > 0);
+      
+//       if (validVenues.length === 0) {
+//         venueBreakdown.style.display = 'none';
+//         return;
+//       }
+      
+//       // Tampilkan breakdown
+//       let html = '';
+//       validVenues.forEach(venue => {
+//         html += `<div style="font-size:11px;color:#94a3b8;margin:4px 0">
+//           · ${venue.venue.toUpperCase()}: harian $0.00 · total $0.00
+//         </div>`;
+//       });
+      
+//       venueList.innerHTML = html;
+//       venueBreakdown.style.display = 'block';
+//     })
+//     .catch(e => {
+//       console.error('Error loading venue breakdown:', e);
+//     });
+// }
+
+// FUNGSI YANG BENAR - Mengambil data P/L per venue dari API
 function loadVenueBreakdown() {
-  fetch('/api/venue-feed?scope=today')
-    .then(r => r.json())
-    .then(data => {
-      const venueBreakdown = document.getElementById('venue-breakdown');
-      const venueList = document.getElementById('venue-list');
+  // Fetch 2 API secara paralel: venue aktif + data P/L
+  Promise.all([
+    fetch('/api/venue-feed?scope=today').then(r => r.json()),
+    fetch('/api/pnl?scope=today').then(r => r.json())
+  ]).then(([venueData, pnlData]) => {
+    const venueBreakdown = document.getElementById('venue-breakdown');
+    const venueList = document.getElementById('venue-list');
+    
+    if (!venueBreakdown || !venueList) return;
+    
+    // Filter venue yang valid DAN memiliki kategori
+    const validVenues = venueData.venues.filter(v => v.valid && v.cats && v.cats.length > 0);
+    
+    if (validVenues.length === 0) {
+      venueBreakdown.style.display = 'none';
+      return;
+    }
+    
+    // Ambil data P/L per venue dari API
+    const venuePnl = pnlData.by_venue_period || {};
+    
+    let html = '';
+    validVenues.forEach(venue => {
+      // ✅ INI OTOMATIS - ambil dari data API
+      const todayPnl = venuePnl[venue.venue]?.today || 0;
+      const totalPnl = venuePnl[venue.venue]?.total || 0;
       
-      if (!venueBreakdown || !venueList) return;
-      
-      // Filter venue yang valid DAN memiliki menu (cats tidak kosong)
-      const validVenues = data.venues.filter(v => v.valid && v.cats && v.cats.length > 0);
-      
-      if (validVenues.length === 0) {
-        venueBreakdown.style.display = 'none';
-        return;
-      }
-      
-      // Tampilkan breakdown
-      let html = '';
-      validVenues.forEach(venue => {
-        html += `<div style="font-size:11px;color:#94a3b8;margin:4px 0">
-          · ${venue.venue.toUpperCase()}: harian $0.00 · total $0.00
-        </div>`;
-      });
-      
-      venueList.innerHTML = html;
-      venueBreakdown.style.display = 'block';
-    })
-    .catch(e => {
-      console.error('Error loading venue breakdown:', e);
+      html += `<div style="font-size:11px;color:#94a3b8;margin:4px 0">
+        · ${venue.venue.toUpperCase()}: harian $${todayPnl.toFixed(2)} · total $${totalPnl.toFixed(2)}
+      </div>`;
     });
+    
+    venueList.innerHTML = html;
+    venueBreakdown.style.display = 'block';
+  }).catch(e => {
+    console.error('Error loading venue breakdown:', e);
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function(){
@@ -305,15 +346,15 @@ async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) retur
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
 
-  <!-- <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div> -->
-
-  <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
-
   <!-- RINCIAN PER VENUE -->
   <div id="venue-breakdown" style="margin-top:12px;padding:12px;background:#1e293b;border:1px solid #334155;border-radius:6px;display:none">
     <strong style="color:#94a3b8;font-size:12px">Rincian per venue:</strong>
     <div id="venue-list" style="margin-top:8px"></div>
   </div>
+
+  <!-- <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div> -->
+
+  <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
 
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
     <button onclick="syncPositions()" style="background:#10b981;color:white;border:none;border-radius:6px;padding:8px 14px;cursor:pointer;font-weight:600">🔄 Sync Posisi</button>
