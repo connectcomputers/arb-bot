@@ -644,6 +644,26 @@ async def api_cancel_order(request: Request):
             return {"ok": False, "message": str(e)[:100]}
     return {"ok": False, "message": "venue tidak didukung untuk cancel via API ini"}
 
+@app.get("/api/active-venues")
+def api_get_active_venues():
+    """
+    Mendapatkan daftar venue yang AKTIF di Setup.
+    Venue dianggap aktif jika:
+    1. API valid (credentials valid)
+    2. Memiliki kategori/pairs yang dipilih
+    """
+    cfg = load_config()
+    active_venues = []
+    
+    for venue_name, venue_config in cfg.get("venues", {}).items():
+        # Cek apakah venue valid dan memiliki pairs/kategori
+        if venue_config.get("valid") and venue_config.get("cats"):
+            active_venues.append(venue_name)
+    
+    return {
+        "active_venues": active_venues,
+        "all_venues": list(cfg.get("venues", {}).keys())
+    }
 # ===========================================================================================================
 # # /app/web/main.py
 # """
