@@ -22,13 +22,38 @@ from app.engine import _log_loop
 
 LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]
 
+# def config_complete(cfg: dict) -> bool:
+#     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
+#     pairs = cfg.get("pairs") or {}
+#     n_pairs = sum(len(v) for v in pairs.values())
+#     limits = cfg.get("limits") or {}
+#     return (venues_ok >= 2 and n_pairs >= 1
+#             and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]))
+
 def config_complete(cfg: dict) -> bool:
     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
     pairs = cfg.get("pairs") or {}
     n_pairs = sum(len(v) for v in pairs.values())
     limits = cfg.get("limits") or {}
+    
+    # Set default values untuk field yang kosong
+    defaults = {
+        "min_pi": 1.5,      # Default 1.5¢ (filter noise)
+        "max_pi": 30,       # Default 30¢
+        "sl": 40,           # Default 40% SL
+        "tp": 50,           # Default 50% TP
+        "requote_tol": 15,  # Default 15¢ toleransi
+        "quote_max_age_sec": 10,  # Default 10 detik
+        "rugi_harian": 5,   # Default $5
+        "max_op_per_pair": 1,  # Default 1 OP
+    }
+    
+    for key, default_val in defaults.items():
+        if limits.get(key) in [None, "", 0]:
+            limits[key] = default_val
+    
     return (venues_ok >= 2 and n_pairs >= 1
-            and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]))
+            and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi"]))
 
 VENUES_SCHEMA = {
     "polymarket": [

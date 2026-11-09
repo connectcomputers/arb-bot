@@ -327,7 +327,8 @@ def _auto_take_profit():
     from app.position_manager import load_positions, save_positions
     cfg = load_config()
     limits = cfg.get("limits", {})
-    tp_pct = float(limits.get("tp", 90)) / 100
+    # tp_pct = float(limits.get("tp", 90)) / 100
+    tp_pct = float(limits.get("tp", 50)) / 100  # Default 50% untuk ambil profit cepat
     positions = load_positions()
     active = [p for p in positions if not p.get("resolved")]
     if not active: 

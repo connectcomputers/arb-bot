@@ -30,22 +30,34 @@ button:disabled{background:#475569;cursor:not-allowed}
 <div class="card">
 <label>Volume Modal total (USDC)<input id="modal_total" type="number" value="{{ limits.get('modal_total','') }}"></label>
 <label>Modal per OP (USDC)<input id="modal_per_op" type="number" value="{{ limits.get('modal_per_op','') }}"></label>
-<label>SL (% pengaman posisi terbuka)<input id="sl" type="number" step="0.1" value="{{ limits.get('sl','') }}"></label>
-<label>TP (% ambil profit awal)<input id="tp" type="number" step="0.1" value="{{ limits.get('tp','') }}"></label>
+<!-- <label>SL (% pengaman posisi terbuka)<input id="sl" type="number" step="0.1" value="{{ limits.get('sl','') }}"></label> -->
+<label>SL (% pengamanan posisi terbuka) <span class="muted">(rekomendasi: 40 untuk volatilitas crypto)</span>
+  <input id="sl" type="number" step="0.1" value="{{ limits.get('sl', 40) }}">
+</label>
+<!-- <label>TP (% ambil profit awal)<input id="tp" type="number" step="0.1" value="{{ limits.get('tp','') }}"></label> -->
+<label>TP (% ambil profit awal) <span class="muted">(rekomendasi: 50 untuk ambil profit cepat)</span>
+  <input id="tp" type="number" step="0.1" value="{{ limits.get('tp', 50) }}">
+</label>
 
 <hr style="border-color:#334155; margin: 16px 0;">
 <h3>🎯 Kontrol Profit (Π) Transparan</h3>
 <p class="muted" style="margin-top:-8px;margin-bottom:12px">Bot hanya akan eksekusi jika profit bersih berada dalam rentang ini. (Aturan tersembunyi seperti locked>=3c telah dihapus).</p>
 
-<label>Min Profit per trade (¢)<input id="min_pi" type="number" step="0.1" value="{{ limits.get('min_pi', 0.1) }}"></label>
+<!-- <label>Min Profit per trade (¢)<input id="min_pi" type="number" step="0.1" value="{{ limits.get('min_pi', 0.1) }}"></label> -->
+<label>Min Profit per trade (¢) <span class="muted">(rekomendasi: 1.5 untuk filter noise)</span>
+  <input id="min_pi" type="number" step="0.1" value="{{ limits.get('min_pi', 1.5) }}">
+</label>
 <label>Max Profit per trade (¢) <span class="muted">(kosongkan atau isi 999 untuk unlimited)</span><input id="max_pi" type="number" step="0.1" value="{{ limits.get('max_pi', 30) }}"></label>
 
 <hr style="border-color:#334155; margin: 16px 0;">
 <h3>⚡ Kontrol Eksekusi & Requote</h3>
 <p class="muted" style="margin-top:-8px;margin-bottom:12px">Atur toleransi agar bot tidak terlalu mudah membatalkan eksekusi saat harga berubah sesaat.</p>
 
-<label>Toleransi Penyusutan Requote (¢) <span class="muted">(default: 10, longgarkan agar tidak mudah skip)</span>
+<!-- <label>Toleransi Penyusutan Requote (¢) <span class="muted">(default: 10, longgarkan agar tidak mudah skip)</span>
   <input id="requote_tol" type="number" step="0.1" value="{{ limits.get('requote_tol', 10) }}">
+</label> -->
+<label>Toleransi Penyusutan Requote (¢) (default: 15, longgarkan agar tidak mudah skip)
+  <input id="requote_tol" type="number" step="0.1" value="{{ limits.get('requote_tol', 15) }}">
 </label>
 <label>Usia Maksimal Data Quote (detik) <span class="muted">(default: 20, semakin kecil semakin fresh)</span>
   <input id="quote_max_age_sec" type="number" step="1" value="{{ limits.get('quote_max_age_sec', 20) }}">
