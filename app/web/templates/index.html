@@ -322,7 +322,10 @@ async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) retur
   
   <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
-  <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
+  <!-- <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div> -->
+  <div id="pnl-content" style="color:#94a3b8;margin-top:12px">
+    <!-- Content will be loaded by JavaScript -->
+  </div>
   <div id="unrealized-content" style="color:#94a3b8;margin-top:10px"></div>
 
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
@@ -400,14 +403,47 @@ window.loadRecon = function(scope, fromDate = '', toDate = ''){
 //   }).catch(e=>{ console.error('P/L error:', e); });
 // };
 
-// 2. LOAD P/L (VERSI DIPERBAIKI - MENAMPILKAN FORMAT INFORMATIF)
+//// 2. LOAD P/L (VERSI DIPERBAIKI - MENAMPILKAN FORMAT INFORMATIF)
+// window.loadPnl = function(){
+//   const scope = window.__rekScope || 'today';
+//   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(d=>{
+//     const el = document.getElementById('pnl-content');
+//     if(!el) return;
+    
+//     // TAMPILKAN FORMAT INFORMATIF SELALU (meskipun $0.00)
+//     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
+//     h += `Harian: <span style="color:${(d.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.today||0).toFixed(2)}</span>`;
+//     h += ` · Mingguan: <span style="color:${(d.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.week||0).toFixed(2)}</span>`;
+//     h += ` · Bulanan: <span style="color:${(d.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.month||0).toFixed(2)}</span>`;
+//     h += ` · TOTAL: <span style="color:${(d.total_pnl||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.total_pnl||0).toFixed(2)}</span>`;
+    
+//     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${d.resolved_count}</strong> · Posisi aktif: <strong>${d.active_count}</strong></span>`;
+    
+//     // Tampilkan rincian per venue jika ada
+//     if (d.by_venue_period && Object.keys(d.by_venue_period).length){
+//       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
+//       for (const [v, r] of Object.entries(d.by_venue_period)){
+//         h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+//       }
+//       h += '</span>';
+//     }
+    
+//     // Tambahkan catatan jika semua nilai 0
+//     if (d.resolved_count === 0 && d.total_pnl === 0) {
+//       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
+//     }
+    
+//     el.innerHTML = h;
+//   }).catch(e=>{ console.error('P/L error:', e); });
+// };
+
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(d=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
     
-    // TAMPILKAN FORMAT INFORMATIF SELALU (meskipun $0.00)
+    // Tampilkan format informatif selalu
     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
     h += `Harian: <span style="color:${(d.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.today||0).toFixed(2)}</span>`;
     h += ` · Mingguan: <span style="color:${(d.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.week||0).toFixed(2)}</span>`;
@@ -416,17 +452,14 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${d.resolved_count}</strong> · Posisi aktif: <strong>${d.active_count}</strong></span>`;
     
-    // Tampilkan rincian per venue jika ada
-    if (d.by_venue_period && Object.keys(d.by_venue_period).length){
+    // Tampilkan rincian per venue HANYA jika ada data
+    if (d.by_venue_period && Object.keys(d.by_venue_period).length > 0){
       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
       for (const [v, r] of Object.entries(d.by_venue_period)){
         h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
       }
       h += '</span>';
-    }
-    
-    // Tambahkan catatan jika semua nilai 0
-    if (d.resolved_count === 0 && d.total_pnl === 0) {
+    } else {
       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
     }
     

@@ -194,11 +194,35 @@ async def api_pairs(request: Request):
     engine.unkill()
     return {"saved": True}
 
+# @app.get("/limits", response_class=HTMLResponse)
+# def limits(request: Request):
+#     cfg = load_config()
+#     return templates.TemplateResponse(request, "limits.html", {
+#         "limits": cfg.get("limits", {}),
+#         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
+#         "pairs": cfg.get("pairs", {}),
+#     })
+
 @app.get("/limits", response_class=HTMLResponse)
 def limits(request: Request):
     cfg = load_config()
+    
+    # Load flags untuk parameter runtime
+    flags_file = Path("data/limits_flags.json")
+    flags = {}
+    if flags_file.exists():
+        try:
+            flags = json.loads(flags_file.read_text())
+        except Exception:
+            flags = {}
+    
+    # Gunakan nilai dari flags jika ada, fallback ke config
+    max_op = flags.get("max_op_per_pair", cfg.get("limits", {}).get("max_op_per_pair", 1))
+    
     return templates.TemplateResponse(request, "limits.html", {
         "limits": cfg.get("limits", {}),
+        "flags": flags,
+        "max_op_per_pair": max_op,  # Pass ke template
         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
         "pairs": cfg.get("pairs", {}),
     })
