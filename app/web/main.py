@@ -16,19 +16,10 @@ from app.config_store import load_creds, save_creds, load_config, save_config, s
 from app.venue_auth import check_venue
 from app.venue_markets import venue_categories
 from app import engine
-# from app.venue_positions import get_positions
 from app.venue_positions import get_positions, get_positions_detailed
 from app.engine import _log_loop
 
 LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]
-
-# def config_complete(cfg: dict) -> bool:
-#     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
-#     pairs = cfg.get("pairs") or {}
-#     n_pairs = sum(len(v) for v in pairs.values())
-#     limits = cfg.get("limits") or {}
-#     return (venues_ok >= 2 and n_pairs >= 1
-#             and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]))
 
 def config_complete(cfg: dict) -> bool:
     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
@@ -194,15 +185,6 @@ async def api_pairs(request: Request):
     engine.unkill()
     return {"saved": True}
 
-# @app.get("/limits", response_class=HTMLResponse)
-# def limits(request: Request):
-#     cfg = load_config()
-#     return templates.TemplateResponse(request, "limits.html", {
-#         "limits": cfg.get("limits", {}),
-#         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
-#         "pairs": cfg.get("pairs", {}),
-#     })
-
 @app.get("/limits", response_class=HTMLResponse)
 def limits(request: Request):
     cfg = load_config()
@@ -226,7 +208,7 @@ def limits(request: Request):
     return templates.TemplateResponse(request, "limits.html", {
         "limits": cfg.get("limits", {}),
         "flags": flags,
-        "max_op_per_pair": max_op,  # Pass ke template
+        "max_op_per_pair": max_op,
         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
         "pairs": cfg.get("pairs", {}),
     })
@@ -446,56 +428,6 @@ async def api_baseline_set(request: Request):
         return {"ok": True, "message": "baseline tersimpan"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
-
-# @app.get("/api/pnl")
-# def api_pnl(scope: str = "today"):
-#     try:
-#         from app.position_manager import load_positions
-#         positions = load_positions()
-#     except Exception:
-#         return {"by_venue": {}, "by_period": {}, "total_pnl": 0, "resolved_count": 0, "active_count": 0}
-    
-#     resolved = [x for x in positions if x.get("resolved")]
-#     active = [x for x in positions if not x.get("resolved")]
-    
-#     now = datetime.now()
-#     today_str = now.strftime("%Y-%m-%d")
-#     week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
-#     month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    
-#     dk = lambda ts: (ts or "")[:10]
-    
-#     pnl_by_venue = {}
-#     per = {}
-#     for x in resolved:
-#         v = x.get("venue", "?")
-#         d = pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl_realized": 0, "active": 0})
-#         d["count"] += 1; d["invested"] += x.get("size", 0)
-#         if x.get("resolved"): d["pnl_realized"] += x.get("pnl", 0)
-#         else: d["active"] += 1
-        
-#         row = per.setdefault(v, {"today": 0.0, "week": 0.0, "month": 0.0, "total": 0.0})
-#         pnl_val = x.get("pnl", 0)
-#         row["total"] = round(row["total"] + pnl_val, 2)
-#         if dk(x.get("resolved_ts")) == today_str: row["today"] = round(row["today"] + pnl_val, 2)
-#         if dk(x.get("resolved_ts")) >= week0: row["week"] = round(row["week"] + pnl_val, 2)
-#         if dk(x.get("resolved_ts")) >= month0: row["month"] = round(row["month"] + pnl_val, 2)
-
-#     pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today_str)
-#     pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
-#     pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
-    
-#     resolved_count_out = len([x for x in resolved if dk(x.get("resolved_ts")) == today_str]) if scope == "today" else len(resolved)
-#     active_count_out = len([x for x in active if dk(x.get("ts")) == today_str]) if scope == "today" else len(active)
-
-#     return {
-#         "by_venue": pnl_by_venue,
-#         "by_period": {"today": round(pt, 2), "week": round(pw, 2), "month": round(pm, 2)},
-#         "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
-#         "resolved_count": resolved_count_out,
-#         "active_count": active_count_out,
-#         "by_venue_period": per
-#     }
 
 @app.get("/api/pnl")
 def api_pnl(scope: str = "today"):
@@ -744,6 +676,755 @@ def api_get_active_venues():
         "active_venues": active_venues,
         "all_venues": list(cfg.get("venues", {}).keys())
     }
+
+# ========================================================================================================
+# # /app/web/main.py
+# """
+# UI Dashboard — FastAPI app dengan kontrol transparan dan filter yang robust.
+# """
+# import json
+# import subprocess
+# import sys
+# from datetime import datetime, timedelta
+# from pathlib import Path
+
+# from fastapi import FastAPI, Request
+# from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+# from fastapi.templating import Jinja2Templates
+
+# from app.config_store import load_creds, save_creds, load_config, save_config, set_venue_valid
+# from app.venue_auth import check_venue
+# from app.venue_markets import venue_categories
+# from app import engine
+# # from app.venue_positions import get_positions
+# from app.venue_positions import get_positions, get_positions_detailed
+# from app.engine import _log_loop
+
+# LIMIT_KEYS = ["modal_total", "modal_per_op", "sl", "tp", "min_profit", "rugi_harian", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]
+
+# # def config_complete(cfg: dict) -> bool:
+# #     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
+# #     pairs = cfg.get("pairs") or {}
+# #     n_pairs = sum(len(v) for v in pairs.values())
+# #     limits = cfg.get("limits") or {}
+# #     return (venues_ok >= 2 and n_pairs >= 1
+# #             and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi", "requote_tol", "quote_max_age_sec"]))
+
+# def config_complete(cfg: dict) -> bool:
+#     venues_ok = sum(1 for s in cfg["venues"].values() if s.get("valid"))
+#     pairs = cfg.get("pairs") or {}
+#     n_pairs = sum(len(v) for v in pairs.values())
+#     limits = cfg.get("limits") or {}
+    
+#     # Set default values untuk field yang kosong
+#     defaults = {
+#         "min_pi": 1.5,      # Default 1.5¢ (filter noise)
+#         "max_pi": 30,       # Default 30¢
+#         "sl": 40,           # Default 40% SL
+#         "tp": 50,           # Default 50% TP
+#         "requote_tol": 15,  # Default 15¢ toleransi
+#         "quote_max_age_sec": 10,  # Default 10 detik
+#         "rugi_harian": 5,   # Default $5
+#         "max_op_per_pair": 1,  # Default 1 OP
+#     }
+    
+#     for key, default_val in defaults.items():
+#         if limits.get(key) in [None, "", 0]:
+#             limits[key] = default_val
+    
+#     return (venues_ok >= 2 and n_pairs >= 1
+#             and all(str(limits.get(k, "")).strip() != "" for k in LIMIT_KEYS if k not in ["min_pi", "max_pi"]))
+
+# VENUES_SCHEMA = {
+#     "polymarket": [
+#         ("private_key", "Private Key Wallet (0x…)", "text"),
+#         ("proxy_address", "Deposit/Proxy Wallet Address (opsional, untuk order)", "text"),
+#         ("proxy_url", "Proxy URL eksekusi (opsional: http://user:pass@host:port wilayah didukung)", "text"),
+#     ],
+#     "kalshi": [
+#         ("api_key_id", "API Key ID", "text"),
+#         ("private_key_pem", "RSA Private Key (PEM)", "text"),
+#         ("base_url", "Base URL (kosong = produksi)", "text"),
+#     ],
+#     "limitless": [
+#         ("api_key", "API Key", "text"),
+#         ("api_secret", "API Secret (base64)", "text"),
+#         ("wallet_mode", "Pilih Wallet untuk Order Limitless", "select", [("smartWallet", "Wallet Limitless"), ("eoa", "Wallet Pribadi (EOA)")]),
+#         ("smart_wallet_profile_id", "Limitless Wallet Profile ID", "text"),
+#         ("wallet_pk", "Private Key Wallet Pribadi (0x + 64 hex)", "text"),
+#         ("_note_sw", "Wallet Limitless: order menggunakan delegated signing melalui server-wallet child profile.", "info"),
+#         ("_note_eoa", "Wallet Pribadi: order ditandatangani EOA menggunakan private key 0x + 64 hex.", "info"),
+#     ],
+# }
+
+# app = FastAPI(title="Arb Bot Dashboard", version="1.0")
+# templates = Jinja2Templates(directory="app/web/templates")
+
+# @app.middleware("http")
+# async def _gate_setup(request: Request, call_next):
+#     if request.url.path == "/":
+#         _vs = ("polymarket", "kalshi", "limitless")
+#         _cfg = (load_config() or {}).get("venues", {})
+#         _cr = load_creds() or {}
+#         _ok = any(_cfg.get(v, {}).get("valid") for v in _vs) or any((_cr.get(v) or {}).get("api_valid") for v in _vs)
+#         if not _ok:
+#             return RedirectResponse("/setup", status_code=302)
+#     return await call_next(request)
+
+# @app.on_event("startup")
+# def _reset_stale_engine_state():
+#     p = Path("data/live_state.json")
+#     try:
+#         if p.exists():
+#             d = json.loads(p.read_text())
+#             if d.get("running"):
+#                 d["running"] = False
+#                 p.write_text(json.dumps(d, indent=2))
+#     except Exception:
+#         pass
+
+# @app.post("/api/engine/reset-spend")
+# def engine_reset_spend():
+#     st = engine._read()
+#     st["spend"] = {"today": datetime.now().strftime("%Y-%m-%d"), "amount": 0.0}
+#     st.pop("auto_stop", None)
+#     engine._write(st)
+#     return {"ok": True, "message": "cap harian direset (spend=$0.00)"}
+
+# def _filter_trades_by_date(trades, from_date=None, to_date=None):
+#     out = []
+#     for tr in trades:
+#         ts = tr.get("ts", "")
+#         if not ts: continue
+#         try:
+#             d = datetime.fromisoformat(ts.replace("Z","")).date()
+#         except Exception: continue
+        
+#         if from_date:
+#             try:
+#                 if d < datetime.fromisoformat(from_date).date(): continue
+#             except Exception: pass
+#         if to_date:
+#             try:
+#                 if d > datetime.fromisoformat(to_date).date(): continue
+#             except Exception: pass
+#         out.append(tr)
+#     return out
+
+# @app.get("/api/report.csv")
+# def api_report_csv(from_date: str = "", to_date: str = ""):
+#     live_path = Path("data/live_state.json")
+#     live = json.loads(live_path.read_text()) if live_path.exists() else {}
+#     trades = live.get("trades") or []
+#     positions = live.get("positions") or []
+    
+#     filtered_trades = _filter_trades_by_date(trades, from_date or None, to_date or None)
+    
+#     import io, csv
+#     buf = io.StringIO()
+#     w = csv.writer(buf)
+#     w.writerow(["section","ts","mode","venue","side","price","size","pi","title","resolved","pnl"])
+    
+#     for t_ in filtered_trades:
+#         w.writerow([
+#             "trade", t_.get("ts",""), t_.get("mode",""), ",".join(t_.get("venues") or []),
+#             t_.get("side",""), t_.get("price"), t_.get("size"), t_.get("pi"),
+#             ((t_.get("ta") or "") + " | " + (t_.get("tb") or ""))[:60], 
+#             str(t_.get("resolved", "")), str(t_.get("pnl", ""))
+#         ])
+    
+#     for p_ in positions:
+#         if not p_.get("resolved"): continue
+#         ts = p_.get("resolved_ts") or p_.get("ts","")
+#         if not _filter_trades_by_date([{"ts": ts}], from_date or None, to_date or None): continue
+#         w.writerow(["resolution", ts, "", p_.get("venue",""), p_.get("direction",""), p_.get("buy_price"), p_.get("size"), "", (p_.get("market_id") or "")[:60], p_.get("resolved"), p_.get("pnl")])
+    
+#     buf.seek(0)
+#     fname = f"arb_report_{from_date or 'all'}_to_{to_date or 'all'}.csv"
+#     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+# @app.get("/api/saldo")
+# def api_saldo():
+#     from app.saldo_service import get_all_saldo
+#     return get_all_saldo()
+
+# @app.get("/", response_class=HTMLResponse)
+# def index(request: Request):
+#     if not config_complete(load_config()):
+#         return RedirectResponse("/setup")
+#     st = engine.status()
+#     if st.get("kill") or st.get("need_rearm"):
+#         return RedirectResponse("/setup", status_code=303)
+#     return templates.TemplateResponse(request, "index.html", {})
+
+# @app.post("/api/exec/micro")
+# async def exec_micro(request: Request):
+#     data = await request.json()
+#     return engine.micro_exec(data.get("venue"), dry=bool(data.get("dry")))
+
+# @app.post("/api/engine/refresh")
+# def engine_refresh():
+#     return engine.refresh()
+
+# @app.post("/api/pairs")
+# async def api_pairs(request: Request):
+#     cfg = load_config()
+#     cfg["pairs"] = (await request.json()).get("pairs", {})
+#     save_config(cfg)
+#     engine.unkill()
+#     return {"saved": True}
+
+# # @app.get("/limits", response_class=HTMLResponse)
+# # def limits(request: Request):
+# #     cfg = load_config()
+# #     return templates.TemplateResponse(request, "limits.html", {
+# #         "limits": cfg.get("limits", {}),
+# #         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
+# #         "pairs": cfg.get("pairs", {}),
+# #     })
+
+# @app.get("/limits", response_class=HTMLResponse)
+# def limits(request: Request):
+#     cfg = load_config()
+    
+#     # Load flags untuk parameter runtime
+#     flags_file = Path("data/limits_flags.json")
+#     flags = {}
+#     if flags_file.exists():
+#         try:
+#             flags = json.loads(flags_file.read_text())
+#         except Exception:
+#             flags = {}
+    
+#     # Pastikan max_op_per_pair ada di flags
+#     if "max_op_per_pair" not in flags:
+#         flags["max_op_per_pair"] = cfg.get("limits", {}).get("max_op_per_pair", 1)
+    
+#     # Gunakan nilai dari flags jika ada, fallback ke config
+#     max_op = flags.get("max_op_per_pair", 1)
+    
+#     return templates.TemplateResponse(request, "limits.html", {
+#         "limits": cfg.get("limits", {}),
+#         "flags": flags,
+#         "max_op_per_pair": max_op,  # Pass ke template
+#         "venues_valid": [v for v, s in cfg["venues"].items() if s.get("valid")],
+#         "pairs": cfg.get("pairs", {}),
+#     })
+
+# @app.post("/api/limits/max-op")
+# async def api_update_max_op(request: Request):
+#     """Update Max OP per Pasangan."""
+#     try:
+#         data = await request.json()
+#         max_op = int(data.get("max_op", 1))
+        
+#         # Simpan ke flags file
+#         flags_file = Path("data/limits_flags.json")
+#         flags = {}
+#         if flags_file.exists():
+#             flags = json.loads(flags_file.read_text())
+        
+#         flags["max_op_per_pair"] = max_op
+#         flags_file.write_text(json.dumps(flags, indent=2))
+        
+#         return {"ok": True, "message": f"Max OP per Pasangan diset ke {max_op}"}
+#     except Exception as e:
+#         return {"ok": False, "message": str(e)}
+
+# @app.get("/api/limits")
+# def api_get_limits():
+#     """Get current limits configuration."""
+#     cfg = load_config()
+    
+#     # Load flags
+#     flags_file = Path("data/limits_flags.json")
+#     flags = {}
+#     if flags_file.exists():
+#         try:
+#             flags = json.loads(flags_file.read_text())
+#         except Exception:
+#             flags = {}
+    
+#     return {
+#         "limits": cfg.get("limits", {}),
+#         "flags": flags
+#     }
+    
+# @app.get("/api/limits/flag")
+# def api_limits_flag_get():
+#     c = load_config().get("limits", {})
+#     return {k: c.get(k) for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "min_profit", "min_pi", "max_pi", "requote_tol", "quote_max_age_sec")}
+
+# @app.post("/api/limits/flag")
+# async def api_limits_flag(request: Request):
+#     try:
+#         body = await request.json()
+#         _fp = Path("data/limits_flags.json")
+#         cur = json.loads(_fp.read_text()) if _fp.exists() else {}
+#         for k in ("use_pi_band", "max_op_per_pair", "exec_unlocked", "pi_ceiling", "quote_max_age_sec", "min_pi", "max_pi", "requote_tol"):
+#             if k in body: cur[k] = body[k]
+#         _fp.write_text(json.dumps(cur, indent=2))
+#         return {"ok": True, "limits": load_config().get("limits", {})}
+#     except Exception as e:
+#         return {"ok": False, "message": str(e)}
+
+# @app.post("/api/limits")
+# async def api_limits(request: Request):
+#     cfg = load_config()
+#     cfg["limits"] = (await request.json()).get("limits", {})
+#     save_config(cfg)
+#     engine.unkill()
+#     return {"saved": True}
+
+# @app.get("/api/markets")
+# def api_markets(venue: str):
+#     creds = load_creds().get(venue, {})
+#     return {"venue": venue, "categories": venue_categories(venue, creds)}
+
+# @app.get("/setup", response_class=HTMLResponse)
+# async def setup(request: Request):
+#     cfg = load_config()
+#     creds = load_creds()
+#     saved = {v: bool(creds.get(v)) for v in VENUES_SCHEMA}
+#     limitless = creds.get("limitless", {})
+#     return templates.TemplateResponse(request, "setup.html", {
+#         "venues": VENUES_SCHEMA, "cfg": cfg, "saved": saved,
+#         "limitless_mode": limitless.get("wallet_mode", "smartWallet"),
+#     })
+
+# @app.post("/api/credentials")
+# async def api_credentials(request: Request):
+#     data = await request.json()
+#     venue = data.get("venue")
+#     incoming = data.get("creds") or {}
+#     if not venue: return {"saved": False, "message": "venue kosong"}
+#     current = load_creds().get(venue, {})
+#     merged = dict(current)
+#     for key, value in incoming.items():
+#         if value is None or key.startswith("_"): continue
+#         value = str(value).strip()
+#         if value == "": continue
+#         merged[key] = value
+#     save_creds(venue, merged)
+#     engine.unkill()
+#     return {"saved": True, "venue": venue}
+
+# @app.post("/api/cek-api")
+# async def api_cek(request: Request):
+#     venue = (await request.json()).get("venue")
+#     _cr = dict((load_creds() or {}).get(venue, {}) or {})
+#     ok, msg = check_venue(venue, _cr)
+#     set_venue_valid(venue, bool(ok))
+#     return {"ok": ok, "message": msg}
+
+# @app.get("/api/venue-feed")
+# def venue_feed(scope: str = "all"):
+#     cfg = load_config()
+#     creds = load_creds()
+#     _tdy = datetime.now().strftime("%Y-%m-%d")
+#     _venues_with_today = set()
+#     try:
+#         _st = json.loads(Path("data/live_state.json").read_text())
+#         for _tr in (_st.get("trades") or []):
+#             if (_tr.get("ts") or "")[:10] == _tdy: _venues_with_today.update(_tr.get("venues") or [])
+#         from app.position_manager import load_positions as _lp
+#         for _pos in _lp():
+#             if (_pos.get("ts") or "")[:10] == _tdy: _venues_with_today.add(_pos.get("venue"))
+#     except Exception: pass
+    
+#     _out_venues = []
+#     for v, s in cfg["venues"].items():
+#         _holds = get_positions(v, creds.get(v, {})) if s.get("valid") else []
+#         if scope == "today":
+#             if v not in _venues_with_today: _holds = []
+#             else: _holds = [h for h in _holds if not (h.get("value") == 0 and str(h.get("end_date", ""))[:10] < _tdy)]
+#         _out_venues.append({"venue": v, "valid": bool(s.get("valid")), "cats": (cfg.get("pairs") or {}).get(v, []), "positions": _holds})
+#     return {"venues": _out_venues}
+
+# @app.post("/api/engine/start")
+# async def engine_start(request: Request):
+#     try: body = await request.json()
+#     except Exception: body = {}
+#     mode = body.get("mode", "paper")
+#     st = engine.status()
+#     if st.get("running") and st.get("mode") != mode:
+#         engine.stop()
+#         import time; time.sleep(0.6)
+#     ok, msg = engine.start(mode)
+#     return {"ok": ok, "message": msg}
+
+# @app.post("/api/engine/stop")
+# def engine_stop():
+#     engine.stop()
+#     return {"ok": True}
+
+# @app.post("/api/engine/kill")
+# def engine_kill():
+#     engine.kill()
+#     return {"ok": True}
+
+# @app.get("/api/engine/status")
+# def engine_status():
+#     return engine.status()
+
+# @app.get("/api/reconciliation")
+# def api_reconciliation(scope: str = "today", from_date: str = "", to_date: str = ""):
+#     from app.baseline import load_baseline
+#     baseline = load_baseline()
+    
+#     live_path = Path("data/live_state.json")
+#     state = json.loads(live_path.read_text()) if live_path.exists() else {}
+#     trades = state.get("trades", [])
+#     spend = state.get("spend", {})
+    
+#     now = datetime.now()
+#     today_str = now.strftime("%Y-%m-%d")
+    
+#     # PRIORITAS: Jika from_date dan to_date diisi, gunakan itu (Custom Date)
+#     if from_date and to_date:
+#         _f2, _t2v = from_date, to_date
+#     else:
+#         # Fallback ke scope
+#         if scope == "today":
+#             _f2, _t2v = today_str, today_str
+#         elif scope == "week":
+#             _f2, _t2v = (now - timedelta(days=7)).strftime("%Y-%m-%d"), today_str
+#         elif scope == "month":
+#             _f2, _t2v = (now - timedelta(days=30)).strftime("%Y-%m-%d"), today_str
+#         else: # 'all'
+#             _f2, _t2v = "", ""
+
+#     filtered_trades = _filter_trades_by_date(trades, _f2 or None, _t2v or None)
+    
+#     real_trades = [t for t in filtered_trades if t.get("mode") in ("real-auto", "real-micro", "real")]
+#     paper_trades = [t for t in filtered_trades if t.get("mode") == "paper"]
+    
+#     by_venue = {}
+#     for t in real_trades:
+#         for v in t.get("venues", []):
+#             by_venue.setdefault(v, {"count": 0, "size": 0})
+#             by_venue[v]["count"] += 1
+#             by_venue[v]["size"] += t.get("size", 0)
+    
+#     return {
+#         "baseline": baseline,
+#         "scope": scope,
+#         "trades_real": len(real_trades),
+#         "trades_paper": len(paper_trades),
+#         "spend_today": spend.get("amount", 0),
+#         "by_venue": by_venue,
+#         "recent_trades": real_trades[-10:],
+#         "recent_trades_all": [t for t in trades if t.get("mode") in ("real-auto", "real-micro", "real")][-10:]
+#     }
+
+# @app.post("/api/baseline/set")
+# async def api_baseline_set(request: Request):
+#     from app.baseline import save_baseline
+#     try:
+#         body = await request.json()
+#         save_baseline(body)
+#         return {"ok": True, "message": "baseline tersimpan"}
+#     except Exception as e:
+#         return {"ok": False, "message": str(e)}
+
+# # @app.get("/api/pnl")
+# # def api_pnl(scope: str = "today"):
+# #     try:
+# #         from app.position_manager import load_positions
+# #         positions = load_positions()
+# #     except Exception:
+# #         return {"by_venue": {}, "by_period": {}, "total_pnl": 0, "resolved_count": 0, "active_count": 0}
+    
+# #     resolved = [x for x in positions if x.get("resolved")]
+# #     active = [x for x in positions if not x.get("resolved")]
+    
+# #     now = datetime.now()
+# #     today_str = now.strftime("%Y-%m-%d")
+# #     week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+# #     month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+# #     dk = lambda ts: (ts or "")[:10]
+    
+# #     pnl_by_venue = {}
+# #     per = {}
+# #     for x in resolved:
+# #         v = x.get("venue", "?")
+# #         d = pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl_realized": 0, "active": 0})
+# #         d["count"] += 1; d["invested"] += x.get("size", 0)
+# #         if x.get("resolved"): d["pnl_realized"] += x.get("pnl", 0)
+# #         else: d["active"] += 1
+        
+# #         row = per.setdefault(v, {"today": 0.0, "week": 0.0, "month": 0.0, "total": 0.0})
+# #         pnl_val = x.get("pnl", 0)
+# #         row["total"] = round(row["total"] + pnl_val, 2)
+# #         if dk(x.get("resolved_ts")) == today_str: row["today"] = round(row["today"] + pnl_val, 2)
+# #         if dk(x.get("resolved_ts")) >= week0: row["week"] = round(row["week"] + pnl_val, 2)
+# #         if dk(x.get("resolved_ts")) >= month0: row["month"] = round(row["month"] + pnl_val, 2)
+
+# #     pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today_str)
+# #     pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
+# #     pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
+    
+# #     resolved_count_out = len([x for x in resolved if dk(x.get("resolved_ts")) == today_str]) if scope == "today" else len(resolved)
+# #     active_count_out = len([x for x in active if dk(x.get("ts")) == today_str]) if scope == "today" else len(active)
+
+# #     return {
+# #         "by_venue": pnl_by_venue,
+# #         "by_period": {"today": round(pt, 2), "week": round(pw, 2), "month": round(pm, 2)},
+# #         "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
+# #         "resolved_count": resolved_count_out,
+# #         "active_count": active_count_out,
+# #         "by_venue_period": per
+# #     }
+
+# @app.get("/api/pnl")
+# def api_pnl(scope: str = "today"):
+#     """
+#     Get P/L data HANYA untuk venue yang AKTIF di Setup.
+#     """
+#     try:
+#         from app.position_manager import load_positions
+#         positions = load_positions()
+#     except Exception:
+#         return {
+#             "by_venue": {}, 
+#             "by_period": {}, 
+#             "total_pnl": 0, 
+#             "resolved_count": 0, 
+#             "active_count": 0, 
+#             "by_venue_period": {}
+#         }
+    
+#     # 1. Dapatkan venue yang AKTIF di Setup (valid DAN memiliki categories)
+#     cfg = load_config()
+#     active_venues = []
+#     for venue_name, venue_config in cfg.get("venues", {}).items():
+#         if venue_config.get("valid") and venue_config.get("cats"):
+#             active_venues.append(venue_name)
+    
+#     # 2. Filter positions HANYA untuk venue yang aktif
+#     filtered_positions = []
+#     for pos in positions:
+#         if pos.get("venue") in active_venues:
+#             filtered_positions.append(pos)
+    
+#     # 3. Lanjutkan logika P/L asli dengan data yang sudah difilter
+#     resolved = [x for x in filtered_positions if x.get("resolved")]
+#     active = [x for x in filtered_positions if not x.get("resolved")]
+    
+#     now = datetime.now()
+#     today_str = now.strftime("%Y-%m-%d")
+#     week0 = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+#     month0 = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+#     dk = lambda ts: (ts or "")[:10]
+    
+#     pnl_by_venue = {}
+#     per = {}
+#     for x in resolved:
+#         v = x.get("venue", "?")
+#         d = pnl_by_venue.setdefault(v, {"count": 0, "invested": 0, "pnl_realized": 0, "active": 0})
+#         d["count"] += 1
+#         d["invested"] += x.get("size", 0)
+#         if x.get("resolved"): 
+#             d["pnl_realized"] += x.get("pnl", 0)
+#         else: 
+#             d["active"] += 1
+        
+#         row = per.setdefault(v, {"today": 0.0, "week": 0.0, "month": 0.0, "total": 0.0})
+#         pnl_val = x.get("pnl", 0)
+#         row["total"] = round(row["total"] + pnl_val, 2)
+#         if dk(x.get("resolved_ts")) == today_str: 
+#             row["today"] = round(row["today"] + pnl_val, 2)
+#         if dk(x.get("resolved_ts")) >= week0: 
+#             row["week"] = round(row["week"] + pnl_val, 2)
+#         if dk(x.get("resolved_ts")) >= month0: 
+#             row["month"] = round(row["month"] + pnl_val, 2)
+
+#     pt = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) == today_str)
+#     pw = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= week0)
+#     pm = sum(x.get("pnl", 0) for x in resolved if dk(x.get("resolved_ts")) >= month0)
+    
+#     resolved_count_out = len([x for x in resolved if dk(x.get("resolved_ts")) == today_str]) if scope == "today" else len(resolved)
+#     active_count_out = len([x for x in active if dk(x.get("ts")) == today_str]) if scope == "today" else len(active)
+
+#     return {
+#         "by_venue": pnl_by_venue,
+#         "by_period": {"today": round(pt, 2), "week": round(pw, 2), "month": round(pm, 2)},
+#         "total_pnl": round(sum(x.get("pnl", 0) for x in resolved), 2),
+#         "resolved_count": resolved_count_out,
+#         "active_count": active_count_out,
+#         "by_venue_period": per
+#     }
+    
+# @app.post("/api/admin/reset-history")
+# def api_reset_history():
+#     sp = Path("data/live_state.json")
+#     try: d = json.loads(sp.read_text()) if sp.exists() else {}
+#     except Exception: d = {}
+#     bak = Path("data/live_state.json.bak-history")
+#     bak.write_text(json.dumps(d, indent=2))
+#     d["trades"] = []
+#     d["spend"] = {"today": datetime.now().strftime("%Y-%m-%d"), "amount": 0.0}
+#     sp.write_text(json.dumps(d, indent=2))
+#     return {"ok": True, "message": "riwayat trades + spend dibersihkan"}
+
+# @app.post("/api/close-position")
+# async def api_close_position(request: Request):
+#     from app.executor import sell_kalshi, sell_polymarket, sell_limitless
+#     from app.position_manager import load_positions, save_positions
+#     import time
+#     try:
+#         body = await request.json()
+#         venue, position_id, size = body.get("venue"), body.get("position_id"), float(body.get("size", 1))
+#         creds = load_creds().get(venue, {})
+#         positions = load_positions()
+#         pos = next((p for p in positions if p.get("market_id") == position_id and not p.get("resolved")), None)
+        
+#         ok, msg = False, "posisi tidak ditemukan"
+#         if pos:
+#             if venue == "kalshi": ok, msg = sell_kalshi(creds, position_id, "yes", size)
+#             elif venue == "polymarket": 
+#                 from app.venue_positions import get_positions_detailed
+#                 rows = get_positions_detailed("polymarket", creds)
+#                 hit = next((r for r in rows if (r.get("title") or "").strip().lower() == (position_id or "").strip().lower()), None)
+#                 if hit and hit.get("token_id"):
+#                     px = round(max((hit.get("cur_price") or 0.5) - 0.03, 0.01), 2)
+#                     ok, msg = sell_polymarket(creds, hit["token_id"], hit.get("size") or size, px)
+#             elif venue == "limitless": ok, msg = sell_limitless(creds, position_id, size)
+            
+#             if ok:
+#                 pos["resolved"] = True; pos["resolved_ts"] = time.strftime("%Y-%m-%dT%H:%M:%S"); pos["manual_close"] = True
+#                 save_positions(positions)
+#         return {"ok": ok, "message": msg}
+#     except Exception as e:
+#         return {"ok": False, "message": str(e)}
+
+# @app.get("/api/unrealized")
+# def api_unrealized():
+#     creds = load_creds()
+#     out = {}
+#     for v in ("polymarket", "kalshi", "limitless"):
+#         try:
+#             rows = get_positions_detailed(v, creds.get(v, {}))
+#             out[v] = [{"title": r.get("title"), "size": r.get("size"), "value": r.get("value"), "pnl": r.get("pnl", 0), "pnl_pct": r.get("pnl_pct", 0)} for r in rows]
+#         except Exception: out[v] = []
+#     return out
+
+# @app.post("/api/sync-positions")
+# def api_sync_positions():
+#     from app.position_manager import load_positions, save_positions
+#     import time
+#     creds = load_creds()
+#     local_positions = load_positions()
+#     synced_count, new_positions, closed_positions = 0, [], []
+    
+#     for venue in ["polymarket", "kalshi", "limitless"]:
+#         try:
+#             exchange_positions = get_positions_detailed(venue, creds.get(venue, {}))
+#             exchange_titles = {p.get("title") or p.get("ticker"): p for p in exchange_positions}
+            
+#             for pos in local_positions:
+#                 if pos.get("venue") != venue or pos.get("resolved"): continue
+#                 market_id = pos.get("market_id")
+#                 if market_id not in exchange_titles:
+#                     pos.update({"resolved": True, "manual_close": True, "synced": True, "resolved_ts": time.strftime("%Y-%m-%dT%H:%M:%S")})
+#                     closed_positions.append(market_id); synced_count += 1
+#                 else:
+#                     ep = exchange_titles[market_id]
+#                     pos.update({"size": ep.get("size", pos.get("size")), "value": ep.get("value", pos.get("value")), 
+#                                 "cur_price": ep.get("cur_price", pos.get("cur_price")), "pnl": ep.get("pnl", 0), 
+#                                 "pnl_pct": ep.get("pnl_pct", 0), "synced": True})
+#                     synced_count += 1
+#         except Exception as e:
+#             _log_loop(f"sync-positions error {venue}: {e}")
+            
+#     save_positions(local_positions)
+#     return {"ok": True, "message": f"Synced {synced_count} positions", "details": {"synced": synced_count, "new_positions": new_positions, "closed_positions": closed_positions}}
+
+# @app.get("/api/positions/refresh")
+# def api_positions_refresh():
+#     creds = load_creds()
+#     all_positions = {}
+#     for venue in ["polymarket", "kalshi", "limitless"]:
+#         try: all_positions[venue] = get_positions_detailed(venue, creds.get(venue, {}))
+#         except Exception as e: all_positions[venue] = {"error": str(e)}
+#     return all_positions
+
+# @app.post("/api/sync-settlement")
+# def api_sync_settlement():
+#     """Trigger settlement sync dari dashboard."""
+#     import subprocess
+#     try:
+#         result = subprocess.run(
+#             [sys.executable, "-m", "scripts.sync_settlement", "--execute"],
+#             capture_output=True,
+#             text=True,
+#             timeout=60
+#         )
+#         return {"ok": True, "message": "Settlement sync completed", "output": result.stdout}
+#     except Exception as e:
+#         return {"ok": False, "message": str(e)}
+
+# @app.post("/api/reset-scan-interval")
+# def api_reset_scan_interval():
+#     """Reset scan interval ke normal (30 detik)."""
+#     import time
+#     st = engine._read()
+#     st["last_scan_ts"] = 0  # Reset timestamp
+#     st["scan_interval"] = 30  # Set ke 30 detik
+#     engine._write(st)
+#     _log_loop("Scan interval direset ke 30 detik via API")
+#     return {"ok": True, "message": "Scan interval direset ke 30 detik"}
+    
+# @app.get("/api/open-orders")
+# def api_open_orders():
+#     out = {"kalshi": [], "limitless": [], "manual": []}
+#     try:
+#         mo = json.loads(Path("data/manual_orders.json").read_text()) if Path("data/manual_orders.json").exists() else []
+#         out["manual"] = [m for m in mo if not m.get("cancelled")][-10:]
+#     except Exception: pass
+#     return out
+
+# @app.post("/api/cancel-order")
+# async def api_cancel_order(request: Request):
+#     body = await request.json()
+#     venue, oid = body.get("venue"), body.get("order_id")
+#     if venue == "limitless":
+#         try:
+#             f = Path("data/manual_orders.json")
+#             mo = json.loads(f.read_text()) if f.exists() else []
+#             for m in mo:
+#                 if m.get("order_id") == oid: m["cancelled"] = True
+#             f.write_text(json.dumps(mo, indent=2))
+#             from app.executor import reap_limitless_stale
+#             count, tickers, err = reap_limitless_stale()
+#             return {"ok": True, "message": f"order Limitless ditandai batal; reaper cancel {count}"}
+#         except Exception as e:
+#             return {"ok": False, "message": str(e)[:100]}
+#     return {"ok": False, "message": "venue tidak didukung untuk cancel via API ini"}
+
+# @app.get("/api/active-venues")
+# def api_get_active_venues():
+#     """
+#     Mendapatkan daftar venue yang AKTIF di Setup.
+#     Venue dianggap aktif jika:
+#     1. API valid (credentials valid)
+#     2. Memiliki kategori/pairs yang dipilih
+#     """
+#     cfg = load_config()
+#     active_venues = []
+    
+#     for venue_name, venue_config in cfg.get("venues", {}).items():
+#         # Cek apakah venue valid dan memiliki pairs/kategori
+#         if venue_config.get("valid") and venue_config.get("cats"):
+#             active_venues.append(venue_name)
+    
+#     return {
+#         "active_venues": active_venues,
+#         "all_venues": list(cfg.get("venues", {}).keys())
+#     }
+
 # ===========================================================================================================
 # # /app/web/main.py
 # """

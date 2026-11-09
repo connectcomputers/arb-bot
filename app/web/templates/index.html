@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(pull,5000); pull();
   function msg(){
     var clock=new Date().toLocaleTimeString('id-ID');
-    if(!epoch) return '🟢 SCANNER MENYALA · '+clock;
+    if(!epoch) return ' SCANNER MENYALA · '+clock;
     var age=Math.floor(Date.now()/1000)-epoch;
     if(age>SCAN+45) return '⚠ SCAN LAMBAT '+age+'s · '+clock;
     if(age>SCAN) return '🟢 SCAN BERJALAN · siklus #'+cycles+' · '+clock;
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <div class="cols" id="cols"></div>
 
 <div class="tabs">
- <button onclick="tab(0)">📊 Dashboard</button>
+ <button onclick="tab(0)"> Dashboard</button>
  <button onclick="tab(1)">🧾 Audit</button>
 </div>
 <div id="audit" style="display:none"><iframe src="/legacy"></iframe></div>
@@ -152,7 +152,7 @@ async function micro(v){
   const r = await fetch('/api/exec/micro',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({venue:v})});
   const d = await r.json();
   let msg = (d.ok?'✅ ':'❌ ')+d.message;
-  if(!d.ok && v==='polymarket' && (d.message.includes('geofence') || d.message.includes('403'))){ msg = '❌ GEOFENCE / GEOBLOCK\n\nPerlu proxy wilayah didukung.'; }
+  if(!d.ok && v==='polymarket' && (d.message.includes('geofence') || d.message.includes('403'))){ msg = ' GEOFENCE / GEOBLOCK\n\nPerlu proxy wilayah didukung.'; }
   alert(msg); poll();
 }
 
@@ -170,63 +170,7 @@ async function loadActiveRules(){
   } catch(e) { console.error('Load rules error:', e); }
 }
 
-//// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
-// async function poll(){
-//   try {
-//     const [f, s] = await Promise.all([ 
-//       fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()), 
-//       fetch('/api/engine/status').then(r=>r.json()) 
-//     ]);
-//     window.__st = s;
-//     if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
-    
-//     const b = document.getElementById('badge');
-//     b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
-//     b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
-//     if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
-    
-//     if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
-    
-//     const skipBox = document.getElementById('skip-notif-box');
-//     const skipList = document.getElementById('skip-reasons-list');
-//     if (skipBox && skipList) {
-//       if (s.skip_reasons && s.skip_reasons.length > 0) {
-//         skipBox.style.display = 'block';
-//         skipList.innerHTML = s.skip_reasons.map(r => `<li style="margin:2px 0; font-family:monospace; font-size:11px;">[${r.ts}] ${r.reason}</li>`).join('');
-//       } else { skipBox.style.display = 'none'; }
-//     }
-    
-//     document.getElementById('cols').innerHTML = f.venues.map(v => {
-//       // LOGIKA RENDER SCANLOG YANG AMAN DARI OVERWRITE
-//       const venueLogs = (s.scanlog || []).filter(l => l.toLowerCase().includes(v.venue)).slice(-10);
-//       const logHtml = venueLogs.length > 0 
-//         ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;">${l}</div>`).join('')
-//         : '<div class="muted">…menunggu log…</div>';
-
-//       return `
-//       <div class="col">
-//         <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
-//         <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
-//         <h4>Open Positions (OP)</h4>
-//         ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
-        
-//         <h4>🔄 Screening Realtime</h4>
-//         <div class="logbox">${logHtml}</div>      
-        
-//         <h4>Match + Π bersih</h4>
-//         <div class="matchbox">
-//           ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue).map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>')).join('') || '<div class="muted">belum ada</div>'}
-//         </div>
-        
-//         <h4>Eksekusi</h4>
-//         <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
-//         ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse().map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('') || '<div class="muted">belum ada</div>'}
-//         </div>
-//       </div>`;
-//     }).join('');
-//   } catch(e) { console.error('Poll error:', e); }
-// }
-
+// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
 async function poll(){
   try {
     const [f, s] = await Promise.all([ 
@@ -341,15 +285,9 @@ async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) retur
     <span id="rekCount" style="font-size:10px;color:#64748b"></span>
   </div>
   
-  <!-- <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
-  <div id="recon-content" style="color:#94a3b8">Loading...</div>
-  <div id="pnl-content" style="color:#94a3b8;margin-top:12px"> -->
-    <!-- Content will be loaded by JavaScript -->
-  <!-- </div> -->
-
   <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
   <div id="active-venues-info" style="color:#86efac;font-size:11px;margin-bottom:8px;padding:6px;background:#064e3b;border-radius:4px;display:none">
-    <strong>📍 Venue Aktif:</strong> <span id="active-venues-list"></span>
+    <strong> Venue Aktif:</strong> <span id="active-venues-list"></span>
   </div>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
@@ -403,90 +341,7 @@ window.loadRecon = function(scope, fromDate = '', toDate = ''){
   }).catch(e => { console.error('Recon error:', e); });
 };
 
-//// 2. LOAD P/L (VERSI DIPERBAIKI - MENAMPILKAN FORMAT INFORMATIF)
-// window.loadPnl = function(){
-//   const scope = window.__rekScope || 'today';
-//   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(d=>{
-//     const el = document.getElementById('pnl-content');
-//     if(!el) return;
-    
-//     // Tampilkan format informatif selalu
-//     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
-//     h += `Harian: <span style="color:${(d.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.today||0).toFixed(2)}</span>`;
-//     h += ` · Mingguan: <span style="color:${(d.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.week||0).toFixed(2)}</span>`;
-//     h += ` · Bulanan: <span style="color:${(d.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.by_period.month||0).toFixed(2)}</span>`;
-//     h += ` · TOTAL: <span style="color:${(d.total_pnl||0) >= 0 ? '#4ade80' : '#f87171'}">$${(d.total_pnl||0).toFixed(2)}</span>`;
-    
-//     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${d.resolved_count}</strong> · Posisi aktif: <strong>${d.active_count}</strong></span>`;
-    
-//     // Tampilkan rincian per venue SEMUA venue (meskipun $0.00)
-//     if (d.by_venue_period && Object.keys(d.by_venue_period).length > 0){
-//       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-//       for (const [v, r] of Object.entries(d.by_venue_period)){
-//         h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
-//       }
-//       h += '</span>';
-//     } else {
-//       // Tampilkan pesan jika belum ada data
-//       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
-//     }
-    
-//     el.innerHTML = h;
-//   }).catch(e=>{ console.error('P/L error:', e); });
-// };
-
-// window.loadPnl = function(){
-//   const scope = window.__rekScope || 'today';
-  
-//   // Fetch active venues dan P/L data secara paralel
-//   Promise.all([
-//     fetch('/api/active-venues').then(r => r.json()),
-//     fetch(`/api/pnl?scope=${scope}`).then(r => r.json())
-//   ]).then(([venuesData, pnlData])=>{
-//     const el = document.getElementById('pnl-content');
-//     if(!el) return;
-    
-//     const activeVenues = venuesData.active_venues || [];
-    
-//     // Tampilkan format informatif selalu
-//     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
-//     h += `Harian: <span style="color:${(pnlData.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.today||0).toFixed(2)}</span>`;
-//     h += ` · Mingguan: <span style="color:${(pnlData.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.week||0).toFixed(2)}</span>`;
-//     h += ` · Bulanan: <span style="color:${(pnlData.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.month||0).toFixed(2)}</span>`;
-//     h += ` · TOTAL: <span style="color:${(pnlData.total_pnl||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.total_pnl||0).toFixed(2)}</span>`;
-    
-//     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
-    
-//     // Tampilkan rincian per venue HANYA untuk venue AKTIF
-//     if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0){
-//       // Filter venue yang AKTIF di setup
-//       const activeVenueData = {};
-//       for (const [venue, data] of Object.entries(pnlData.by_venue_period)){
-//         if (activeVenues.includes(venue)){
-//           activeVenueData[venue] = data;
-//         }
-//       }
-      
-//       // Tampilkan hanya jika ada venue aktif dengan data
-//       if (Object.keys(activeVenueData).length > 0) {
-//         h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue (aktif):';
-//         for (const [v, r] of Object.entries(activeVenueData)){
-//           h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
-//         }
-//         h += '</span>';
-//       } else {
-//         // Tidak ada venue aktif dengan data P/L
-//         h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif (${activeVenues.join(', ')}). P/L akan muncul otomatis saat posisi ditutup.</span>`;
-//       }
-//     } else {
-//       // Tidak ada data P/L sama sekali
-//       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
-//     }
-    
-//     el.innerHTML = h;
-//   }).catch(e=>{ console.error('P/L error:', e); });
-// };
-
+// 2. LOAD P/L (VERSI DIPERBAIKI - MENAMPILKAN FORMAT INFORMATIF)
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
   
@@ -494,10 +349,6 @@ window.loadPnl = function(){
   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(pnlData=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
-    
-    // Dapatkan venue aktif dari konfigurasi global window.__st
-    const st = window.__st || {};
-    const venues = st.info?.venues || ['polymarket', 'kalshi', 'limitless'];
     
     // Tampilkan format informatif selalu
     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
