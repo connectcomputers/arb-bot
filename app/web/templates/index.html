@@ -33,23 +33,7 @@ a{color:#38bdf8}
 .recon-card .value{font-size:18px;font-weight:600;margin:4px 0}
 </style>
 <script>
-// Load dan tampilkan informasi venue aktif
-window.loadActiveVenuesInfo = function(){
-  fetch('/api/active-venues').then(r => r.json()).then(data => {
-    const infoEl = document.getElementById('active-venues-info');
-    const listEl = document.getElementById('active-venues-list');
-    
-    if (infoEl && listEl && data.active_venues && data.active_venues.length > 0) {
-      listEl.textContent = data.active_venues.join(', ').toUpperCase();
-      infoEl.style.display = 'block';
-    }
-  }).catch(e => {
-    console.error('Error loading active venues:', e);
-  });
-};
-
 document.addEventListener('DOMContentLoaded', function(){
-  loadActiveVenuesInfo(); 
   var st=document.createElement('style'); st.textContent='@keyframes lspin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
   var bar=document.createElement('div'); bar.id='live-indicator';
   bar.style.cssText='position:fixed;right:12px;bottom:12px;z-index:999;background:#052e16;border:1px solid #16a34a;color:#86efac;border-radius:8px;padding:8px 12px;font:12px monospace;display:flex;gap:8px;align-items:center';
@@ -63,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function(){
     var clock=new Date().toLocaleTimeString('id-ID');
     if(!epoch) return ' SCANNER MENYALA · '+clock;
     var age=Math.floor(Date.now()/1000)-epoch;
-    if(age>SCAN+45) return '⚠ SCAN LAMBAT '+age+'s · '+clock;
+    if(age>SCAN+45) return ' SCAN LAMBAT '+age+'s · '+clock;
     if(age>SCAN) return '🟢 SCAN BERJALAN · siklus #'+cycles+' · '+clock;
     return '🟢 SCAN #'+cycles+' · berikut '+(SCAN-age)+'s · '+clock;
   }
@@ -123,7 +107,7 @@ document.addEventListener('DOMContentLoaded', function(){
 <div style="background:#1e293b;padding:16px;margin-bottom:16px;border-radius:12px;border:1px solid #334155">
   <h2 style="color:#38bdf8;margin:0 0 12px;font-size:16px">💰 Saldo Semua Venue</h2>
   <div class="cols">
-    <div class="col" style="min-height:0"><h2>🎯 POLYMARKET</h2><div id="saldo-polymarket" class="item">Loading…</div></div>
+    <div class="col" style="min-height:0"><h2> POLYMARKET</h2><div id="saldo-polymarket" class="item">Loading…</div></div>
     <div class="col" style="min-height:0"><h2>📊 KALSHI</h2><div id="saldo-kalshi" class="item">Loading…</div></div>
     <div class="col" style="min-height:0"><h2>💎 LIMITLESS</h2><div id="saldo-limitless" class="item">Loading…</div></div>
   </div>
@@ -160,7 +144,7 @@ async function loadActiveRules(){
   try {
     const r = await fetch('/api/limits/flag'); const d = await r.json();
     document.getElementById('rule-min-pi').textContent = (d.min_pi || 0.1).toFixed(1);
-    document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞' : (d.max_pi || 30).toFixed(1));
+    document.getElementById('rule-max-pi').textContent = (d.max_pi > 100 ? '∞' : (d.max_pi || 30)).toFixed(1);
     document.getElementById('rule-requote-tol').textContent = (d.requote_tol || 10).toFixed(1);
     document.getElementById('rule-max-age').textContent = (d.quote_max_age_sec || 20);
     document.getElementById('rule-max-op').textContent = d.max_op_per_pair || 2;
@@ -170,7 +154,6 @@ async function loadActiveRules(){
   } catch(e) { console.error('Load rules error:', e); }
 }
 
-// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
 async function poll(){
   try {
     const [f, s] = await Promise.all([ 
@@ -185,7 +168,6 @@ async function poll(){
     b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
     if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
 
-    // Load active rules jika belum di-load
     if(document.getElementById('active-rules-box').style.display === 'none') {
       loadActiveRules();
     }
@@ -201,7 +183,6 @@ async function poll(){
       } else { skipBox.style.display = 'none'; }
     }
     
-    // === PERBAIKAN: Tambahkan info scan di setiap venue ===
     const info = s.info || {};
     const counts = info.counts || {};
     const comparisons = info.comparisons || 0;
@@ -212,7 +193,6 @@ async function poll(){
         ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;font-size:10px">${l}</div>`).join('')
         : '<div class="muted" style="font-size:10px">…menunggu log…</div>';
       
-      // === HEADER INFO SCAN ===
       const eventCount = counts[v.venue] || 0;
       const scanHeader = `
         <div style="margin-bottom:4px;padding:2px;background:#064e3b;border-radius:3px">
@@ -253,7 +233,7 @@ async function poll(){
 }
 
 poll(); 
-setInterval(poll, 5000); // Diubah ke 5 detik agar lebih realtime
+setInterval(poll, 5000);
 
 async function loadSaldo() {
   try {
@@ -281,14 +261,11 @@ async function resetSpend(){ if(!confirm('Reset counter belanja harian?')) retur
     <label style="font-size:11px">Dari: <input type="date" id="rekFrom" style="font-size:11px"></label>
     <label style="font-size:11px">Sampai: <input type="date" id="rekTo" style="font-size:11px"></label>
     <button id="rekDownload" style="font-size:11px;padding:2px 8px"> Download CSV</button>
-    <button id="rekScopeBtn" style="font-size:11px;padding:2px 8px">🕘 Lihat Riwayat</button>
+    <button id="rekScopeBtn" style="font-size:11px;padding:2px 8px"> Lihat Riwayat</button>
     <span id="rekCount" style="font-size:10px;color:#64748b"></span>
   </div>
   
   <h3 style="margin-top:0">📊 Rekonsiliasi Harian</h3>
-  <div id="active-venues-info" style="color:#86efac;font-size:11px;margin-bottom:8px;padding:6px;background:#064e3b;border-radius:4px;display:none">
-    <strong> Venue Aktif:</strong> <span id="active-venues-list"></span>
-  </div>
   <div id="recon-content" style="color:#94a3b8">Loading...</div>
   <div id="pnl-content" style="color:#94a3b8;margin-top:12px"></div>
 
@@ -341,59 +318,16 @@ window.loadRecon = function(scope, fromDate = '', toDate = ''){
   }).catch(e => { console.error('Recon error:', e); });
 };
 
-// 2. LOAD P/L (VERSI DIPERBAIKI - MENAMPILKAN FORMAT INFORMATIF)
-// window.loadPnl = function(){
-//   const scope = window.__rekScope || 'today';
-  
-//   // Fetch P/L data
-//   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(pnlData=>{
-//     const el = document.getElementById('pnl-content');
-//     if(!el) return;
-    
-//     // Tampilkan format informatif selalu
-//     let h = `<strong>💹 P/L Resolve-Based:</strong> `;
-//     h += `Harian: <span style="color:${(pnlData.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.today||0).toFixed(2)}</span>`;
-//     h += ` · Mingguan: <span style="color:${(pnlData.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.week||0).toFixed(2)}</span>`;
-//     h += ` · Bulanan: <span style="color:${(pnlData.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.month||0).toFixed(2)}</span>`;
-//     h += ` · TOTAL: <span style="color:${(pnlData.total_pnl||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.total_pnl||0).toFixed(2)}</span>`;
-    
-//     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
-    
-//     // Tampilkan rincian per venue dari data P/L
-//     if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0) {
-//       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-//       for (const [v, r] of Object.entries(pnlData.by_venue_period)){
-//         h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
-//       }
-//       h += '</span>';
-//     } else {
-//       // Tampilkan pesan jika belum ada data
-//       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif. P/L akan muncul otomatis saat posisi ditutup.</span>`;
-//     }
-    
-//     el.innerHTML = h;
-//   }).catch(e=>{ 
-//     console.error('P/L error:', e);
-//     const el = document.getElementById('pnl-content');
-//     if(el) el.innerHTML = '<span style="color:#f87171">❌ Error loading P/L data</span>';
-//   });
-// };
-
+// 2. LOAD P/L (VERSI DIPERBAIKI - TIDAK DEPENDEN API YANG TIDAK ADA)
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
   
-  // Fetch P/L data dan active venues
-  Promise.all([
-    fetch(`/api/pnl?scope=${scope}`).then(r => r.json()),
-    fetch('/api/active-venues').then(r => r.json())
-  ]).then(([pnlData, venuesData]) => {
+  fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(pnlData=>{
     const el = document.getElementById('pnl-content');
     if(!el) return;
     
-    const activeVenues = venuesData.active_venues || [];
-    
     // Tampilkan format informatif selalu
-    let h = `<strong>💹 P/L Resolve-Based:</strong> `;
+    let h = `<strong> P/L Resolve-Based:</strong> `;
     h += `Harian: <span style="color:${(pnlData.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.today||0).toFixed(2)}</span>`;
     h += ` · Mingguan: <span style="color:${(pnlData.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.week||0).toFixed(2)}</span>`;
     h += ` · Bulanan: <span style="color:${(pnlData.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.month||0).toFixed(2)}</span>`;
@@ -401,35 +335,20 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
     
-    // SELALU tampilkan venue aktif meskipun P/L = 0
-    if (activeVenues.length > 0) {
+    // Tampilkan rincian per venue dari data P/L
+    if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0) {
       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-      
-      for (const venue of activeVenues) {
-        const venueData = pnlData.by_venue_period ? pnlData.by_venue_period[venue] : null;
-        const today = venueData ? (venueData.today || 0) : 0;
-        const total = venueData ? (venueData.total || 0) : 0;
-        
-        h += `<br>· ${venue.toUpperCase()}: harian $${today.toFixed(2)} · total $${total.toFixed(2)}`;
+      for (const [v, r] of Object.entries(pnlData.by_venue_period)){
+        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
       }
-      
       h += '</span>';
-      
-      // Tampilkan catatan jika semua venue masih $0.00
-      const allZero = activeVenues.every(v => {
-        const data = pnlData.by_venue_period ? pnlData.by_venue_period[v] : null;
-        return !data || (data.today === 0 && data.total === 0);
-      });
-      
-      if (allZero && pnlData.resolved_count === 0) {
-        h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
-      }
     } else {
-      h += `<br><span style="font-size:11px;color:#f87171">⚠️ Tidak ada venue yang aktif di Setup.</span>`;
+      // Tampilkan pesan jika belum ada data
+      h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif. P/L akan muncul otomatis saat posisi ditutup.</span>`;
     }
     
     el.innerHTML = h;
-  }).catch(e => { 
+  }).catch(e=>{ 
     console.error('P/L error:', e);
     const el = document.getElementById('pnl-content');
     if(el) el.innerHTML = '<span style="color:#f87171">❌ Error loading P/L data</span>';
@@ -439,7 +358,6 @@ window.loadPnl = function(){
 // Load active rules dari API
 window.loadActiveRules = function(){
   fetch('/api/limits').then(r=>r.json()).then(d=>{
-    // Update nilai-nilai di "Aturan Eksekusi Aktif Saat Ini"
     document.getElementById('rule-min-pi').textContent = (d.limits?.min_pi || 0.1).toFixed(1);
     document.getElementById('rule-max-pi').textContent = (d.limits?.max_pi > 100 ? '∞' : (d.limits?.max_pi || 30)).toFixed(1);
     document.getElementById('rule-requote-tol').textContent = (d.limits?.requote_tol || 15).toFixed(1);
@@ -447,7 +365,6 @@ window.loadActiveRules = function(){
     document.getElementById('rule-max-op').textContent = d.flags?.max_op_per_pair || d.limits?.max_op_per_pair || 1;
     document.getElementById('rule-rugi').textContent = (d.limits?.rugi_harian || 5).toFixed(0);
     
-    // Tampilkan box
     document.getElementById('active-rules-box').style.display = 'block';
   }).catch(e=>{ console.error('Load rules error:', e); });
 };
