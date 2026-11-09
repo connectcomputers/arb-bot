@@ -457,30 +457,32 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
     
-    // Tampilkan rincian per venue HANYA untuk venue AKTIF
-    if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0){
-      // Filter venue yang AKTIF di setup
-      const activeVenueData = {};
-      for (const [venue, data] of Object.entries(pnlData.by_venue_period)){
-        if (activeVenues.includes(venue)){
-          activeVenueData[venue] = data;
-        }
+    // SELALU tampilkan rincian per venue AKTIF (meskipun $0.00)
+    if (activeVenues.length > 0) {
+      h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue (aktif):';
+      
+      // Tampilkan SEMUA venue aktif, ambil data P/L jika ada
+      for (const venue of activeVenues) {
+        const venueData = pnlData.by_venue_period ? pnlData.by_venue_period[venue] : null;
+        const today = venueData ? (venueData.today || 0) : 0;
+        const total = venueData ? (venueData.total || 0) : 0;
+        
+        h += `<br>· ${venue.toUpperCase()}: harian $${today.toFixed(2)} · total $${total.toFixed(2)}`;
       }
       
-      // Tampilkan hanya jika ada venue aktif dengan data
-      if (Object.keys(activeVenueData).length > 0) {
-        h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue (aktif):';
-        for (const [v, r] of Object.entries(activeVenueData)){
-          h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
-        }
-        h += '</span>';
-      } else {
-        // Tidak ada venue aktif dengan data P/L
-        h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif (${activeVenues.join(', ')}). P/L akan muncul otomatis saat posisi ditutup.</span>`;
+      h += '</span>';
+      
+      // Tampilkan catatan jika semua venue masih $0.00
+      const allZero = activeVenues.every(v => {
+        const data = pnlData.by_venue_period ? pnlData.by_venue_period[v] : null;
+        return !data || (data.today === 0 && data.total === 0);
+      });
+      
+      if (allZero && pnlData.resolved_count === 0) {
+        h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif. P/L akan muncul otomatis saat posisi ditutup.</span>`;
       }
     } else {
-      // Tidak ada data P/L sama sekali
-      h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
+      h += `<br><span style="font-size:11px;color:#fbbf24">⚠️ Tidak ada venue yang aktif di Setup.</span>`;
     }
     
     el.innerHTML = h;
