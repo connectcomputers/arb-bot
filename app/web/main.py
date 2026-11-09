@@ -250,6 +250,25 @@ async def api_update_max_op(request: Request):
         return {"ok": True, "message": f"Max OP per Pasangan diset ke {max_op}"}
     except Exception as e:
         return {"ok": False, "message": str(e)}
+
+@app.get("/api/limits")
+def api_get_limits():
+    """Get current limits configuration."""
+    cfg = load_config()
+    
+    # Load flags
+    flags_file = Path("data/limits_flags.json")
+    flags = {}
+    if flags_file.exists():
+        try:
+            flags = json.loads(flags_file.read_text())
+        except Exception:
+            flags = {}
+    
+    return {
+        "limits": cfg.get("limits", {}),
+        "flags": flags
+    }
     
 @app.get("/api/limits/flag")
 def api_limits_flag_get():

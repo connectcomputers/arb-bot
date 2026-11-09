@@ -224,6 +224,11 @@ async function poll(){
     b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
     b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
     if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
+
+    // Load active rules jika belum di-load
+    if(document.getElementById('active-rules-box').style.display === 'none') {
+      loadActiveRules();
+    }
     
     if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
     
@@ -452,29 +457,36 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${d.resolved_count}</strong> · Posisi aktif: <strong>${d.active_count}</strong></span>`;
     
-    // Tampilkan rincian per venue HANYA jika ada data P/L (bukan $0.00)
+    // Tampilkan rincian per venue SEMUA venue (meskipun $0.00)
     if (d.by_venue_period && Object.keys(d.by_venue_period).length > 0){
-      // Filter venue yang memiliki P/L != 0 atau resolved_count > 0
-      const activeVenues = Object.entries(d.by_venue_period).filter(([v, r]) => {
-        return (r.today !== 0 || r.total !== 0);
-      });
-      
-      if (activeVenues.length > 0) {
-        h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-        for (const [v, r] of activeVenues){
-          h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
-        }
-        h += '</span>';
+      h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
+      for (const [v, r] of Object.entries(d.by_venue_period)){
+        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
       }
-    }
-    
-    // Tambahkan catatan jika semua nilai 0
-    if (d.resolved_count === 0 && d.total_pnl === 0) {
+      h += '</span>';
+    } else {
+      // Tampilkan pesan jika belum ada data
       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
     }
     
     el.innerHTML = h;
   }).catch(e=>{ console.error('P/L error:', e); });
+};
+
+// Load active rules dari API
+window.loadActiveRules = function(){
+  fetch('/api/limits').then(r=>r.json()).then(d=>{
+    // Update nilai-nilai di "Aturan Eksekusi Aktif Saat Ini"
+    document.getElementById('rule-min-pi').textContent = (d.limits?.min_pi || 0.1).toFixed(1);
+    document.getElementById('rule-max-pi').textContent = (d.limits?.max_pi > 100 ? '∞' : (d.limits?.max_pi || 30)).toFixed(1);
+    document.getElementById('rule-requote-tol').textContent = (d.limits?.requote_tol || 15).toFixed(1);
+    document.getElementById('rule-max-age').textContent = d.limits?.quote_max_age_sec || 10;
+    document.getElementById('rule-max-op').textContent = d.flags?.max_op_per_pair || d.limits?.max_op_per_pair || 1;
+    document.getElementById('rule-rugi').textContent = (d.limits?.rugi_harian || 5).toFixed(0);
+    
+    // Tampilkan box
+    document.getElementById('active-rules-box').style.display = 'block';
+  }).catch(e=>{ console.error('Load rules error:', e); });
 };
 
 window.loadUnrealized = function(){
