@@ -318,16 +318,59 @@ window.loadRecon = function(scope, fromDate = '', toDate = ''){
   }).catch(e => { console.error('Recon error:', e); });
 };
 
-// 2. LOAD P/L (VERSI DIPERBAIKI - TIDAK DEPENDEN API YANG TIDAK ADA)
+//// 2. LOAD P/L (VERSI DIPERBAIKI - TIDAK DEPENDEN API YANG TIDAK ADA)
+// window.loadPnl = function(){
+//   const scope = window.__rekScope || 'today';
+  
+//   fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(pnlData=>{
+//     const el = document.getElementById('pnl-content');
+//     if(!el) return;
+    
+//     // Tampilkan format informatif selalu
+//     let h = `<strong> P/L Resolve-Based:</strong> `;
+//     h += `Harian: <span style="color:${(pnlData.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.today||0).toFixed(2)}</span>`;
+//     h += ` · Mingguan: <span style="color:${(pnlData.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.week||0).toFixed(2)}</span>`;
+//     h += ` · Bulanan: <span style="color:${(pnlData.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.month||0).toFixed(2)}</span>`;
+//     h += ` · TOTAL: <span style="color:${(pnlData.total_pnl||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.total_pnl||0).toFixed(2)}</span>`;
+    
+//     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
+    
+//     // Tampilkan rincian per venue dari data P/L
+//     if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0) {
+//       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
+//       for (const [v, r] of Object.entries(pnlData.by_venue_period)){
+//         h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+//       }
+//       h += '</span>';
+//     } else {
+//       // Tampilkan pesan jika belum ada data
+//       h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif. P/L akan muncul otomatis saat posisi ditutup.</span>`;
+//     }
+    
+//     el.innerHTML = h;
+//   }).catch(e=>{ 
+//     console.error('P/L error:', e);
+//     const el = document.getElementById('pnl-content');
+//     if(el) el.innerHTML = '<span style="color:#f87171">❌ Error loading P/L data</span>';
+//   });
+// };
+
+// 2. LOAD P/L (VERSI FINAL - TAMPILKAN VENUE AKTIF MESKIPUN $0)
 window.loadPnl = function(){
   const scope = window.__rekScope || 'today';
   
-  fetch(`/api/pnl?scope=${scope}`).then(r=>r.json()).then(pnlData=>{
+  // Fetch P/L data dan active venues secara paralel
+  Promise.all([
+    fetch(`/api/pnl?scope=${scope}`).then(r => r.json()),
+    fetch('/api/active-venues').then(r => r.json())
+  ]).then(([pnlData, venuesData]) => {
     const el = document.getElementById('pnl-content');
     if(!el) return;
     
+    const activeVenues = venuesData.active_venues || [];
+    
     // Tampilkan format informatif selalu
-    let h = `<strong> P/L Resolve-Based:</strong> `;
+    let h = `<strong>💹 P/L Resolve-Based:</strong> `;
     h += `Harian: <span style="color:${(pnlData.by_period.today||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.today||0).toFixed(2)}</span>`;
     h += ` · Mingguan: <span style="color:${(pnlData.by_period.week||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.week||0).toFixed(2)}</span>`;
     h += ` · Bulanan: <span style="color:${(pnlData.by_period.month||0) >= 0 ? '#4ade80' : '#f87171'}">$${(pnlData.by_period.month||0).toFixed(2)}</span>`;
@@ -335,20 +378,35 @@ window.loadPnl = function(){
     
     h += `<br><span style="font-size:12px">Posisi resolve: <strong>${pnlData.resolved_count}</strong> · Posisi aktif: <strong>${pnlData.active_count}</strong></span>`;
     
-    // Tampilkan rincian per venue dari data P/L
-    if (pnlData.by_venue_period && Object.keys(pnlData.by_venue_period).length > 0) {
+    // SELALU tampilkan venue aktif meskipun P/L = 0
+    if (activeVenues.length > 0) {
       h += '<br><span style="font-size:11px;color:#94a3b8">Rincian per venue:';
-      for (const [v, r] of Object.entries(pnlData.by_venue_period)){
-        h += `<br>· ${v.toUpperCase()}: harian $${(r.today||0).toFixed(2)} · total $${(r.total||0).toFixed(2)}`;
+      
+      for (const venue of activeVenues) {
+        const venueData = pnlData.by_venue_period ? pnlData.by_venue_period[venue] : null;
+        const today = venueData ? (venueData.today || 0) : 0;
+        const total = venueData ? (venueData.total || 0) : 0;
+        
+        h += `<br>· ${venue.toUpperCase()}: harian $${today.toFixed(2)} · total $${total.toFixed(2)}`;
       }
+      
       h += '</span>';
+      
+      // Tampilkan catatan jika semua venue masih $0.00
+      const allZero = activeVenues.every(v => {
+        const data = pnlData.by_venue_period ? pnlData.by_venue_period[v] : null;
+        return !data || (data.today === 0 && data.total === 0);
+      });
+      
+      if (allZero && pnlData.resolved_count === 0) {
+        h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada posisi yang close/resolve. P/L akan muncul otomatis saat posisi ditutup.</span>`;
+      }
     } else {
-      // Tampilkan pesan jika belum ada data
-      h += `<br><span style="font-size:11px;color:#fbbf24">💡 Catatan: Belum ada data P/L untuk venue aktif. P/L akan muncul otomatis saat posisi ditutup.</span>`;
+      h += `<br><span style="font-size:11px;color:#f87171">⚠️ Tidak ada venue yang aktif di Setup.</span>`;
     }
     
     el.innerHTML = h;
-  }).catch(e=>{ 
+  }).catch(e => { 
     console.error('P/L error:', e);
     const el = document.getElementById('pnl-content');
     if(el) el.innerHTML = '<span style="color:#f87171">❌ Error loading P/L data</span>';
