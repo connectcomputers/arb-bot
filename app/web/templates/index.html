@@ -154,7 +154,63 @@ async function loadActiveRules(){
   } catch(e) { console.error('Load rules error:', e); }
 }
 
-// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
+//// === FUNGSI POLL UTAMA (SUDAH DIPERBAIKI UNTUK MERENDER SCANLOG DENGAN BENAR) ===
+// async function poll(){
+//   try {
+//     const [f, s] = await Promise.all([ 
+//       fetch('/api/venue-feed?scope=' + (window.__rekScope || 'today')).then(r=>r.json()), 
+//       fetch('/api/engine/status').then(r=>r.json()) 
+//     ]);
+//     window.__st = s;
+//     if (s.kill || s.need_rearm){ location.href = '/setup'; return; }
+    
+//     const b = document.getElementById('badge');
+//     b.textContent = s.kill ? '🛑 KILLED' : (s.running ? 'ACTIVE · '+s.mode.toUpperCase() : 'OK');
+//     b.className = 'badge ' + (s.running && !s.kill ? 'on' : 'off');
+//     if (s.auto_stop){ b.textContent = 'AUTO-STOP'; b.className = 'badge off'; }
+    
+//     if(document.getElementById('active-rules-box').style.display === 'none') loadActiveRules();
+    
+//     const skipBox = document.getElementById('skip-notif-box');
+//     const skipList = document.getElementById('skip-reasons-list');
+//     if (skipBox && skipList) {
+//       if (s.skip_reasons && s.skip_reasons.length > 0) {
+//         skipBox.style.display = 'block';
+//         skipList.innerHTML = s.skip_reasons.map(r => `<li style="margin:2px 0; font-family:monospace; font-size:11px;">[${r.ts}] ${r.reason}</li>`).join('');
+//       } else { skipBox.style.display = 'none'; }
+//     }
+    
+//     document.getElementById('cols').innerHTML = f.venues.map(v => {
+//       // LOGIKA RENDER SCANLOG YANG AMAN DARI OVERWRITE
+//       const venueLogs = (s.scanlog || []).filter(l => l.toLowerCase().includes(v.venue)).slice(-10);
+//       const logHtml = venueLogs.length > 0 
+//         ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;">${l}</div>`).join('')
+//         : '<div class="muted">…menunggu log…</div>';
+
+//       return `
+//       <div class="col">
+//         <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
+//         <div class="muted">Menu: ${(v.cats||[]).join(', ')||'-'}</div>
+//         <h4>Open Positions (OP)</h4>
+//         ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
+        
+//         <h4>🔄 Screening Realtime</h4>
+//         <div class="logbox">${logHtml}</div>      
+        
+//         <h4>Match + Π bersih</h4>
+//         <div class="matchbox">
+//           ${(s.matches||[]).filter(m=>m.a===v.venue||m.b===v.venue).map(m=>it('['+m.cat+'] '+m.a+' ↔ '+m.b+' = <b style="color:#86efac">Π '+(m.pi*100).toFixed(1)+'¢</b>')).join('') || '<div class="muted">belum ada</div>'}
+//         </div>
+        
+//         <h4>Eksekusi</h4>
+//         <div style="max-height:240px;overflow-y:auto;min-height:80px;border:1px solid #1e293b;background:#0b1220;padding:6px;border-radius:6px">
+//         ${(s.trades||[]).filter(t=>t.venues.includes(v.venue) && (t.ts||'').slice(0,10)===_todayVps(s)&&(t.mode||'').indexOf(s.mode==='real'?'real':'paper')===0).slice().reverse().map(t=>it(`${(t.ts||'').slice(11,19)} · ${t.mode} · Π=${(t.pi*100).toFixed(2)}¢ · $${t.size}`)).join('') || '<div class="muted">belum ada</div>'}
+//         </div>
+//       </div>`;
+//     }).join('');
+//   } catch(e) { console.error('Poll error:', e); }
+// }
+
 async function poll(){
   try {
     const [f, s] = await Promise.all([ 
@@ -180,13 +236,30 @@ async function poll(){
       } else { skipBox.style.display = 'none'; }
     }
     
+    // === PERBAIKAN: Tambahkan info scan di setiap venue ===
+    const info = s.info || {};
+    const counts = info.counts || {};
+    const comparisons = info.comparisons || 0;
+    
     document.getElementById('cols').innerHTML = f.venues.map(v => {
-      // LOGIKA RENDER SCANLOG YANG AMAN DARI OVERWRITE
       const venueLogs = (s.scanlog || []).filter(l => l.toLowerCase().includes(v.venue)).slice(-10);
       const logHtml = venueLogs.length > 0 
-        ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;">${l}</div>`).join('')
-        : '<div class="muted">…menunggu log…</div>';
-
+        ? venueLogs.map(l => `<div style="margin:1px 0;color:#94a3b8;font-size:10px">${l}</div>`).join('')
+        : '<div class="muted" style="font-size:10px">…menunggu log…</div>';
+      
+      // === HEADER INFO SCAN ===
+      const eventCount = counts[v.venue] || 0;
+      const scanHeader = `
+        <div style="margin-bottom:4px;padding:2px;background:#064e3b;border-radius:3px">
+          <div style="color:#22c55e;font-size:10px;font-weight:600">
+            🟢 SCAN BERJALAN · siklus #${s.ts || '?'}
+          </div>
+          <div style="color:#94a3b8;font-size:9px;margin-top:1px">
+            event venue ini: ${eventCount} · perbandingan: ${comparisons.toLocaleString('id-ID')}
+          </div>
+        </div>
+      `;
+      
       return `
       <div class="col">
         <h2>${v.venue.toUpperCase()} ${v.valid?'✅':'⚠️'} · <a target="_blank" href="${LINKS[v.venue]}">buka exchange ↗</a></h2>
@@ -195,7 +268,10 @@ async function poll(){
         ${v.positions.filter(p=>(p.value||0)>0).length ? v.positions.filter(p=>(p.value||0)>0).map(p=>it(`${p.title} · ${p.size} · $${p.value}`)).join('') : '<div class="muted">tidak ada</div>'}
         
         <h4>🔄 Screening Realtime</h4>
-        <div class="logbox">${logHtml}</div>      
+        <div class="logbox" style="max-height:180px">
+          ${scanHeader}
+          ${logHtml}
+        </div>      
         
         <h4>Match + Π bersih</h4>
         <div class="matchbox">
@@ -210,6 +286,7 @@ async function poll(){
     }).join('');
   } catch(e) { console.error('Poll error:', e); }
 }
+
 poll(); 
 setInterval(poll, 5000); // Diubah ke 5 detik agar lebih realtime
 
