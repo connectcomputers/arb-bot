@@ -19,7 +19,8 @@ LOOP_LOG = Path("data") / "engine_loop.log"
 
 FEES = {"polymarket": 0.0, "kalshi": 0.04, "limitless": 0.004}
 INTERVAL = 30
-SCAN_EVERY_SEC = 120
+# SCAN_EVERY_SEC = 120
+SCAN_EVERY_SEC = 30
 
 _thr = None
 _run = False
@@ -160,6 +161,13 @@ def _scan():
     creds = load_creds()
     pairs = cfg.get("pairs", {})
     venues = [v for v, s in cfg["venues"].items() if s.get("valid") and s.get("enabled") and pairs.get(v)]
+
+    # LOG: Tampilkan venue yang akan di-scan
+    _log_loop(f"Active venues: {', '.join(venues)}")
+    for v in venues:
+        cats = pairs.get(v, [])
+        _log_loop(f"  - {v}: {len(cats)} categories: {', '.join(cats[:3])}{'...' if len(cats) > 3 else ''}")
+
     log = []
     def L(msg): log.append(f"{time.strftime('%H:%M:%S')} {msg}")
     rows = {}
@@ -238,6 +246,15 @@ def _scan():
                         continue
                     matches.append({"a": a, "b": b, "cat": ma["cat"], "ta": ma["title"], "tb": mb["title"], "gross": gross, "fees": round(fees, 4), "pi": pi, "direction": direction, "leg_a_side": leg_a_side, "leg_b_side": leg_b_side, "ea": _row_end(ma), "eb": _row_end(mb)})
                     L(f"MATCH {a}×{b} {direction} Π {pi*100:.1f}¢: {ma['title'][:28]} ↔ {mb['title'][:28]}")
+
+                    # Setelah baris: L(f"MATCH {a}×{b} {direction} Π {pi*100:.1f}¢...")
+                    # TAMBAHKAN:
+                    _log_loop(f"  DEBUG MATCH: {a}×{b}")
+                    _log_loop(f"    - Title A: {ma['title'][:80]}")
+                    _log_loop(f"    - Title B: {mb['title'][:80]}")
+                    _log_loop(f"    - Cat: {ma['cat']}, Ending: {_row_end(ma)} vs {_row_end(mb)}")
+                    _log_loop(f"    - Price: {ya:.3f} vs {yb:.3f}, Fees: {fees:.4f}, Pi: {pi*100:.1f}¢")
+
             L(f"banding {a}×{b}: {n_pair} pairs")
     near.sort(key=lambda x: -x["s"])
     matches.sort(key=lambda m: -m["pi"])
