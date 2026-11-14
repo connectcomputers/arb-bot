@@ -486,15 +486,33 @@ def _loop():
                 if st.get("last_error"): dispatch_alert("warning", f"Loop error: {st['last_error']}", "last_error")
                 if _run and _thr is not None and not _thr.is_alive(): dispatch_alert("critical", "Loop thread mati", "thread_dead")
 
+            # lim = cfg.get("limits", {})
+            # # === BACA KONFIGURASI DARI USER (TRANSPARAN) ===
+            # min_pi_cent = float(lim.get("min_pi", 0.1))
+            # max_pi_cent = float(lim.get("max_pi", 30.0))
+            # requote_tol_cent = float(lim.get("requote_tol", 10.0)) # Toleransi penyusutan dalam cent (default 10¢)
+            # quote_max_age = float(lim.get("quote_max_age_sec", 20))
+            # per_op = float(lim.get("modal_per_op", 2))
+            # cap = float(lim.get("rugi_harian", 5))
+
             lim = cfg.get("limits", {})
             # === BACA KONFIGURASI DARI USER (TRANSPARAN) ===
             min_pi_cent = float(lim.get("min_pi", 0.1))
             max_pi_cent = float(lim.get("max_pi", 30.0))
-            requote_tol_cent = float(lim.get("requote_tol", 10.0)) # Toleransi penyusutan dalam cent (default 10¢)
+            requote_tol_cent = float(lim.get("requote_tol", 10.0))
             quote_max_age = float(lim.get("quote_max_age_sec", 20))
             per_op = float(lim.get("modal_per_op", 2))
             cap = float(lim.get("rugi_harian", 5))
 
+            # === DEBUG LOG: pastikan engine membaca nilai yang benar ===
+            # Log ini akan muncul di engine_loop.log setiap cycle.
+            _log_loop(
+                f"[limits] min_pi={min_pi_cent}¢ max_pi={max_pi_cent}¢ "
+                f"requote_tol={requote_tol_cent}¢ quote_age={quote_max_age}s "
+                f"per_op=${per_op} cap=${cap} "
+                f"(raw_keys={sorted(lim.keys())})"
+            )
+            
             today = time.strftime("%Y-%m-%d")
             sp = st.get("spend", {})
             if sp.get("today") != today: sp = {"today": today, "amount": 0.0}
