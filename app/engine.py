@@ -204,7 +204,17 @@ def _scan():
                     kb = _ckey(mb["title"]) if mb["cat"] == "crypto" else None
                     s = sim(ma["title"], mb["title"])
                     if ma["cat"] == "crypto":
-                        same = bool(ka and kb and ka == kb and _row_end(ma) is not None and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
+                        # same = bool(ka and kb and ka == kb and _row_end(ma) is not None and _row_end(ma) == _row_end(mb) and _wstep(ma["title"]) == _wstep(mb["title"]))
+                        # Versi baru (lebih fleksibel):
+                        if ka and kb and ka == kb:
+                            # Canonical key sama, tapi ending time bisa berbeda
+                            # Selama wstep sama (5min/15min/hourly), anggap match
+                            wstep_a = _wstep(ma["title"])
+                            wstep_b = _wstep(mb["title"])
+                            same = bool(wstep_a and wstep_b and wstep_a == wstep_b)
+                        else:
+                            same = False
+
                         if (not same) and (ma["cat"] != mb["cat"] or _wstep(ma["title"]) != _wstep(mb["title"])):
                             _ea, _eb = _row_end(ma), _row_end(mb)
                             if _ea and _ea == _eb:
@@ -215,7 +225,9 @@ def _scan():
                                     _pi2 = round((1.0 - _mc2) - _f2, 4)
                                     if -0.30 < _pi2 < 0.30 and sum(1 for _x in matches if _x.get("locked") is False) < 6:
                                         matches.append({"a": a, "b": b, "cat": ma["cat"] + "+" + mb["cat"], "ta": ma["title"], "tb": mb["title"], "gross": round(1.0 - _mc2, 4), "fees": _f2, "pi": _pi2, "direction": "CROSS_CAT", "leg_a_side": "YES", "leg_b_side": "NO", "locked": False, "ea": _ea, "eb": _eb})
-                    else: same = s >= 0.65
+                    # else: same = s >= 0.65
+                    else: same = s >= 0.50  # Turunkan dari 0.65 ke 0.50 untuk match lebih fleksibel
+
                     if not same:
                         if s >= 0.25:
                             import re as _re
@@ -225,6 +237,12 @@ def _scan():
                             if not (_toks(ma["title"]) & _toks(mb["title"])): continue
                             near.append({"a": a, "b": b, "s": round(s, 2), "ta": ma["title"][:40], "tb": mb["title"][:40]})
                             L(f"kandidat {a}×{b} sim {s:.2f}: {ma['title'][:28]} ↔ {mb['title'][:28]}")
+
+                            # TAMBAHKAN LOG INI:
+                            _log_loop(f"DEBUG SKIP: {a}×{b} similarity={s:.2f} < threshold 0.50")
+                            _log_loop(f"  Title A: {ma['title'][:80]}")
+                            _log_loop(f"  Title B: {mb['title'][:80]}")
+
                         continue
                     ya, yb = ma.get("yes") or 0.0, mb.get("yes") or 0.0
                     if ya > 0.01 and ya < 0.99 and yb > 0.01 and yb < 0.99:
